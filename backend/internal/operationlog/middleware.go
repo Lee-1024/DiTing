@@ -1,6 +1,7 @@
 package operationlog
 
 import (
+	"log/slog"
 	"net/http"
 
 	"diting/backend/internal/auth"
@@ -18,7 +19,7 @@ func Middleware(repository Repository) func(http.Handler) http.Handler {
 			if !ok {
 				return
 			}
-			_ = repository.Create(r.Context(), Entry{
+			if err := repository.Create(r.Context(), Entry{
 				UserID:    claims.UserID,
 				Username:  claims.Username,
 				Method:    r.Method,
@@ -26,7 +27,9 @@ func Middleware(repository Repository) func(http.Handler) http.Handler {
 				Status:    recorder.status,
 				IP:        r.RemoteAddr,
 				UserAgent: r.UserAgent(),
-			})
+			}); err != nil {
+				slog.Error("operation log write failed", "method", r.Method, "path", r.URL.Path, "status", recorder.status, "username", claims.Username, "error", err)
+			}
 		})
 	}
 }

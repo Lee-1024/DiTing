@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -93,6 +94,53 @@ func TestFileCollectorTailReadsOnlyAppendedLines(t *testing.T) {
 	waitForEvents(t, writer, 1)
 	if writer.events[0].ProcessName != "whoami" {
 		t.Fatalf("expected only appended whoami event, got %q", writer.events[0].ProcessName)
+	}
+	cancel()
+
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Fatalf("Tail returned error: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("tail did not stop after context cancellation")
+	}
+}
+
+func TestFileCollectorTailReopensReplacedFile(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("windows does not allow replacing an open file")
+	}
+	tempDir := t.TempDir()
+	filePath := filepath.Join(tempDir, "tetragon.jsonl")
+	first := `{"time":"2026-07-09T13:00:00Z","process_exec":{"process":{"exec_id":"evt-1","pid":1,"binary":"/usr/bin/id","arguments":"","pod":{}},"parent":{"pid":0}},"node_name":"node-1"}`
+	second := `{"time":"2026-07-09T13:00:01Z","process_exec":{"process":{"exec_id":"evt-2","pid":2,"binary":"/usr/bin/whoami","arguments":"","pod":{}},"parent":{"pid":0}},"node_name":"node-1"}`
+	if err := os.WriteFile(filePath, []byte(first+"\n"), 0644); err != nil {
+		t.Fatalf("write sample file: %v", err)
+	}
+
+	writer := &fakeWriter{}
+	collector := NewFileCollector(filePath, 1, writer)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- collector.Tail(ctx, 10*time.Millisecond)
+	}()
+
+	waitForNoEvents(t, writer)
+	replacementPath := filepath.Join(tempDir, "tetragon.new.jsonl")
+	if err := os.WriteFile(replacementPath, []byte(second+"\n"), 0644); err != nil {
+		t.Fatalf("write replacement file: %v", err)
+	}
+	if err := os.Rename(replacementPath, filePath); err != nil {
+		t.Fatalf("replace sample file: %v", err)
+	}
+
+	waitForEvents(t, writer, 1)
+	if writer.events[0].ProcessName != "whoami" {
+		t.Fatalf("expected event from replaced file, got %q", writer.events[0].ProcessName)
 	}
 	cancel()
 

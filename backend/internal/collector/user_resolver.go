@@ -3,6 +3,7 @@ package collector
 import (
 	"bufio"
 	"context"
+	"log/slog"
 	"os"
 	"strconv"
 	"strings"
@@ -47,6 +48,7 @@ func NewPasswdUserResolver(path string) (*PasswdUserResolver, error) {
 	if err := scanner.Err(); err != nil {
 		return nil, err
 	}
+	slog.Info("passwd resolver loaded", "path", path, "users", len(resolver.users))
 	return resolver, nil
 }
 
@@ -68,8 +70,19 @@ func NewIdentityWriter(resolver UserResolver, next EventWriter) *IdentityWriter 
 
 func (w *IdentityWriter) Write(ctx context.Context, events []audit.Event) error {
 	enriched := make([]audit.Event, len(events))
+	unresolvedUsername := 0
+	unresolvedLoginUsername := 0
 	for i, event := range events {
 		enriched[i] = w.enrich(event)
+		if enriched[i].Username == "" {
+			unresolvedUsername++
+		}
+		if enriched[i].LoginUsername == "" && enriched[i].AUID != UnsetAuditUID {
+			unresolvedLoginUsername++
+		}
+	}
+	if unresolvedUsername > 0 || unresolvedLoginUsername > 0 {
+		slog.Warn("collector user resolution incomplete", "events", len(events), "unresolved_username", unresolvedUsername, "unresolved_login_username", unresolvedLoginUsername)
 	}
 	return w.next.Write(ctx, enriched)
 }

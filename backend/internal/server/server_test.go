@@ -2,8 +2,10 @@ package server
 
 import (
 	"bytes"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"diting/backend/internal/auth"
@@ -21,6 +23,27 @@ func TestHealthzReturnsOK(t *testing.T) {
 	}
 	if rec.Body.String() != `{"status":"ok"}` {
 		t.Fatalf("unexpected body: %s", rec.Body.String())
+	}
+}
+
+func TestRouterLogsRequests(t *testing.T) {
+	var logs bytes.Buffer
+	original := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
+	t.Cleanup(func() { slog.SetDefault(original) })
+
+	router := NewRouter(nil, nil, nil, nil, nil, nil, nil)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+
+	router.ServeHTTP(rec, req)
+
+	output := logs.String()
+	if !strings.Contains(output, "http request") {
+		t.Fatalf("expected request log, got %q", output)
+	}
+	if !strings.Contains(output, "path=/healthz") {
+		t.Fatalf("expected request path in log, got %q", output)
 	}
 }
 

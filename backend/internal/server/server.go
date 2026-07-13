@@ -1,7 +1,9 @@
 package server
 
 import (
+	"log/slog"
 	"net/http"
+	"time"
 
 	"diting/backend/internal/audit"
 	"diting/backend/internal/auth"
@@ -110,5 +112,31 @@ func NewRouter(repository audit.Repository, ruleRepository rule.Repository, stat
 		mux.Handle("/api/v1/stats/users", protect(http.HandlerFunc(statsHandler.UserAudits)))
 		mux.Handle("/api/v1/stats/hosts", protect(http.HandlerFunc(statsHandler.HostAudits)))
 	}
-	return mux
+	return loggingMiddleware(mux)
+}
+
+func loggingMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		started := time.Now()
+		recorder := &responseRecorder{ResponseWriter: w, status: http.StatusOK}
+		next.ServeHTTP(recorder, r)
+		slog.Info("http request",
+			"method", r.Method,
+			"path", r.URL.Path,
+			"query", r.URL.RawQuery,
+			"status", recorder.status,
+			"duration_ms", time.Since(started).Milliseconds(),
+			"remote_addr", r.RemoteAddr,
+		)
+	})
+}
+
+type responseRecorder struct {
+	http.ResponseWriter
+	status int
+}
+
+func (r *responseRecorder) WriteHeader(statusCode int) {
+	r.status = statusCode
+	r.ResponseWriter.WriteHeader(statusCode)
 }

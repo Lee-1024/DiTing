@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -60,7 +61,12 @@ func (c *HTTPClient) WriteEvents(ctx context.Context, events []audit.Event) erro
 		}
 	}
 
-	return c.do(ctx, body.String())
+	if err := c.do(ctx, body.String()); err != nil {
+		slog.Error("clickhouse write events failed", "url", c.config.URL, "database", c.config.Database, "events", len(events), "error", err)
+		return err
+	}
+	slog.Info("clickhouse write events completed", "url", c.config.URL, "database", c.config.Database, "events", len(events))
+	return nil
 }
 
 func (c *HTTPClient) Execute(ctx context.Context, query string) error {
