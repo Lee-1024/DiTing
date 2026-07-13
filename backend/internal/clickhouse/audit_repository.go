@@ -1,0 +1,228 @@
+package clickhouse
+
+import (
+	"bufio"
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"strings"
+	"time"
+
+	"diting/backend/internal/audit"
+)
+
+type AuditRepository struct {
+	client *HTTPClient
+}
+
+func NewAuditRepository(client *HTTPClient) *AuditRepository {
+	return &AuditRepository{client: client}
+}
+
+func (r *AuditRepository) ListEvents(ctx context.Context, query audit.Query) ([]audit.Event, int, error) {
+	sql := buildListEventsSQL(r.client.config.Database, query)
+	data, err := r.client.Query(ctx, sql)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	events := []audit.Event{}
+	scanner := bufio.NewScanner(bytes.NewReader(data))
+	for scanner.Scan() {
+		if strings.TrimSpace(scanner.Text()) == "" {
+			continue
+		}
+		event, err := decodeEventRow(scanner.Bytes())
+		if err != nil {
+			return nil, 0, err
+		}
+		if eventMatchesQuery(event, query) {
+			events = append(events, event)
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, 0, err
+	}
+	total, err := r.countEvents(ctx, query)
+	if err != nil {
+		return nil, 0, err
+	}
+	return events, total, nil
+}
+
+func (r *AuditRepository) countEvents(ctx context.Context, query audit.Query) (int, error) {
+	sql := buildCountEventsSQL(r.client.config.Database, query)
+	data, err := r.client.Query(ctx, sql)
+	if err != nil {
+		return 0, err
+	}
+	var row struct {
+		Total flexibleUint64 `json:"total"`
+	}
+	if err := firstJSONRow(data, &row); err != nil {
+		return 0, err
+	}
+	return int(row.Total), nil
+}
+
+func auditTable(database string) string {
+	table := "audit_events"
+	if database != "" {
+		table = database + "." + table
+	}
+	return table
+}
+
+func buildListEventsSQL(database string, query audit.Query) string {
+	table := auditTable(database)
+	limit := query.PageSize
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := 0
+	if query.Page > 1 {
+		offset = (query.Page - 1) * limit
+	}
+
+	where := buildAuditWhere(query)
+	return fmt.Sprintf(`SELECT event_id, event_time, event_type, severity, risk_score, host_name, node_name, namespace, pod_name, username, uid, gid, auid, euid, egid, login_username, process_name, binary_path, cmdline, cwd, parent_process_name, parent_binary_path, parent_cmdline, tags, rule_ids, rule_names, raw_event
+FROM %s
+WHERE %s
+ORDER BY event_time DESC
+LIMIT %d OFFSET %d
+FORMAT JSONEachRow`, table, where, limit, offset)
+}
+
+func buildCountEventsSQL(database string, query audit.Query) string {
+	return fmt.Sprintf(`SELECT count() AS total
+FROM %s
+WHERE %s
+FORMAT JSONEachRow`, auditTable(database), buildAuditWhere(query))
+}
+
+func buildAuditWhere(query audit.Query) string {
+	conditions := []string{
+		fmt.Sprintf("event_time >= parseDateTime64BestEffort('%s', 3)", query.StartTime.Format(time.RFC3339Nano)),
+		fmt.Sprintf("event_time <= parseDateTime64BestEffort('%s', 3)", query.EndTime.Format(time.RFC3339Nano)),
+	}
+	if query.EventType != "" {
+		conditions = append(conditions, "event_type = '"+escapeSQL(query.EventType)+"'")
+	}
+	if query.Severity != "" {
+		conditions = append(conditions, "severity = '"+escapeSQL(query.Severity)+"'")
+	}
+	if len(query.SeverityIn) > 0 {
+		values := make([]string, 0, len(query.SeverityIn))
+		for _, severity := range query.SeverityIn {
+			values = append(values, "'"+escapeSQL(severity)+"'")
+		}
+		conditions = append(conditions, "severity IN ("+strings.Join(values, ", ")+")")
+	}
+	if query.HostName != "" {
+		hostName := escapeSQL(query.HostName)
+		conditions = append(conditions, "(node_name = '"+hostName+"' OR host_name = '"+hostName+"')")
+	}
+	if query.Username != "" {
+		username := escapeSQL(query.Username)
+		conditions = append(conditions, "(username = '"+username+"' OR login_username = '"+username+"')")
+	}
+	if query.Cmdline != "" {
+		conditions = append(conditions, "cmdline = '"+escapeSQL(query.Cmdline)+"'")
+	}
+	if query.Keyword != "" {
+		keyword := escapeSQL(query.Keyword)
+		conditions = append(conditions, "(positionCaseInsensitive(cmdline, '"+keyword+"') > 0 OR positionCaseInsensitive(process_name, '"+keyword+"') > 0 OR positionCaseInsensitive(username, '"+keyword+"') > 0 OR positionCaseInsensitive(login_username, '"+keyword+"') > 0)")
+	}
+	return strings.Join(conditions, " AND ")
+}
+
+func eventMatchesQuery(event audit.Event, query audit.Query) bool {
+	if query.EventType != "" && event.EventType != query.EventType {
+		return false
+	}
+	if query.Severity != "" && event.Severity != query.Severity {
+		return false
+	}
+	if len(query.SeverityIn) > 0 {
+		matched := false
+		for _, severity := range query.SeverityIn {
+			if event.Severity == severity {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return false
+		}
+	}
+	if query.HostName != "" && event.NodeName != query.HostName && event.HostName != query.HostName {
+		return false
+	}
+	if query.Username != "" && event.Username != query.Username && event.LoginUsername != query.Username {
+		return false
+	}
+	if query.Cmdline != "" && event.Cmdline != query.Cmdline {
+		return false
+	}
+	if query.Keyword != "" {
+		keyword := strings.ToLower(query.Keyword)
+		if !strings.Contains(strings.ToLower(event.Cmdline), keyword) &&
+			!strings.Contains(strings.ToLower(event.ProcessName), keyword) &&
+			!strings.Contains(strings.ToLower(event.Username), keyword) &&
+			!strings.Contains(strings.ToLower(event.LoginUsername), keyword) {
+			return false
+		}
+	}
+	return true
+}
+
+func escapeSQL(value string) string {
+	return strings.ReplaceAll(value, "'", "''")
+}
+
+type eventRow struct {
+	EventID           string   `json:"event_id"`
+	EventTime         string   `json:"event_time"`
+	EventType         string   `json:"event_type"`
+	Severity          string   `json:"severity"`
+	RiskScore         uint8    `json:"risk_score"`
+	HostName          string   `json:"host_name"`
+	NodeName          string   `json:"node_name"`
+	Namespace         string   `json:"namespace"`
+	PodName           string   `json:"pod_name"`
+	Username          string   `json:"username"`
+	UID               uint32   `json:"uid"`
+	GID               uint32   `json:"gid"`
+	AUID              uint32   `json:"auid"`
+	EUID              uint32   `json:"euid"`
+	EGID              uint32   `json:"egid"`
+	LoginUsername     string   `json:"login_username"`
+	ProcessName       string   `json:"process_name"`
+	BinaryPath        string   `json:"binary_path"`
+	Cmdline           string   `json:"cmdline"`
+	CWD               string   `json:"cwd"`
+	ParentProcessName string   `json:"parent_process_name"`
+	ParentBinaryPath  string   `json:"parent_binary_path"`
+	ParentCmdline     string   `json:"parent_cmdline"`
+	Tags              []string `json:"tags"`
+	RuleIDs           []string `json:"rule_ids"`
+	RuleNames         []string `json:"rule_names"`
+	RawEvent          string   `json:"raw_event"`
+}
+
+func decodeEventRow(data []byte) (audit.Event, error) {
+	var row eventRow
+	if err := json.Unmarshal(data, &row); err != nil {
+		return audit.Event{}, err
+	}
+	eventTime, _ := time.Parse("2006-01-02 15:04:05.000", row.EventTime)
+	return audit.Event{
+		EventID: row.EventID, EventTime: eventTime, EventType: row.EventType, Severity: row.Severity, RiskScore: row.RiskScore,
+		HostName: row.HostName, NodeName: row.NodeName, Namespace: row.Namespace, PodName: row.PodName,
+		Username: row.Username, UID: row.UID, GID: row.GID, AUID: row.AUID, EUID: row.EUID, EGID: row.EGID, LoginUsername: row.LoginUsername,
+		ProcessName: row.ProcessName, BinaryPath: row.BinaryPath, Cmdline: row.Cmdline, CWD: row.CWD,
+		ParentProcessName: row.ParentProcessName, ParentBinaryPath: row.ParentBinaryPath, ParentCmdline: row.ParentCmdline,
+		Tags: row.Tags, RuleIDs: row.RuleIDs, RuleNames: row.RuleNames, RawEvent: row.RawEvent,
+	}, nil
+}

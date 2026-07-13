@@ -1,0 +1,95 @@
+package audit
+
+import (
+	"context"
+	"encoding/csv"
+	"encoding/json"
+	"net/http"
+	"strings"
+)
+
+type Repository interface {
+	ListEvents(ctx context.Context, query Query) ([]Event, int, error)
+}
+
+type Handler struct {
+	repository Repository
+}
+
+func NewHandler(repository Repository) *Handler {
+	return &Handler{repository: repository}
+}
+
+func (h *Handler) ListEvents(w http.ResponseWriter, r *http.Request) {
+	query, err := ParseQuery(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	items := []Event{}
+	total := 0
+	if h.repository != nil {
+		var err error
+		items, total, err = h.repository.ListEvents(r.Context(), query)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"items":    items,
+		"page":     query.Page,
+		"pageSize": query.PageSize,
+		"total":    total,
+	})
+}
+
+func (h *Handler) ExportEvents(w http.ResponseWriter, r *http.Request) {
+	query, err := ParseQuery(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	query.Page = 1
+	query.PageSize = 5000
+
+	items := []Event{}
+	if h.repository != nil {
+		items, _, err = h.repository.ListEvents(r.Context(), query)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", `attachment; filename="audit-events.csv"`)
+	writer := csv.NewWriter(w)
+	_ = writer.Write([]string{"event_time", "severity", "login_username", "username", "host", "process", "cmdline", "rule_names", "event_id"})
+	for _, event := range items {
+		_ = writer.Write([]string{
+			event.EventTime.Format("2006-01-02 15:04:05.000"),
+			event.Severity,
+			firstNonEmpty(event.LoginUsername, event.Username),
+			event.Username,
+			firstNonEmpty(event.NodeName, event.HostName),
+			event.ProcessName,
+			event.Cmdline,
+			strings.Join(event.RuleNames, "|"),
+			event.EventID,
+		})
+	}
+	writer.Flush()
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
+}

@@ -1,0 +1,130 @@
+package clickhouse
+
+import (
+	"bufio"
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"strings"
+	"time"
+
+	"diting/backend/internal/audit"
+)
+
+type AuditRepository struct {
+	client *HTTPClient
+}
+
+func NewAuditRepository(client *HTTPClient) *AuditRepository {
+	return &AuditRepository{client: client}
+}
+
+func (r *AuditRepository) ListEvents(ctx context.Context, query audit.Query) ([]audit.Event, int, error) {
+	sql := buildListEventsSQL(r.client.config.Database, query)
+	data, err := r.client.Query(ctx, sql)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	events := []audit.Event{}
+	scanner := bufio.NewScanner(bytes.NewReader(data))
+	for scanner.Scan() {
+		if strings.TrimSpace(scanner.Text()) == "" {
+			continue
+		}
+		event, err := decodeEventRow(scanner.Bytes())
+		if err != nil {
+			return nil, 0, err
+		}
+		events = append(events, event)
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, 0, err
+	}
+	return events, len(events), nil
+}
+
+func buildListEventsSQL(database string, query audit.Query) string {
+	table := "audit_events"
+	if database != "" {
+		table = database + "." + table
+	}
+	limit := query.PageSize
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := 0
+	if query.Page > 1 {
+		offset = (query.Page - 1) * limit
+	}
+
+	conditions := []string{
+		fmt.Sprintf("event_time >= parseDateTime64BestEffort('%s', 3)", query.StartTime.Format(time.RFC3339Nano)),
+		fmt.Sprintf("event_time <= parseDateTime64BestEffort('%s', 3)", query.EndTime.Format(time.RFC3339Nano)),
+	}
+	if query.EventType != "" {
+		conditions = append(conditions, "event_type = '"+escapeSQL(query.EventType)+"'")
+	}
+	if query.Severity != "" {
+		conditions = append(conditions, "severity = '"+escapeSQL(query.Severity)+"'")
+	}
+	if query.Keyword != "" {
+		keyword := escapeSQL(query.Keyword)
+		conditions = append(conditions, "(positionCaseInsensitive(cmdline, '"+keyword+"') > 0 OR positionCaseInsensitive(process_name, '"+keyword+"') > 0 OR positionCaseInsensitive(username, '"+keyword+"') > 0 OR positionCaseInsensitive(login_username, '"+keyword+"') > 0)")
+	}
+
+	return fmt.Sprintf(`SELECT event_id, event_time, event_type, severity, risk_score, host_name, namespace, pod_name, username, uid, gid, auid, euid, egid, login_username, process_name, binary_path, cmdline, cwd, parent_process_name, parent_binary_path, parent_cmdline, tags, raw_event
+FROM %s
+WHERE %s
+ORDER BY event_time DESC
+LIMIT %d OFFSET %d
+FORMAT JSONEachRow`, table, strings.Join(conditions, " AND "), limit, offset)
+}
+
+func escapeSQL(value string) string {
+	return strings.ReplaceAll(value, "'", "''")
+}
+
+type eventRow struct {
+	EventID     string   `json:"event_id"`
+	EventTime   string   `json:"event_time"`
+	EventType   string   `json:"event_type"`
+	Severity    string   `json:"severity"`
+	RiskScore   uint8    `json:"risk_score"`
+	HostName    string   `json:"host_name"`
+	Namespace   string   `json:"namespace"`
+	PodName     string   `json:"pod_name"`
+	Username    string   `json:"username"`
+	UID         uint32   `json:"uid"`
+	GID         uint32   `json:"gid"`
+	AUID        uint32   `json:"auid"`
+	EUID        uint32   `json:"euid"`
+	EGID        uint32   `json:"egid"`
+	LoginUsername string `json:"login_username"`
+	ProcessName string   `json:"process_name"`
+	BinaryPath  string   `json:"binary_path"`
+	Cmdline     string   `json:"cmdline"`
+	CWD         string   `json:"cwd"`
+	ParentProcessName string `json:"parent_process_name"`
+	ParentBinaryPath  string `json:"parent_binary_path"`
+	ParentCmdline     string `json:"parent_cmdline"`
+	Tags        []string `json:"tags"`
+	RawEvent    string   `json:"raw_event"`
+}
+
+func decodeEventRow(data []byte) (audit.Event, error) {
+	var row eventRow
+	if err := json.Unmarshal(data, &row); err != nil {
+		return audit.Event{}, err
+	}
+	eventTime, _ := time.Parse("2006-01-02 15:04:05.000", row.EventTime)
+	return audit.Event{
+		EventID: row.EventID, EventTime: eventTime, EventType: row.EventType, Severity: row.Severity, RiskScore: row.RiskScore,
+		HostName: row.HostName, Namespace: row.Namespace, PodName: row.PodName,
+		Username: row.Username, UID: row.UID, GID: row.GID, AUID: row.AUID, EUID: row.EUID, EGID: row.EGID, LoginUsername: row.LoginUsername,
+		ProcessName: row.ProcessName, BinaryPath: row.BinaryPath, Cmdline: row.Cmdline, CWD: row.CWD,
+		ParentProcessName: row.ParentProcessName, ParentBinaryPath: row.ParentBinaryPath, ParentCmdline: row.ParentCmdline,
+		Tags: row.Tags, RawEvent: row.RawEvent,
+	}, nil
+}

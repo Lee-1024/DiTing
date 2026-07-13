@@ -1,0 +1,66 @@
+export interface OverviewStats {
+  totalEvents: number;
+  highRiskEvents: number;
+  activeHosts: number;
+  activeRules: number;
+}
+
+export interface TrendPoint {
+  time: string;
+  count: number;
+}
+
+export interface TopItem {
+  name: string;
+  count: number;
+}
+
+export interface CommandItem {
+  processName: string;
+  cmdline: string;
+  username: string;
+  loginUsername: string;
+  count: number;
+  firstSeen: string;
+  lastSeen: string;
+}
+
+export interface CommandStatsQuery {
+  start_time?: string;
+  end_time?: string;
+  keyword?: string;
+  username?: string;
+  limit?: number;
+}
+
+export interface UserAuditItem {
+  username: string;
+  commandCount: number;
+  activeHosts: number;
+  highRiskEvents: number;
+  firstSeen: string;
+  lastSeen: string;
+}
+
+export interface UserAuditQuery {
+  start_time?: string;
+  end_time?: string;
+  keyword?: string;
+  limit?: number;
+}
+
+export interface HostAuditItem {
+  hostName: string;
+  commandCount: number;
+  activeUsers: number;
+  highRiskEvents: number;
+  firstSeen: string;
+  lastSeen: string;
+}
+
+export interface HostAuditQuery {
+  start_time?: string;
+  end_time?: string;
+  keyword?: string;
+  limit?: number;
+}

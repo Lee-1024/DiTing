@@ -1,0 +1,28 @@
+server:
+  port: 8080
+  mode: debug
+
+jwt:
+  secret: change-me
+  expires_hours: 24
+
+postgres:
+  host: 127.0.0.1
+  port: 5432
+  database: diting
+  username: diting
+  password: diting
+  ssl_mode: disable
+
+clickhouse:
+  addr: 127.0.0.1:9000
+  database: diting
+  username: default
+  password: ""
+
+collector:
+  input_mode: file
+  tetragon_log_file: /data/tetragon/logs/tetragon.log
+  passwd_file: /etc/passwd
+  flush_interval_seconds: 1
+  batch_size: 1000

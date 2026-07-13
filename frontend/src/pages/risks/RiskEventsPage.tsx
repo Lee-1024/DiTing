@@ -1,0 +1,258 @@
+import { Button, Card, DatePicker, Empty, Form, Input, Modal, Select, Space, Table, Tag, Typography, message } from 'antd';
+import dayjs from 'dayjs';
+import { useEffect, useRef, useState } from 'react';
+import { exportAuditEvents, queryAuditEvents } from '../../api/audit';
+import { getRiskDispositions, updateRiskDisposition } from '../../api/riskDispositions';
+import CommandText from '../../components/CommandText';
+import FilterToolbar from '../../components/FilterToolbar';
+import SeverityTag from '../../components/SeverityTag';
+import type { AuditEvent, AuditEventQuery } from '../../types/audit';
+import type { RiskDisposition, RiskDispositionMap, RiskDispositionStatus } from '../../types/riskDisposition';
+import { downloadBlob } from '../../utils/download';
+import EventDetailDrawer from '../audit-events/EventDetailDrawer';
+
+const defaultRange = [dayjs().subtract(7, 'day'), dayjs()] as const;
+
+export default function RiskEventsPage() {
+  const [events, setEvents] = useState<AuditEvent[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [selected, setSelected] = useState<AuditEvent>();
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [dispositions, setDispositions] = useState<RiskDispositionMap>({});
+  const [dispositionOpen, setDispositionOpen] = useState(false);
+  const [dispositionEvent, setDispositionEvent] = useState<AuditEvent>();
+  const [savingDisposition, setSavingDisposition] = useState(false);
+  const [form] = Form.useForm();
+  const [dispositionForm] = Form.useForm();
+  const requestSeq = useRef(0);
+
+  function buildQuery(nextPage = page, nextPageSize = pageSize, formValues = form.getFieldsValue()): AuditEventQuery {
+    const values = formValues;
+    const range = values.timeRange ?? defaultRange;
+    const severity = values.severity ?? 'high,critical';
+    return {
+      start_time: range?.[0]?.startOf('day').toISOString(),
+      end_time: range?.[1]?.endOf('day').toISOString(),
+      event_type: 'process_exec',
+      severity_in: severity,
+      username: values.username,
+      keyword: values.keyword,
+      page: nextPage,
+      page_size: nextPageSize,
+    };
+  }
+
+  async function load(nextPage = page, nextPageSize = pageSize, formValues = form.getFieldsValue()) {
+    const seq = requestSeq.current + 1;
+    requestSeq.current = seq;
+    setLoading(true);
+    try {
+      const data = await queryAuditEvents(buildQuery(nextPage, nextPageSize, formValues));
+      if (seq !== requestSeq.current) {
+        return;
+      }
+      setEvents(data.items ?? []);
+      const statusMap = await getRiskDispositions((data.items ?? []).map((item) => item.eventId));
+      if (seq !== requestSeq.current) {
+        return;
+      }
+      setDispositions(statusMap);
+      setTotal(data.total);
+      setPage(data.page);
+      setPageSize(nextPageSize);
+    } finally {
+      if (seq === requestSeq.current) {
+        setLoading(false);
+      }
+    }
+  }
+
+  function submit() {
+    void load(1, pageSize, form.getFieldsValue());
+  }
+
+  async function resetAndLoad() {
+    form.resetFields();
+    await Promise.resolve();
+    await load(1, 10, form.getFieldsValue());
+  }
+
+  async function exportCSV() {
+    const blob = await exportAuditEvents(buildQuery(1, 5000));
+    downloadBlob(blob, 'risk-events.csv');
+  }
+
+  function openDisposition(record: AuditEvent) {
+    const existing = dispositions[record.eventId];
+    setDispositionEvent(record);
+    dispositionForm.setFieldsValue({
+      status: existing?.status ?? 'open',
+      note: existing?.note ?? '',
+    });
+    setDispositionOpen(true);
+  }
+
+  async function submitDisposition() {
+    if (!dispositionEvent) {
+      return;
+    }
+    const values = await dispositionForm.validateFields();
+    setSavingDisposition(true);
+    try {
+      const updated = await updateRiskDisposition(dispositionEvent.eventId, values.status, values.note ?? '');
+      setDispositions((current) => ({ ...current, [updated.eventId]: updated }));
+      message.success('处置状态已更新');
+      setDispositionOpen(false);
+    } finally {
+      setSavingDisposition(false);
+    }
+  }
+
+  function dispositionFor(record: AuditEvent): RiskDisposition {
+    return dispositions[record.eventId] ?? {
+      eventId: record.eventId,
+      status: 'open',
+      note: '',
+      handledBy: '',
+      createdAt: '',
+      updatedAt: '',
+    };
+  }
+
+  useEffect(() => {
+    void load();
+  }, []);
+
+  return (
+    <>
+      <div className="page-heading">
+        <Typography.Title level={3} className="page-title">风险事件</Typography.Title>
+      </div>
+      <FilterToolbar form={form} initialValues={{ timeRange: defaultRange, severity: 'high,critical' }} onSearch={submit} onReset={() => void resetAndLoad()} onExport={() => void exportCSV()}>
+        <Form.Item name="timeRange" label="时间" className="filter-field-time">
+          <DatePicker.RangePicker />
+        </Form.Item>
+        <Form.Item name="severity" label="等级">
+          <Select
+            className="filter-control-compact"
+            options={[
+              { value: 'high,critical', label: 'high + critical' },
+              { value: 'high', label: 'high' },
+              { value: 'critical', label: 'critical' },
+            ]}
+          />
+        </Form.Item>
+        <Form.Item name="username" label="用户">
+          <Input className="filter-control-compact" placeholder="root / ubuntu" allowClear />
+        </Form.Item>
+        <Form.Item name="keyword" label="关键字">
+          <Input className="filter-control-compact" placeholder="wget / docker" allowClear />
+        </Form.Item>
+      </FilterToolbar>
+      <Card className="data-card">
+        <Table
+          rowKey="eventId"
+          loading={loading}
+          dataSource={events}
+          locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无风险事件" /> }}
+          scroll={{ x: 1040 }}
+          onRow={(record) => ({ onClick: () => setSelected(record) })}
+          pagination={{
+            current: page,
+            pageSize,
+            total,
+            showSizeChanger: true,
+            pageSizeOptions: [10, 20, 50, 100],
+            showTotal: (value) => `共 ${value} 条`,
+            onChange: (nextPage, nextPageSize) => {
+              const sizeChanged = nextPageSize !== pageSize;
+              void load(sizeChanged ? 1 : nextPage, nextPageSize, form.getFieldsValue());
+            },
+          }}
+          columns={[
+            { title: '时间', dataIndex: 'eventTime', width: 170, fixed: 'left' },
+            { title: '等级', dataIndex: 'severity', width: 86, render: (value) => <SeverityTag value={value} /> },
+            { title: '登录用户', dataIndex: 'loginUsername', width: 96, render: (_, record) => record.loginUsername || record.username },
+            { title: '执行用户', dataIndex: 'username', width: 96 },
+            { title: '节点', dataIndex: 'nodeName', width: 120, render: (_, record) => record.nodeName || record.hostName },
+            { title: '进程', dataIndex: 'processName', width: 110 },
+            { title: '命令', dataIndex: 'cmdline', render: (value, record) => <CommandText value={value} onView={() => setSelected(record)} /> },
+            {
+              title: '命中规则',
+              dataIndex: 'ruleNames',
+              width: 180,
+              render: (rules?: string[]) => rules?.length ? <div className="rule-tags">{rules.map((rule) => <Tag color="orange" key={rule}>{rule}</Tag>)}</div> : <Typography.Text type="secondary">-</Typography.Text>,
+            },
+            {
+              title: '处置状态',
+              width: 112,
+              render: (_, record) => <DispositionTag disposition={dispositionFor(record)} />,
+            },
+            {
+              title: '处置',
+              width: 88,
+              render: (_, record) => (
+                <Button size="small" onClick={(event) => { event.stopPropagation(); openDisposition(record); }}>
+                  处理
+                </Button>
+              ),
+            },
+          ]}
+        />
+      </Card>
+      <EventDetailDrawer event={selected} open={Boolean(selected)} onClose={() => setSelected(undefined)} />
+      <Modal
+        title="处置风险事件"
+        open={dispositionOpen}
+        confirmLoading={savingDisposition}
+        onOk={() => void submitDisposition()}
+        onCancel={() => setDispositionOpen(false)}
+        width={560}
+      >
+        <Form form={dispositionForm} layout="vertical">
+          <Form.Item label="命令">
+            <CommandText value={dispositionEvent?.cmdline} />
+          </Form.Item>
+          <Form.Item label="命中规则">
+            {dispositionEvent?.ruleNames?.length ? (
+              <div className="rule-tags">
+                {dispositionEvent.ruleNames.map((rule) => <Tag color="orange" key={rule}>{rule}</Tag>)}
+              </div>
+            ) : (
+              <Typography.Text type="secondary">-</Typography.Text>
+            )}
+          </Form.Item>
+          <Form.Item name="status" label="处置状态" rules={[{ required: true }]}>
+            <Select
+              options={[
+                { value: 'open', label: '未处理' },
+                { value: 'confirmed', label: '已确认' },
+                { value: 'ignored', label: '已忽略' },
+              ]}
+            />
+          </Form.Item>
+          <Form.Item name="note" label="处置备注">
+            <Input.TextArea rows={4} placeholder="记录确认原因、忽略理由或后续处理说明" />
+          </Form.Item>
+        </Form>
+      </Modal>
+    </>
+  );
+}
+
+function DispositionTag({ disposition }: { disposition: RiskDisposition }) {
+  const config: Record<RiskDispositionStatus, { color: string; text: string }> = {
+    open: { color: 'red', text: '未处理' },
+    confirmed: { color: 'green', text: '已确认' },
+    ignored: { color: 'default', text: '已忽略' },
+  };
+  const current = config[disposition.status] ?? config.open;
+  return (
+    <Space direction="vertical" size={0}>
+      <Tag color={current.color}>{current.text}</Tag>
+      {disposition.handledBy && <Typography.Text type="secondary">{disposition.handledBy}</Typography.Text>}
+    </Space>
+  );
+}
