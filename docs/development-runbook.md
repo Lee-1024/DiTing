@@ -151,3 +151,42 @@ The Vite dev server proxies `/api` and `/healthz` to `http://127.0.0.1:8089`.
 ## Production
 
 See `docs/production-deployment.md`.
+# Linux 实时数据测试启动
+
+在 Linux 服务器上测试实时 Tetragon 日志时，先确认 `backend/configs/config.yaml` 中：
+
+- `collector.tetragon_log_file` 指向真实日志，例如 `/data/tetragon/logs/tetragon.log`
+- `collector.passwd_file` 指向服务器的 passwd 快照，例如 `/data/tetragon/passwd`
+- ClickHouse 和 PostgreSQL 地址可从服务器访问
+
+启动实时测试服务：
+
+```bash
+chmod +x scripts/start-linux.sh scripts/stop-linux.sh
+scripts/start-linux.sh --config backend/configs/config.yaml --web-port 5174
+```
+
+这个脚本会启动 Vite dev server，因此 `/api` 会按 `frontend/vite.config.ts` 代理到本机 `8089` API。
+
+首次部署或表结构变更后可带迁移：
+
+```bash
+scripts/start-linux.sh --config backend/configs/config.yaml --web-port 5174 --migrate
+```
+
+停止：
+
+```bash
+scripts/stop-linux.sh
+```
+
+日志位置：
+
+```text
+logs/api.out.log
+logs/api.err.log
+logs/collector.out.log
+logs/collector.err.log
+logs/web.out.log
+logs/web.err.log
+```
