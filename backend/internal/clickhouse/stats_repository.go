@@ -269,7 +269,7 @@ func (r *StatsRepository) HostAudits(ctx context.Context, query stats.Query) ([]
 FROM
 (
 	SELECT
-		if(host_id != '', host_id, if(host_name != '', host_name, node_name)) AS audit_host,
+		if(host_name != '', host_name, if(host_id != '', host_id, node_name)) AS audit_host,
 		if(login_username != '', login_username, username) AS audit_user,
 		severity,
 		event_time,

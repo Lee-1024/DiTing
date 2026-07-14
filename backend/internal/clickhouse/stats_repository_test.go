@@ -146,7 +146,7 @@ func TestStatsRepositoryHostAuditsAggregatesHosts(t *testing.T) {
 		t.Fatalf("HostAudits returned error: %v", err)
 	}
 
-	if !strings.Contains(body, "event_type = 'process_exec'") || !strings.Contains(body, "if(host_id != '', host_id, if(host_name != '', host_name, node_name)) AS audit_host") || !strings.Contains(body, "positionCaseInsensitive(audit_host, 'node')") {
+	if !strings.Contains(body, "event_type = 'process_exec'") || !strings.Contains(body, "if(host_name != '', host_name, if(host_id != '', host_id, node_name)) AS audit_host") || !strings.Contains(body, "positionCaseInsensitive(audit_host, 'node')") {
 		t.Fatalf("expected host audit query filters, got %s", body)
 	}
 	if len(items) != 1 || items[0].HostName != "node-1" || items[0].CommandCount != 12 {
