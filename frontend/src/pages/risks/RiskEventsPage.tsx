@@ -9,6 +9,7 @@ import SeverityTag from '../../components/SeverityTag';
 import type { AuditEvent, AuditEventQuery } from '../../types/audit';
 import type { RiskDisposition, RiskDispositionMap, RiskDispositionStatus } from '../../types/riskDisposition';
 import { downloadBlob } from '../../utils/download';
+import { formatLocalDateTime } from '../../utils/time';
 import EventDetailDrawer from '../audit-events/EventDetailDrawer';
 
 const defaultRange = [dayjs().subtract(7, 'day'), dayjs()] as const;
@@ -172,7 +173,7 @@ export default function RiskEventsPage() {
             },
           }}
           columns={[
-            { title: '时间', dataIndex: 'eventTime', width: 170, fixed: 'left' },
+            { title: '时间', dataIndex: 'eventTime', width: 170, fixed: 'left', render: (value) => formatLocalDateTime(value) },
             { title: '等级', dataIndex: 'severity', width: 86, render: (value) => <SeverityTag value={value} /> },
             { title: '登录用户', dataIndex: 'loginUsername', width: 96, render: (_, record) => record.loginUsername || record.username },
             { title: '执行用户', dataIndex: 'username', width: 96 },

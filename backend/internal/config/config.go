@@ -46,6 +46,8 @@ type CollectorConfig struct {
 	InputMode            string
 	TetragonLogFile      string
 	PasswdFile           string
+	HostID               string
+	HostName             string
 	FlushIntervalSeconds int
 	BatchSize            int
 }
@@ -136,6 +138,10 @@ func assignValue(cfg *Config, section, key, value string) error {
 			cfg.Collector.TetragonLogFile = value
 		case "passwd_file":
 			cfg.Collector.PasswdFile = value
+		case "host_id":
+			cfg.Collector.HostID = value
+		case "host_name":
+			cfg.Collector.HostName = value
 		case "flush_interval_seconds":
 			cfg.Collector.FlushIntervalSeconds = mustInt(key, value)
 		case "batch_size":

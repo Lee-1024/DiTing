@@ -45,6 +45,7 @@ func (w *AuditWriter) Write(ctx context.Context, events []audit.Event) error {
 			event.RiskScore,
 			event.Tags,
 			event.HostName,
+			event.HostID,
 			event.HostIP,
 			event.NodeName,
 			event.Namespace,
@@ -87,7 +88,7 @@ const insertAuditEventsSQL = `
 INSERT INTO audit_events (
 	event_id, event_time, event_date, ingest_time,
 	event_type, action, severity, risk_score, tags,
-	host_name, host_ip, node_name,
+	host_name, host_id, host_ip, node_name,
 	namespace, pod_name, container_id, container_name, image,
 	pid, ppid, process_name, binary_path, cmdline, cwd,
 	parent_process_name, parent_binary_path, parent_cmdline,

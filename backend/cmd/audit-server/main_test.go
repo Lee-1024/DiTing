@@ -1,9 +1,14 @@
 package main
 
 import (
+	"bytes"
+	"context"
+	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestParseArgsReadsModeAndConfigPath(t *testing.T) {
@@ -73,5 +78,20 @@ func TestMigrationFilesReturnsSQLFilesInNameOrder(t *testing.T) {
 	}
 	if filepath.Base(files[0]) != "001_first.sql" || filepath.Base(files[1]) != "002_second.sql" {
 		t.Fatalf("unexpected file order %#v", files)
+	}
+}
+
+func TestNewLogHandlerFormatsTimeInCST(t *testing.T) {
+	var output bytes.Buffer
+	handler := newLogHandler(&output)
+	record := slog.NewRecord(time.Date(2026, 7, 14, 2, 30, 0, 0, time.UTC), slog.LevelInfo, "time check", 0)
+
+	if err := handler.Handle(context.Background(), record); err != nil {
+		t.Fatalf("Handle returned error: %v", err)
+	}
+
+	logLine := output.String()
+	if !strings.Contains(logLine, "time=\"2026-07-14 10:30:00.000 CST\"") {
+		t.Fatalf("expected slog time field to be formatted in CST, got %q", logLine)
 	}
 }

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -24,7 +25,7 @@ import (
 )
 
 func main() {
-	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, nil)))
+	slog.SetDefault(slog.New(newLogHandler(os.Stdout)))
 	mode, cfgPath := parseArgs(os.Args)
 	slog.Info("process starting", "mode", mode, "config", cfgPath)
 
@@ -78,6 +79,9 @@ func main() {
 			slog.Info("passwd file loaded", "path", cfg.Collector.PasswdFile)
 			eventWriter = collector.NewIdentityWriter(resolver, writer)
 		}
+		hostMetadata := collector.ResolveHostMetadata(cfg.Collector.HostID, cfg.Collector.HostName)
+		slog.Info("collector host metadata resolved", "host_id", hostMetadata.ID, "host_name", hostMetadata.Name)
+		eventWriter = collector.NewHostMetadataWriter(hostMetadata, eventWriter)
 
 		fileCollector := collector.NewFileCollector(cfg.Collector.TetragonLogFile, cfg.Collector.BatchSize, eventWriter)
 		slog.Info("collector starting", "mode", mode, "tetragon_log_file", cfg.Collector.TetragonLogFile, "passwd_file", cfg.Collector.PasswdFile, "batch_size", cfg.Collector.BatchSize, "flush_interval_seconds", cfg.Collector.FlushIntervalSeconds)
@@ -182,6 +186,21 @@ func main() {
 		fmt.Fprintf(os.Stderr, "listen: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+func newLogHandler(writer io.Writer) slog.Handler {
+	location, err := time.LoadLocation("Asia/Shanghai")
+	if err != nil {
+		location = time.FixedZone("CST", 8*60*60)
+	}
+	return slog.NewTextHandler(writer, &slog.HandlerOptions{
+		ReplaceAttr: func(groups []string, attr slog.Attr) slog.Attr {
+			if attr.Key == slog.TimeKey {
+				return slog.String(slog.TimeKey, attr.Value.Time().In(location).Format("2006-01-02 15:04:05.000 MST"))
+			}
+			return attr
+		},
+	})
 }
 
 func migrationFiles(dir string) ([]string, error) {

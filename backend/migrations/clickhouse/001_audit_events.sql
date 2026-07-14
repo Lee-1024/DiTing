@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS diting.audit_events
     tags Array(String),
 
     host_name String,
+    host_id String,
     host_ip String,
     node_name String,
 
@@ -59,5 +60,5 @@ CREATE TABLE IF NOT EXISTS diting.audit_events
 )
 ENGINE = MergeTree
 PARTITION BY toYYYYMM(event_date)
-ORDER BY (event_date, event_type, severity, host_name, namespace, pod_name, event_time)
+ORDER BY (event_date, event_type, severity, host_id, host_name, namespace, pod_name, event_time)
 TTL event_date + INTERVAL 90 DAY;

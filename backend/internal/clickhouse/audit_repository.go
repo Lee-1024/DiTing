@@ -86,7 +86,7 @@ func buildListEventsSQL(database string, query audit.Query) string {
 	}
 
 	where := buildAuditWhere(query)
-	return fmt.Sprintf(`SELECT event_id, event_time, event_type, severity, risk_score, host_name, node_name, namespace, pod_name, username, uid, gid, auid, euid, egid, login_username, process_name, binary_path, cmdline, cwd, parent_process_name, parent_binary_path, parent_cmdline, tags, rule_ids, rule_names, raw_event
+	return fmt.Sprintf(`SELECT event_id, event_time, event_type, severity, risk_score, host_name, host_id, node_name, namespace, pod_name, username, uid, gid, auid, euid, egid, login_username, process_name, binary_path, cmdline, cwd, parent_process_name, parent_binary_path, parent_cmdline, tags, rule_ids, rule_names, raw_event
 FROM %s
 WHERE %s
 ORDER BY event_time DESC
@@ -121,7 +121,7 @@ func buildAuditWhere(query audit.Query) string {
 	}
 	if query.HostName != "" {
 		hostName := escapeSQL(query.HostName)
-		conditions = append(conditions, "(node_name = '"+hostName+"' OR host_name = '"+hostName+"')")
+		conditions = append(conditions, "(host_id = '"+hostName+"' OR node_name = '"+hostName+"' OR host_name = '"+hostName+"')")
 	}
 	if query.Username != "" {
 		username := escapeSQL(query.Username)
@@ -156,7 +156,7 @@ func eventMatchesQuery(event audit.Event, query audit.Query) bool {
 			return false
 		}
 	}
-	if query.HostName != "" && event.NodeName != query.HostName && event.HostName != query.HostName {
+	if query.HostName != "" && event.HostID != query.HostName && event.NodeName != query.HostName && event.HostName != query.HostName {
 		return false
 	}
 	if query.Username != "" && event.Username != query.Username && event.LoginUsername != query.Username {
@@ -188,6 +188,7 @@ type eventRow struct {
 	Severity          string   `json:"severity"`
 	RiskScore         uint8    `json:"risk_score"`
 	HostName          string   `json:"host_name"`
+	HostID            string   `json:"host_id"`
 	NodeName          string   `json:"node_name"`
 	Namespace         string   `json:"namespace"`
 	PodName           string   `json:"pod_name"`
@@ -219,7 +220,7 @@ func decodeEventRow(data []byte) (audit.Event, error) {
 	eventTime, _ := time.Parse("2006-01-02 15:04:05.000", row.EventTime)
 	return audit.Event{
 		EventID: row.EventID, EventTime: eventTime, EventType: row.EventType, Severity: row.Severity, RiskScore: row.RiskScore,
-		HostName: row.HostName, NodeName: row.NodeName, Namespace: row.Namespace, PodName: row.PodName,
+		HostName: row.HostName, HostID: row.HostID, NodeName: row.NodeName, Namespace: row.Namespace, PodName: row.PodName,
 		Username: row.Username, UID: row.UID, GID: row.GID, AUID: row.AUID, EUID: row.EUID, EGID: row.EGID, LoginUsername: row.LoginUsername,
 		ProcessName: row.ProcessName, BinaryPath: row.BinaryPath, Cmdline: row.Cmdline, CWD: row.CWD,
 		ParentProcessName: row.ParentProcessName, ParentBinaryPath: row.ParentBinaryPath, ParentCmdline: row.ParentCmdline,

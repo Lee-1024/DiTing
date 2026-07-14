@@ -7,6 +7,7 @@ import FilterToolbar from '../../components/FilterToolbar';
 import SeverityTag from '../../components/SeverityTag';
 import type { AuditEvent, AuditEventQuery } from '../../types/audit';
 import { downloadBlob } from '../../utils/download';
+import { formatLocalDateTime } from '../../utils/time';
 import EventDetailDrawer from './EventDetailDrawer';
 
 const defaultRange = [dayjs().subtract(7, 'day'), dayjs()] as const;
@@ -114,7 +115,7 @@ export default function AuditEventsPage() {
             },
           }}
           columns={[
-            { title: '时间', dataIndex: 'eventTime', width: 190, fixed: 'left' },
+            { title: '时间', dataIndex: 'eventTime', width: 190, fixed: 'left', render: (value) => formatLocalDateTime(value) },
             { title: '等级', dataIndex: 'severity', width: 100, render: (value) => <SeverityTag value={value} /> },
             { title: '事件', dataIndex: 'eventType', width: 140 },
             { title: 'Namespace', dataIndex: 'namespace', width: 140 },

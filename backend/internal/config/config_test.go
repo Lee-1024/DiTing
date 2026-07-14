@@ -17,4 +17,10 @@ func TestLoadReadsServerAndDatabaseConfig(t *testing.T) {
 	if cfg.Postgres.Database != "diting" {
 		t.Fatalf("expected PostgreSQL database diting, got %q", cfg.Postgres.Database)
 	}
+	if cfg.Collector.HostID != "server-001" {
+		t.Fatalf("expected collector host id server-001, got %q", cfg.Collector.HostID)
+	}
+	if cfg.Collector.HostName != "diting-test-host" {
+		t.Fatalf("expected collector host name diting-test-host, got %q", cfg.Collector.HostName)
+	}
 }

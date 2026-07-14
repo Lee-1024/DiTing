@@ -2,6 +2,7 @@ import { Descriptions, Drawer, Space, Tag, Typography } from 'antd';
 import SeverityTag from '../../components/SeverityTag';
 import type { AuditEvent } from '../../types/audit';
 import { formatJSON } from '../../utils/format';
+import { formatLocalDateTime } from '../../utils/time';
 
 interface Props {
   event?: AuditEvent;
@@ -16,7 +17,7 @@ export default function EventDetailDrawer({ event, open, onClose }: Props) {
         <Space direction="vertical" size={16} style={{ width: '100%' }}>
           <Descriptions title="基础信息" column={1} bordered size="small">
             <Descriptions.Item label="事件 ID">{event.eventId}</Descriptions.Item>
-            <Descriptions.Item label="时间">{event.eventTime}</Descriptions.Item>
+            <Descriptions.Item label="时间">{formatLocalDateTime(event.eventTime)}</Descriptions.Item>
             <Descriptions.Item label="等级"><SeverityTag value={event.severity} /></Descriptions.Item>
             <Descriptions.Item label="风险分数">{event.riskScore}</Descriptions.Item>
             <Descriptions.Item label="节点">{event.nodeName || event.hostName}</Descriptions.Item>

@@ -84,6 +84,8 @@ collector:
   input_mode: file
   tetragon_log_file: /data/tetragon/logs/tetragon.log
   passwd_file: /etc/passwd
+  host_id: app-prod-01
+  host_name: app-prod-01
   flush_interval_seconds: 1
   batch_size: 1000
 ```

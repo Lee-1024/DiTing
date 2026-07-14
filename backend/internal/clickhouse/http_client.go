@@ -155,6 +155,7 @@ type clickHouseRow struct {
 	RiskScore         uint8    `json:"risk_score"`
 	Tags              []string `json:"tags"`
 	HostName          string   `json:"host_name"`
+	HostID            string   `json:"host_id"`
 	HostIP            string   `json:"host_ip"`
 	NodeName          string   `json:"node_name"`
 	Namespace         string   `json:"namespace"`
@@ -202,7 +203,7 @@ func toClickHouseRow(event audit.Event) clickHouseRow {
 	return clickHouseRow{
 		EventID: event.EventID, EventTime: formatDateTime64(event.EventTime), EventDate: eventDate.Format("2006-01-02"), IngestTime: formatDateTime64(event.IngestTime),
 		EventType: event.EventType, Action: event.Action, Severity: event.Severity, RiskScore: event.RiskScore, Tags: tags,
-		HostName: event.HostName, HostIP: event.HostIP, NodeName: event.NodeName,
+		HostName: event.HostName, HostID: event.HostID, HostIP: event.HostIP, NodeName: event.NodeName,
 		Namespace: event.Namespace, PodName: event.PodName, ContainerID: event.ContainerID, ContainerName: event.ContainerName, Image: event.Image,
 		PID: event.PID, PPID: event.PPID, ProcessName: event.ProcessName, BinaryPath: event.BinaryPath, Cmdline: event.Cmdline, CWD: event.CWD,
 		ParentProcessName: event.ParentProcessName, ParentBinaryPath: event.ParentBinaryPath, ParentCmdline: event.ParentCmdline,

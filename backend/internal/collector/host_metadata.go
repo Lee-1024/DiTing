@@ -1,0 +1,65 @@
+package collector
+
+import (
+	"context"
+	"log/slog"
+	"os"
+	"strings"
+
+	"diting/backend/internal/audit"
+)
+
+type HostMetadata struct {
+	ID   string
+	Name string
+}
+
+func ResolveHostMetadata(configuredID, configuredName string) HostMetadata {
+	id := strings.TrimSpace(configuredID)
+	name := strings.TrimSpace(configuredName)
+	if id == "" {
+		id = readMachineID("/etc/machine-id")
+	}
+	if name == "" {
+		name, _ = os.Hostname()
+	}
+	if id == "" {
+		id = name
+	}
+	if name == "" {
+		name = id
+	}
+	return HostMetadata{ID: id, Name: name}
+}
+
+func readMachineID(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(data))
+}
+
+type HostMetadataWriter struct {
+	metadata HostMetadata
+	next     EventWriter
+}
+
+func NewHostMetadataWriter(metadata HostMetadata, next EventWriter) *HostMetadataWriter {
+	return &HostMetadataWriter{metadata: metadata, next: next}
+}
+
+func (w *HostMetadataWriter) Write(ctx context.Context, events []audit.Event) error {
+	enriched := make([]audit.Event, len(events))
+	for i, event := range events {
+		event.HostID = w.metadata.ID
+		if w.metadata.Name != "" {
+			event.HostName = w.metadata.Name
+		}
+		enriched[i] = event
+	}
+	if w.metadata.ID == "" {
+		slog.Warn("collector host id is empty")
+	}
+	return w.next.Write(ctx, enriched)
+}

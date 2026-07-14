@@ -205,7 +205,7 @@ func TestAuditRepositoryFiltersHostName(t *testing.T) {
 		t.Fatalf("ListEvents returned error: %v", err)
 	}
 
-	if !strings.Contains(body, "(node_name = 'node-1' OR host_name = 'node-1')") {
+	if !strings.Contains(body, "(host_id = 'node-1' OR node_name = 'node-1' OR host_name = 'node-1')") {
 		t.Fatalf("expected host filter, got %s", body)
 	}
 }

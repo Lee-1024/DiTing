@@ -157,6 +157,8 @@ See `docs/production-deployment.md`.
 
 - `collector.tetragon_log_file` 指向真实日志，例如 `/data/tetragon/logs/tetragon.log`
 - `collector.passwd_file` 指向服务器的 passwd 快照，例如 `/data/tetragon/passwd`
+- `collector.host_id` 设置为稳定主机 ID，例如 `/etc/machine-id` 的值或自定义资产编号
+- `collector.host_name` 设置为页面展示名称，例如 `app-prod-01`
 - ClickHouse 和 PostgreSQL 地址可从服务器访问
 
 启动实时测试服务：

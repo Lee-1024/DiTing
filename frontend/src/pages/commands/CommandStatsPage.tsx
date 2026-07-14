@@ -9,6 +9,7 @@ import SeverityTag from '../../components/SeverityTag';
 import type { AuditEvent } from '../../types/audit';
 import type { CommandItem, CommandStatsQuery } from '../../types/stats';
 import { downloadBlob } from '../../utils/download';
+import { formatLocalDateTime } from '../../utils/time';
 
 const defaultRange = [dayjs().subtract(7, 'day'), dayjs()] as const;
 
@@ -115,8 +116,8 @@ export default function CommandStatsPage() {
             { title: '登录用户', dataIndex: 'loginUsername', width: 120, render: (_, record) => record.loginUsername || record.username },
             { title: '执行用户', dataIndex: 'username', width: 120 },
             { title: '次数', dataIndex: 'count', width: 90 },
-            { title: '首次执行', dataIndex: 'firstSeen', width: 190 },
-            { title: '最近执行', dataIndex: 'lastSeen', width: 190 },
+            { title: '首次执行', dataIndex: 'firstSeen', width: 190, render: (value) => formatLocalDateTime(value) },
+            { title: '最近执行', dataIndex: 'lastSeen', width: 190, render: (value) => formatLocalDateTime(value) },
           ]}
         />
       </Card>
@@ -134,7 +135,7 @@ export default function CommandStatsPage() {
           locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无执行明细" /> }}
           pagination={{ pageSize: 10 }}
           columns={[
-            { title: '时间', dataIndex: 'eventTime', width: 190 },
+            { title: '时间', dataIndex: 'eventTime', width: 190, render: (value) => formatLocalDateTime(value) },
             { title: '登录用户', dataIndex: 'loginUsername', width: 110, render: (_, record) => record.loginUsername || record.username },
             { title: '执行用户', dataIndex: 'username', width: 110 },
             { title: '节点', dataIndex: 'nodeName', width: 150, render: (_, record) => record.nodeName || record.hostName },

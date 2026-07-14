@@ -15,6 +15,7 @@ type Event struct {
 	Tags      []string `json:"tags"`
 
 	HostName string `json:"hostName"`
+	HostID   string `json:"hostId"`
 	HostIP   string `json:"hostIp"`
 	NodeName string `json:"nodeName"`
 

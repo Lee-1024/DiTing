@@ -10,6 +10,7 @@ import SeverityTag from '../../components/SeverityTag';
 import type { AuditEvent } from '../../types/audit';
 import type { HostAsset } from '../../types/hostAsset';
 import type { HostAuditItem, HostAuditQuery } from '../../types/stats';
+import { formatLocalDateTime } from '../../utils/time';
 
 const defaultRange = [dayjs().subtract(7, 'day'), dayjs()] as const;
 
@@ -121,8 +122,8 @@ export default function HostAuditPage() {
             { title: '命令数', dataIndex: 'commandCount', width: 110 },
             { title: '活跃用户', dataIndex: 'activeUsers', width: 110 },
             { title: '高危事件', dataIndex: 'highRiskEvents', width: 110 },
-            { title: '首次活动', dataIndex: 'firstSeen', width: 190 },
-            { title: '最近活动', dataIndex: 'lastSeen', width: 190 },
+            { title: '首次活动', dataIndex: 'firstSeen', width: 190, render: (value) => formatLocalDateTime(value) },
+            { title: '最近活动', dataIndex: 'lastSeen', width: 190, render: (value) => formatLocalDateTime(value) },
           ]}
         />
       </Card>
@@ -140,7 +141,7 @@ export default function HostAuditPage() {
           locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无命令明细" /> }}
           pagination={{ pageSize: 10 }}
           columns={[
-            { title: '时间', dataIndex: 'eventTime', width: 190 },
+            { title: '时间', dataIndex: 'eventTime', width: 190, render: (value) => formatLocalDateTime(value) },
             { title: '登录用户', dataIndex: 'loginUsername', width: 110, render: (_, record) => record.loginUsername || record.username },
             { title: '执行用户', dataIndex: 'username', width: 110 },
             { title: '进程', dataIndex: 'processName', width: 120 },

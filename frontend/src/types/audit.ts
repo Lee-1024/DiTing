@@ -5,6 +5,7 @@ export interface AuditEvent {
   severity: string;
   riskScore: number;
   hostName: string;
+  hostId?: string;
   nodeName?: string;
   namespace: string;
   podName: string;
