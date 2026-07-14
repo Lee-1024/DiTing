@@ -41,6 +41,33 @@ func TestStatsRepositoryOverviewQueriesClickHouse(t *testing.T) {
 	}
 }
 
+func TestStatsRepositoryEventTrendUsesShanghaiTimezone(t *testing.T) {
+	var body string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		data := make([]byte, r.ContentLength)
+		_, _ = r.Body.Read(data)
+		body = string(data)
+		_, _ = w.Write([]byte(`{"time":"2026-07-14 11:00:00","count":"5"}` + "\n"))
+	}))
+	defer server.Close()
+
+	repository := NewStatsRepository(NewHTTPClient(HTTPConfig{URL: server.URL, Database: "diting"}), nil)
+	points, err := repository.EventTrend(context.Background(), stats.Query{
+		StartTime: time.Date(2026, 7, 14, 0, 0, 0, 0, time.UTC),
+		EndTime:   time.Date(2026, 7, 15, 0, 0, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatalf("EventTrend returned error: %v", err)
+	}
+
+	if !strings.Contains(body, "toTimeZone(event_time, 'Asia/Shanghai')") {
+		t.Fatalf("expected event trend to use Asia/Shanghai timezone, got %s", body)
+	}
+	if len(points) != 1 || points[0].Time != "2026-07-14 11:00:00" || points[0].Count != 5 {
+		t.Fatalf("unexpected trend points %#v", points)
+	}
+}
+
 func TestStatsRepositoryTopCommandsOnlyCountsProcessExec(t *testing.T) {
 	var body string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

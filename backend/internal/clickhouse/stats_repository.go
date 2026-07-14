@@ -81,7 +81,7 @@ func (v *flexibleUint64) UnmarshalJSON(data []byte) error {
 
 func (r *StatsRepository) EventTrend(ctx context.Context, query stats.Query) ([]stats.TrendPoint, error) {
 	sql := fmt.Sprintf(`SELECT
-	formatDateTime(toStartOfHour(event_time), '%%Y-%%m-%%d %%H:00:00') AS time,
+	formatDateTime(toStartOfHour(toTimeZone(event_time, 'Asia/Shanghai')), '%%Y-%%m-%%d %%H:00:00') AS time,
 	count() AS count
 FROM %s
 WHERE %s
