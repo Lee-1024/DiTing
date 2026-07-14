@@ -176,10 +176,23 @@ scripts/start-linux.sh --config backend/configs/config.yaml --web-port 5174
 scripts/start-linux.sh --config backend/configs/config.yaml --web-port 5174 --migrate
 ```
 
+也可以单独执行迁移脚本：
+
+```bash
+chmod +x scripts/migrate-linux.sh
+scripts/migrate-linux.sh --config backend/configs/config.yaml
+```
+
+只执行 ClickHouse 迁移：
+
+```bash
+scripts/migrate-linux.sh --config backend/configs/config.yaml --only clickhouse
+```
+
 停止：
 
 ```bash
-scripts/stop-linux.sh
+scripts/stop-linux.sh --web-port 5174
 ```
 
 日志位置：

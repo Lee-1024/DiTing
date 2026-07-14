@@ -99,9 +99,10 @@ start_process() {
   local stderr="$LOG_DIR/$log_name.err.log"
 
   echo "Starting $name..."
-  nohup "$@" >"$stdout" 2>"$stderr" &
+  setsid "$@" >"$stdout" 2>"$stderr" &
   local pid=$!
   echo "$pid" >"$pid_file"
+  echo "$pid" >"${pid_file%.pid}.pgid"
   sleep 0.5
   if ! kill -0 "$pid" >/dev/null 2>&1; then
     echo "$name failed to start. Check logs:" >&2
@@ -113,6 +114,7 @@ start_process() {
 }
 
 require_command go
+require_command setsid
 if [[ "$SKIP_FRONTEND" != "1" ]]; then
   require_command npm
 fi

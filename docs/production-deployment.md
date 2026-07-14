@@ -97,9 +97,9 @@ Change `jwt.secret` before production use.
 Run once after copying the backend binary and migrations:
 
 ```bash
-cd /opt/diting/backend
-/opt/diting/bin/audit-server migrate-postgres --config /etc/diting/config.yaml
-/opt/diting/bin/audit-server migrate-clickhouse --config /etc/diting/config.yaml
+cd /opt/diting
+chmod +x scripts/migrate-linux.sh
+scripts/migrate-linux.sh --config /etc/diting/config.yaml
 ```
 
 Default login after migration:
