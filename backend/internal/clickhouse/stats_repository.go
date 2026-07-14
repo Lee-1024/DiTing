@@ -30,7 +30,7 @@ func (r *StatsRepository) Overview(ctx context.Context, query stats.Query) (stat
 	sql := fmt.Sprintf(`SELECT
 	count() AS total_events,
 	countIf(severity IN ('high', 'critical')) AS high_risk_events,
-	uniqExact(node_name) AS active_hosts
+	uniqExact(if(host_name != '', host_name, if(host_id != '', host_id, node_name))) AS active_hosts
 FROM %s
 WHERE %s
 FORMAT JSONEachRow`, r.table(), statsWhere(query))

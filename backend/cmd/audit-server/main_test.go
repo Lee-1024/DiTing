@@ -49,6 +49,14 @@ func TestParseArgsSupportsMigratePostgresMode(t *testing.T) {
 	}
 }
 
+func TestParseArgsSupportsClearTestDataMode(t *testing.T) {
+	mode, _ := parseArgs([]string{"audit-server", "clear-test-data"})
+
+	if mode != "clear-test-data" {
+		t.Fatalf("expected clear-test-data mode, got %q", mode)
+	}
+}
+
 func TestParseArgsDefaultsToAPIAndExampleConfig(t *testing.T) {
 	mode, configPath := parseArgs([]string{"audit-server"})
 

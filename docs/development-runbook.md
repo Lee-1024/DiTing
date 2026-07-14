@@ -189,6 +189,17 @@ scripts/migrate-linux.sh --config backend/configs/config.yaml
 scripts/migrate-linux.sh --config backend/configs/config.yaml --only clickhouse
 ```
 
+测试阶段如需清空采集数据后重新采集：
+
+```bash
+chmod +x scripts/clear-test-data-linux.sh
+scripts/stop-linux.sh --web-port 5174
+scripts/clear-test-data-linux.sh --config backend/configs/config.yaml --yes
+scripts/start-linux.sh --config backend/configs/config.yaml --web-port 5174
+```
+
+该脚本只清理采集明细和风险处置状态，不会删除用户、规则、主机资产等配置。
+
 停止：
 
 ```bash

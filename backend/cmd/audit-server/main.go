@@ -156,6 +156,40 @@ func main() {
 		return
 	}
 
+	if mode == "clear-test-data" {
+		client := ch.NewHTTPClient(ch.HTTPConfig{
+			URL:      ch.HTTPURLFromAddress(cfg.ClickHouse.Addr),
+			Database: "",
+			Username: cfg.ClickHouse.Username,
+			Password: cfg.ClickHouse.Password,
+		})
+		auditTable := "audit_events"
+		if cfg.ClickHouse.Database != "" {
+			auditTable = cfg.ClickHouse.Database + "." + auditTable
+		}
+		slog.Warn("clearing clickhouse audit events", "table", auditTable)
+		if err := client.Execute(context.Background(), "TRUNCATE TABLE IF EXISTS "+auditTable); err != nil {
+			slog.Error("clear clickhouse audit events failed", "table", auditTable, "error", err)
+			fmt.Fprintf(os.Stderr, "clear clickhouse audit events: %v\n", err)
+			os.Exit(1)
+		}
+		pool, err := postgres.Connect(context.Background(), cfg.Postgres)
+		if err != nil {
+			slog.Error("connect postgres failed", "host", cfg.Postgres.Host, "port", cfg.Postgres.Port, "database", cfg.Postgres.Database, "error", err)
+			fmt.Fprintf(os.Stderr, "connect postgres: %v\n", err)
+			os.Exit(1)
+		}
+		defer pool.Close()
+		slog.Warn("clearing postgres risk dispositions", "table", "diting_risk_dispositions")
+		if _, err := pool.Exec(context.Background(), "DELETE FROM diting_risk_dispositions"); err != nil {
+			slog.Error("clear postgres risk dispositions failed", "error", err)
+			fmt.Fprintf(os.Stderr, "clear postgres risk dispositions: %v\n", err)
+			os.Exit(1)
+		}
+		slog.Info("test data cleared")
+		return
+	}
+
 	clickHouseClient := ch.NewHTTPClient(ch.HTTPConfig{
 		URL:      ch.HTTPURLFromAddress(cfg.ClickHouse.Addr),
 		Database: cfg.ClickHouse.Database,
@@ -213,7 +247,7 @@ func parseArgs(args []string) (string, string) {
 	configPath := "./configs/config.example.yaml"
 	for i := 1; i < len(args); i++ {
 		switch args[i] {
-		case "api", "collector", "collector-once", "migrate-clickhouse", "migrate-postgres":
+		case "api", "collector", "collector-once", "migrate-clickhouse", "migrate-postgres", "clear-test-data":
 			mode = args[i]
 		case "--config":
 			if i+1 < len(args) {

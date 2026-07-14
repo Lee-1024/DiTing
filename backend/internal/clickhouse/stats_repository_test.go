@@ -33,6 +33,9 @@ func TestStatsRepositoryOverviewQueriesClickHouse(t *testing.T) {
 	if !strings.Contains(body, "count() AS total_events") {
 		t.Fatalf("expected overview query, got %s", body)
 	}
+	if !strings.Contains(body, "uniqExact(if(host_name != '', host_name, if(host_id != '', host_id, node_name))) AS active_hosts") {
+		t.Fatalf("expected active hosts to use stable host identity, got %s", body)
+	}
 	if overview.TotalEvents != 10 || overview.ActiveRules != 4 {
 		t.Fatalf("unexpected overview %#v", overview)
 	}
