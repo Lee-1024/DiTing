@@ -124,8 +124,11 @@ func TestStatsRepositoryCommandStatsFiltersByKeywordAndUser(t *testing.T) {
 	if !strings.Contains(body, "event_time >= parseDateTime64BestEffort('2026-07-09 00:00:00.000', 3)") || !strings.Contains(body, "event_time <= parseDateTime64BestEffort('2026-07-10 00:00:00.000', 3)") {
 		t.Fatalf("expected command stats to apply time range, got %s", body)
 	}
-	if !strings.Contains(body, "formatDateTime(toTimeZone(min(event_time), 'Asia/Shanghai')") || !strings.Contains(body, "formatDateTime(toTimeZone(max(event_time), 'Asia/Shanghai')") {
-		t.Fatalf("expected command first/last seen to use Asia/Shanghai timezone, got %s", body)
+	if strings.Contains(body, "toTimeZone(min(event_time)") || strings.Contains(body, "toTimeZone(max(event_time)") {
+		t.Fatalf("expected command first/last seen to keep the same raw event_time timezone as audit details, got %s", body)
+	}
+	if !strings.Contains(body, "min(event_time) AS first_seen") || !strings.Contains(body, "max(event_time) AS last_seen") {
+		t.Fatalf("expected command first/last seen to use raw event_time aggregates, got %s", body)
 	}
 	if len(items) != 1 || items[0].ProcessName != "whoami" || items[0].Username != "root" {
 		t.Fatalf("unexpected items %#v", items)

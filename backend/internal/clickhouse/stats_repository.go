@@ -155,8 +155,8 @@ func (r *StatsRepository) CommandStats(ctx context.Context, query stats.Query) (
 	username,
 	login_username,
 	count() AS count,
-	formatDateTime(toTimeZone(min(event_time), 'Asia/Shanghai'), '%%Y-%%m-%%d %%H:%%M:%%S') AS first_seen,
-	formatDateTime(toTimeZone(max(event_time), 'Asia/Shanghai'), '%%Y-%%m-%%d %%H:%%M:%%S') AS last_seen,
+	min(event_time) AS first_seen,
+	max(event_time) AS last_seen,
 	max(event_time) AS last_seen_sort
 FROM %s
 WHERE %s
@@ -206,8 +206,8 @@ func (r *StatsRepository) UserAudits(ctx context.Context, query stats.Query) ([]
 	count() AS command_count,
 	uniqExact(node_name) AS active_hosts,
 	countIf(severity IN ('high', 'critical')) AS high_risk_events,
-	formatDateTime(toTimeZone(min(event_time), 'Asia/Shanghai'), '%%Y-%%m-%%d %%H:%%M:%%S') AS first_seen,
-	formatDateTime(toTimeZone(max(event_time), 'Asia/Shanghai'), '%%Y-%%m-%%d %%H:%%M:%%S') AS last_seen
+	min(event_time) AS first_seen,
+	max(event_time) AS last_seen
 FROM
 (
 	SELECT
@@ -264,8 +264,8 @@ func (r *StatsRepository) HostAudits(ctx context.Context, query stats.Query) ([]
 	count() AS command_count,
 	uniqExact(audit_user) AS active_users,
 	countIf(severity IN ('high', 'critical')) AS high_risk_events,
-	formatDateTime(toTimeZone(min(event_time), 'Asia/Shanghai'), '%%Y-%%m-%%d %%H:%%M:%%S') AS first_seen,
-	formatDateTime(toTimeZone(max(event_time), 'Asia/Shanghai'), '%%Y-%%m-%%d %%H:%%M:%%S') AS last_seen
+	min(event_time) AS first_seen,
+	max(event_time) AS last_seen
 FROM
 (
 	SELECT
