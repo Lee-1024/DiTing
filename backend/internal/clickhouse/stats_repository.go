@@ -161,7 +161,7 @@ func (r *StatsRepository) CommandStats(ctx context.Context, query stats.Query) (
 FROM %s
 WHERE %s
 GROUP BY process_name, cmdline, username, login_username
-ORDER BY count DESC, last_seen DESC
+ORDER BY last_seen DESC, count DESC
 LIMIT %d
 FORMAT JSONEachRow`, r.table(), strings.Join(conditions, " AND "), limit)
 	data, err := r.client.Query(ctx, sql)

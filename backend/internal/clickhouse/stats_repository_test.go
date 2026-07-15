@@ -155,6 +155,9 @@ func TestStatsRepositoryCommandStatsIncludesEventsWithoutProcessName(t *testing.
 	if !strings.Contains(body, "cmdline != ''") {
 		t.Fatalf("expected command stats to require cmdline, got %s", body)
 	}
+	if !strings.Contains(body, "ORDER BY last_seen DESC, count DESC") {
+		t.Fatalf("expected command stats to order by newest execution first, got %s", body)
+	}
 	if len(items) != 1 || items[0].Cmdline != "id" || items[0].Username != "ubuntu" {
 		t.Fatalf("unexpected command stats %#v", items)
 	}
