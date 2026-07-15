@@ -13,6 +13,10 @@ import { formatLocalDateTime } from '../../utils/time';
 
 const defaultRange = [dayjs().subtract(7, 'day'), dayjs()] as const;
 
+function commandName(item: CommandItem) {
+  return item.processName || item.cmdline?.split(/\s+/)[0] || '-';
+}
+
 export default function CommandStatsPage() {
   const [items, setItems] = useState<CommandItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -111,7 +115,7 @@ export default function CommandStatsPage() {
             onShowSizeChange: (_, size) => setTablePageSize(size),
           }}
           columns={[
-            { title: '命令', dataIndex: 'processName', width: 150 },
+            { title: '命令', dataIndex: 'processName', width: 150, render: (_, record) => commandName(record) },
             { title: '完整命令', dataIndex: 'cmdline', render: (value, record) => <CommandText value={value} onView={() => void openDetails(record)} /> },
             { title: '登录用户', dataIndex: 'loginUsername', width: 120, render: (_, record) => record.loginUsername || record.username },
             { title: '执行用户', dataIndex: 'username', width: 120 },

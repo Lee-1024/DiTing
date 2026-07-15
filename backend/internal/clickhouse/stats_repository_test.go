@@ -121,8 +121,42 @@ func TestStatsRepositoryCommandStatsFiltersByKeywordAndUser(t *testing.T) {
 	if !strings.Contains(body, "event_type = 'process_exec'") || !strings.Contains(body, "positionCaseInsensitive(cmdline, 'whoami')") || !strings.Contains(body, "username = 'root'") {
 		t.Fatalf("expected command filters in query, got %s", body)
 	}
+	if !strings.Contains(body, "formatDateTime(toTimeZone(min(event_time), 'Asia/Shanghai')") || !strings.Contains(body, "formatDateTime(toTimeZone(max(event_time), 'Asia/Shanghai')") {
+		t.Fatalf("expected command first/last seen to use Asia/Shanghai timezone, got %s", body)
+	}
 	if len(items) != 1 || items[0].ProcessName != "whoami" || items[0].Username != "root" {
 		t.Fatalf("unexpected items %#v", items)
+	}
+}
+
+func TestStatsRepositoryCommandStatsIncludesEventsWithoutProcessName(t *testing.T) {
+	var body string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		data := make([]byte, r.ContentLength)
+		_, _ = r.Body.Read(data)
+		body = string(data)
+		_, _ = w.Write([]byte(`{"process_name":"","cmdline":"id","username":"ubuntu","login_username":"ubuntu","count":"1","first_seen":"2026-07-15 09:10:00","last_seen":"2026-07-15 09:10:00"}` + "\n"))
+	}))
+	defer server.Close()
+
+	repository := NewStatsRepository(NewHTTPClient(HTTPConfig{URL: server.URL, Database: "diting"}), nil)
+	items, err := repository.CommandStats(context.Background(), stats.Query{
+		StartTime: time.Date(2026, 7, 15, 0, 0, 0, 0, time.UTC),
+		EndTime:   time.Date(2026, 7, 16, 0, 0, 0, 0, time.UTC),
+		Limit:     50,
+	})
+	if err != nil {
+		t.Fatalf("CommandStats returned error: %v", err)
+	}
+
+	if strings.Contains(body, "process_name != ''") {
+		t.Fatalf("expected command stats to include rows with empty process_name, got %s", body)
+	}
+	if !strings.Contains(body, "cmdline != ''") {
+		t.Fatalf("expected command stats to require cmdline, got %s", body)
+	}
+	if len(items) != 1 || items[0].Cmdline != "id" || items[0].Username != "ubuntu" {
+		t.Fatalf("unexpected command stats %#v", items)
 	}
 }
 
