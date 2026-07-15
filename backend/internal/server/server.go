@@ -12,9 +12,10 @@ import (
 	"diting/backend/internal/riskstatus"
 	"diting/backend/internal/rule"
 	"diting/backend/internal/stats"
+	"diting/backend/internal/systemconfig"
 )
 
-func NewRouter(repository audit.Repository, ruleRepository rule.Repository, statsRepository stats.Repository, authService *auth.Service, operationRepository operationlog.Repository, hostAssetRepository hostasset.Repository, riskStatusRepository riskstatus.Repository) http.Handler {
+func NewRouter(repository audit.Repository, ruleRepository rule.Repository, statsRepository stats.Repository, authService *auth.Service, operationRepository operationlog.Repository, hostAssetRepository hostasset.Repository, riskStatusRepository riskstatus.Repository, systemConfigRepository systemconfig.Repository) http.Handler {
 	mux := http.NewServeMux()
 	auditHandler := audit.NewHandler(repository)
 	if ruleRepository == nil {
@@ -25,6 +26,10 @@ func NewRouter(repository audit.Repository, ruleRepository rule.Repository, stat
 		hostAssetRepository = hostasset.NewMemoryRepository()
 	}
 	hostAssetHandler := hostasset.NewHandler(hostAssetRepository)
+	if systemConfigRepository == nil {
+		systemConfigRepository = systemconfig.NewMemoryRepository()
+	}
+	systemConfigHandler := systemconfig.NewHandler(systemConfigRepository)
 	var riskStatusHandler *riskstatus.Handler
 	if riskStatusRepository != nil {
 		riskStatusHandler = riskstatus.NewHandler(riskStatusRepository)
@@ -99,6 +104,16 @@ func NewRouter(repository audit.Repository, ruleRepository rule.Repository, stat
 			hostAssetHandler.Update(w, r)
 		case http.MethodDelete:
 			hostAssetHandler.Delete(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})))
+	mux.Handle("/api/v1/system-configs/collector-filter", protect(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			systemConfigHandler.GetCollectorFilter(w, r)
+		case http.MethodPut:
+			systemConfigHandler.SaveCollectorFilter(w, r)
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}

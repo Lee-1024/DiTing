@@ -8,6 +8,7 @@ import HostAuditPage from '../pages/hosts/HostAuditPage';
 import HostAssetsPage from '../pages/host-assets/HostAssetsPage';
 import RiskEventsPage from '../pages/risks/RiskEventsPage';
 import RulesPage from '../pages/rules/RulesPage';
+import CollectorConfigPage from '../pages/settings/CollectorConfigPage';
 import LoginPage from '../pages/login/LoginPage';
 import { getToken } from '../stores/auth';
 
@@ -29,6 +30,7 @@ export const router = createBrowserRouter([
       { path: 'audit/risks', element: <RiskEventsPage /> },
       { path: 'assets/hosts', element: <HostAssetsPage /> },
       { path: 'rules', element: <RulesPage /> },
+      { path: 'settings/collector', element: <CollectorConfigPage /> },
       { path: '*', element: <Navigate to="/" replace /> },
     ],
   },

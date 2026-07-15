@@ -1,4 +1,4 @@
-import { CodeOutlined, DashboardOutlined, FileSearchOutlined, HddOutlined, SafetyCertificateOutlined, ThunderboltOutlined, UserOutlined } from '@ant-design/icons';
+import { CodeOutlined, DashboardOutlined, FileSearchOutlined, HddOutlined, SafetyCertificateOutlined, SettingOutlined, ThunderboltOutlined, UserOutlined } from '@ant-design/icons';
 import { Button, Form, Input, Layout, Menu, Modal, Space, Typography, message } from 'antd';
 import { useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
@@ -66,7 +66,7 @@ export default function MainLayout() {
               label: '配置管理',
               children: [
                 { key: '/rules', icon: <SafetyCertificateOutlined />, label: '审计规则' },
-                { key: '/assets/hosts', icon: <HddOutlined />, label: '主机资产' },
+                { key: '/settings/collector', icon: <SettingOutlined />, label: '采集配置' },
               ],
             },
           ]}

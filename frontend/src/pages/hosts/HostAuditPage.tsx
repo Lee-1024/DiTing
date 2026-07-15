@@ -2,13 +2,11 @@ import { Card, DatePicker, Drawer, Empty, Form, Input, Space, Table, Typography 
 import dayjs from 'dayjs';
 import { useEffect, useState } from 'react';
 import { queryAuditEvents } from '../../api/audit';
-import { listHostAssets } from '../../api/hostAssets';
 import { getHostAudits } from '../../api/stats';
 import CommandText from '../../components/CommandText';
 import FilterToolbar from '../../components/FilterToolbar';
 import SeverityTag from '../../components/SeverityTag';
 import type { AuditEvent } from '../../types/audit';
-import type { HostAsset } from '../../types/hostAsset';
 import type { HostAuditItem, HostAuditQuery } from '../../types/stats';
 import { formatLocalDateTime } from '../../utils/time';
 
@@ -20,7 +18,6 @@ export default function HostAuditPage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [selected, setSelected] = useState<HostAuditItem>();
   const [events, setEvents] = useState<AuditEvent[]>([]);
-  const [assetMap, setAssetMap] = useState<Record<string, HostAsset>>({});
   const [tablePageSize, setTablePageSize] = useState(10);
   const [form] = Form.useForm();
 
@@ -38,9 +35,8 @@ export default function HostAuditPage() {
   async function load() {
     setLoading(true);
     try {
-      const [hostItems, assets] = await Promise.all([getHostAudits(buildQuery()), listHostAssets()]);
+      const hostItems = await getHostAudits(buildQuery());
       setItems(hostItems);
-      setAssetMap(Object.fromEntries(assets.map((asset) => [asset.nodeName, asset])));
     } finally {
       setLoading(false);
     }
@@ -50,10 +46,6 @@ export default function HostAuditPage() {
     form.resetFields();
     await Promise.resolve();
     await load();
-  }
-
-  function hostLabel(hostName: string) {
-    return assetMap[hostName]?.displayName || hostName;
   }
 
   async function openDetails(item: HostAuditItem) {
@@ -114,8 +106,7 @@ export default function HostAuditPage() {
               dataIndex: 'hostName',
               render: (value: string) => (
                 <Space direction="vertical" size={0}>
-                  <Typography.Text>{hostLabel(value)}</Typography.Text>
-                  {assetMap[value]?.displayName && <Typography.Text type="secondary">{value}</Typography.Text>}
+                  <Typography.Text>{value}</Typography.Text>
                 </Space>
               ),
             },
@@ -128,7 +119,7 @@ export default function HostAuditPage() {
         />
       </Card>
       <Drawer
-        title={selected?.hostName ? `${hostLabel(selected.hostName)} 命令明细` : '命令明细'}
+        title={selected?.hostName ? `${selected.hostName} 命令明细` : '命令明细'}
         width={960}
         open={Boolean(selected)}
         onClose={() => { setSelected(undefined); setEvents([]); }}

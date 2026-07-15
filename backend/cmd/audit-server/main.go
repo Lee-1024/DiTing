@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -22,6 +23,7 @@ import (
 	"diting/backend/internal/riskstatus"
 	"diting/backend/internal/rule"
 	"diting/backend/internal/server"
+	"diting/backend/internal/systemconfig"
 )
 
 func main() {
@@ -59,7 +61,9 @@ func main() {
 		slog.Info("postgres connected", "host", cfg.Postgres.Host, "port", cfg.Postgres.Port, "database", cfg.Postgres.Database)
 		defer pool.Close()
 		ruleRepository := rule.NewPostgresRepository(pool)
+		systemConfigRepository := systemconfig.NewPostgresRepository(pool)
 		writer := newRefreshingRuleWriter(client, repositoryRuleProvider{repository: ruleRepository})
+		writer.SetCollectorFilterProvider(systemConfigRepository)
 		if err := writer.Refresh(context.Background()); err != nil {
 			slog.Error("load rules failed", "error", err)
 			fmt.Fprintf(os.Stderr, "load rules: %v\n", err)
@@ -212,10 +216,11 @@ func main() {
 	operationRepository := operationlog.NewPostgresRepository(pool)
 	hostAssetRepository := hostasset.NewPostgresRepository(pool)
 	riskStatusRepository := riskstatus.NewPostgresRepository(pool)
+	systemConfigRepository := systemconfig.NewPostgresRepository(pool)
 
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
 	slog.Info("api server listening", "addr", addr)
-	if err := http.ListenAndServe(addr, server.NewRouter(auditRepository, ruleRepository, statsRepository, authService, operationRepository, hostAssetRepository, riskStatusRepository)); err != nil {
+	if err := http.ListenAndServe(addr, server.NewRouter(auditRepository, ruleRepository, statsRepository, authService, operationRepository, hostAssetRepository, riskStatusRepository, systemConfigRepository)); err != nil {
 		slog.Error("api server stopped with error", "addr", addr, "error", err)
 		fmt.Fprintf(os.Stderr, "listen: %v\n", err)
 		os.Exit(1)
@@ -269,6 +274,10 @@ type ruleProvider interface {
 	Rules(ctx context.Context) ([]rule.Rule, error)
 }
 
+type collectorFilterProvider interface {
+	GetCollectorFilter(ctx context.Context) (systemconfig.CollectorFilterConfig, error)
+}
+
 type repositoryRuleProvider struct {
 	repository rule.Repository
 }
@@ -278,14 +287,46 @@ func (p repositoryRuleProvider) Rules(ctx context.Context) ([]rule.Rule, error) 
 }
 
 type refreshingRuleWriter struct {
-	sink     eventSink
-	provider ruleProvider
-	mu       sync.RWMutex
-	rules    []rule.Rule
+	sink           eventSink
+	provider       ruleProvider
+	filterProvider collectorFilterProvider
+	mu             sync.RWMutex
+	rules          []rule.Rule
+	filter         collectorNoiseFilter
 }
 
 func newRefreshingRuleWriter(sink eventSink, provider ruleProvider) *refreshingRuleWriter {
 	return &refreshingRuleWriter{sink: sink, provider: provider, rules: []rule.Rule{}}
+}
+
+type collectorNoiseFilter struct {
+	Enabled               bool
+	IgnoreProcessNames    []string
+	IgnoreCommandKeywords []string
+	IgnoreUsers           []string
+	KeepSeverities        []string
+}
+
+func (w *refreshingRuleWriter) SetNoiseFilter(filter collectorNoiseFilter) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.filter = filter
+}
+
+func (w *refreshingRuleWriter) SetCollectorFilterProvider(provider collectorFilterProvider) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.filterProvider = provider
+}
+
+func collectorNoiseFilterFromSystemConfig(cfg systemconfig.CollectorFilterConfig) collectorNoiseFilter {
+	return collectorNoiseFilter{
+		Enabled:               cfg.Enabled,
+		IgnoreProcessNames:    cfg.IgnoreProcessNames,
+		IgnoreCommandKeywords: cfg.IgnoreCommandKeywords,
+		IgnoreUsers:           cfg.IgnoreUsers,
+		KeepSeverities:        cfg.KeepSeverities,
+	}
 }
 
 func (w *refreshingRuleWriter) Refresh(ctx context.Context) error {
@@ -294,8 +335,20 @@ func (w *refreshingRuleWriter) Refresh(ctx context.Context) error {
 		slog.Error("refresh rules failed", "error", err)
 		return err
 	}
+	var filter collectorNoiseFilter
+	if w.filterProvider != nil {
+		config, err := w.filterProvider.GetCollectorFilter(ctx)
+		if err != nil {
+			slog.Error("refresh collector filter failed", "error", err)
+			return err
+		}
+		filter = collectorNoiseFilterFromSystemConfig(config)
+	}
 	w.mu.Lock()
 	w.rules = rules
+	if w.filterProvider != nil {
+		w.filter = filter
+	}
 	w.mu.Unlock()
 	slog.Info("rules refreshed", "count", len(rules))
 	return nil
@@ -323,11 +376,20 @@ func (w *refreshingRuleWriter) Write(ctx context.Context, events []audit.Event) 
 	w.mu.RLock()
 	rules := make([]rule.Rule, len(w.rules))
 	copy(rules, w.rules)
+	filter := w.filter
 	w.mu.RUnlock()
 
-	enriched := make([]audit.Event, len(events))
-	for i, event := range events {
-		enriched[i] = rule.ApplyRules(event, rules)
+	enriched := make([]audit.Event, 0, len(events))
+	for _, event := range events {
+		next := rule.ApplyRules(event, rules)
+		if filter.ShouldDrop(next) {
+			continue
+		}
+		enriched = append(enriched, next)
+	}
+	if len(enriched) == 0 {
+		slog.Info("events filtered", "events", len(events), "rules", len(rules))
+		return nil
 	}
 	if err := w.sink.WriteEvents(ctx, enriched); err != nil {
 		slog.Error("write events failed", "events", len(enriched), "rules", len(rules), "error", err)
@@ -335,4 +397,40 @@ func (w *refreshingRuleWriter) Write(ctx context.Context, events []audit.Event) 
 	}
 	slog.Info("events written", "events", len(enriched), "rules", len(rules))
 	return nil
+}
+
+func (f collectorNoiseFilter) ShouldDrop(event audit.Event) bool {
+	if !f.Enabled || f.shouldKeep(event) {
+		return false
+	}
+	if containsFold(f.IgnoreProcessNames, event.ProcessName) {
+		return true
+	}
+	if containsFold(f.IgnoreUsers, event.Username) || containsFold(f.IgnoreUsers, event.LoginUsername) {
+		return true
+	}
+	cmdline := strings.ToLower(event.Cmdline)
+	for _, keyword := range f.IgnoreCommandKeywords {
+		if keyword != "" && strings.Contains(cmdline, strings.ToLower(keyword)) {
+			return true
+		}
+	}
+	return false
+}
+
+func (f collectorNoiseFilter) shouldKeep(event audit.Event) bool {
+	keepSeverities := f.KeepSeverities
+	if len(keepSeverities) == 0 {
+		keepSeverities = []string{"high", "critical"}
+	}
+	return containsFold(keepSeverities, event.Severity)
+}
+
+func containsFold(values []string, target string) bool {
+	for _, value := range values {
+		if strings.EqualFold(strings.TrimSpace(value), strings.TrimSpace(target)) && strings.TrimSpace(value) != "" {
+			return true
+		}
+	}
+	return false
 }
