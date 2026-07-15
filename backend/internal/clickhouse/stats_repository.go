@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
 	"diting/backend/internal/stats"
 )
@@ -157,11 +156,12 @@ func (r *StatsRepository) CommandStats(ctx context.Context, query stats.Query) (
 	login_username,
 	count() AS count,
 	formatDateTime(toTimeZone(min(event_time), 'Asia/Shanghai'), '%%Y-%%m-%%d %%H:%%M:%%S') AS first_seen,
-	formatDateTime(toTimeZone(max(event_time), 'Asia/Shanghai'), '%%Y-%%m-%%d %%H:%%M:%%S') AS last_seen
+	formatDateTime(toTimeZone(max(event_time), 'Asia/Shanghai'), '%%Y-%%m-%%d %%H:%%M:%%S') AS last_seen,
+	max(event_time) AS last_seen_sort
 FROM %s
 WHERE %s
 GROUP BY process_name, cmdline, username, login_username
-ORDER BY last_seen DESC, count DESC
+ORDER BY last_seen_sort DESC, count DESC
 LIMIT %d
 FORMAT JSONEachRow`, r.table(), strings.Join(conditions, " AND "), limit)
 	data, err := r.client.Query(ctx, sql)
@@ -351,8 +351,8 @@ func (r *StatsRepository) table() string {
 
 func statsWhere(query stats.Query) string {
 	return fmt.Sprintf("event_time >= parseDateTime64BestEffort('%s', 3) AND event_time <= parseDateTime64BestEffort('%s', 3)",
-		query.StartTime.Format(time.RFC3339Nano),
-		query.EndTime.Format(time.RFC3339Nano),
+		formatDateTime64(query.StartTime),
+		formatDateTime64(query.EndTime),
 	)
 }
 

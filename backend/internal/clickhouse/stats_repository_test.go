@@ -121,6 +121,9 @@ func TestStatsRepositoryCommandStatsFiltersByKeywordAndUser(t *testing.T) {
 	if !strings.Contains(body, "event_type = 'process_exec'") || !strings.Contains(body, "positionCaseInsensitive(cmdline, 'whoami')") || !strings.Contains(body, "username = 'root'") {
 		t.Fatalf("expected command filters in query, got %s", body)
 	}
+	if !strings.Contains(body, "event_time >= parseDateTime64BestEffort('2026-07-09 00:00:00.000', 3)") || !strings.Contains(body, "event_time <= parseDateTime64BestEffort('2026-07-10 00:00:00.000', 3)") {
+		t.Fatalf("expected command stats to apply time range, got %s", body)
+	}
 	if !strings.Contains(body, "formatDateTime(toTimeZone(min(event_time), 'Asia/Shanghai')") || !strings.Contains(body, "formatDateTime(toTimeZone(max(event_time), 'Asia/Shanghai')") {
 		t.Fatalf("expected command first/last seen to use Asia/Shanghai timezone, got %s", body)
 	}
@@ -155,7 +158,7 @@ func TestStatsRepositoryCommandStatsIncludesEventsWithoutProcessName(t *testing.
 	if !strings.Contains(body, "cmdline != ''") {
 		t.Fatalf("expected command stats to require cmdline, got %s", body)
 	}
-	if !strings.Contains(body, "ORDER BY last_seen DESC, count DESC") {
+	if !strings.Contains(body, "max(event_time) AS last_seen_sort") || !strings.Contains(body, "ORDER BY last_seen_sort DESC, count DESC") {
 		t.Fatalf("expected command stats to order by newest execution first, got %s", body)
 	}
 	if len(items) != 1 || items[0].Cmdline != "id" || items[0].Username != "ubuntu" {
