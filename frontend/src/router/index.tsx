@@ -4,6 +4,7 @@ import DashboardPage from '../pages/dashboard/DashboardPage';
 import AuditEventsPage from '../pages/audit-events/AuditEventsPage';
 import CommandStatsPage from '../pages/commands/CommandStatsPage';
 import UserAuditPage from '../pages/users/UserAuditPage';
+import UserManagementPage from '../pages/users/UserManagementPage';
 import HostAuditPage from '../pages/hosts/HostAuditPage';
 import HostAssetsPage from '../pages/host-assets/HostAssetsPage';
 import RiskEventsPage from '../pages/risks/RiskEventsPage';
@@ -30,6 +31,7 @@ export const router = createBrowserRouter([
       { path: 'audit/risks', element: <RiskEventsPage /> },
       { path: 'assets/hosts', element: <HostAssetsPage /> },
       { path: 'rules', element: <RulesPage /> },
+      { path: 'settings/users', element: <UserManagementPage /> },
       { path: 'settings/collector', element: <CollectorConfigPage /> },
       { path: '*', element: <Navigate to="/" replace /> },
     ],

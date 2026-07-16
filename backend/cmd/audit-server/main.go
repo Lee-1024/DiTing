@@ -24,6 +24,7 @@ import (
 	"diting/backend/internal/rule"
 	"diting/backend/internal/server"
 	"diting/backend/internal/systemconfig"
+	"diting/backend/internal/useradmin"
 )
 
 func main() {
@@ -217,10 +218,11 @@ func main() {
 	hostAssetRepository := hostasset.NewPostgresRepository(pool)
 	riskStatusRepository := riskstatus.NewPostgresRepository(pool)
 	systemConfigRepository := systemconfig.NewPostgresRepository(pool)
+	userAdminRepository := useradmin.NewPostgresRepository(pool)
 
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
 	slog.Info("api server listening", "addr", addr)
-	if err := http.ListenAndServe(addr, server.NewRouter(auditRepository, ruleRepository, statsRepository, authService, operationRepository, hostAssetRepository, riskStatusRepository, systemConfigRepository)); err != nil {
+	if err := http.ListenAndServe(addr, server.NewRouter(auditRepository, ruleRepository, statsRepository, authService, operationRepository, hostAssetRepository, riskStatusRepository, systemConfigRepository, userAdminRepository)); err != nil {
 		slog.Error("api server stopped with error", "addr", addr, "error", err)
 		fmt.Fprintf(os.Stderr, "listen: %v\n", err)
 		os.Exit(1)

@@ -13,9 +13,10 @@ import (
 	"diting/backend/internal/rule"
 	"diting/backend/internal/stats"
 	"diting/backend/internal/systemconfig"
+	"diting/backend/internal/useradmin"
 )
 
-func NewRouter(repository audit.Repository, ruleRepository rule.Repository, statsRepository stats.Repository, authService *auth.Service, operationRepository operationlog.Repository, hostAssetRepository hostasset.Repository, riskStatusRepository riskstatus.Repository, systemConfigRepository systemconfig.Repository) http.Handler {
+func NewRouter(repository audit.Repository, ruleRepository rule.Repository, statsRepository stats.Repository, authService *auth.Service, operationRepository operationlog.Repository, hostAssetRepository hostasset.Repository, riskStatusRepository riskstatus.Repository, systemConfigRepository systemconfig.Repository, userAdminRepository useradmin.Repository) http.Handler {
 	mux := http.NewServeMux()
 	auditHandler := audit.NewHandler(repository)
 	if ruleRepository == nil {
@@ -30,6 +31,10 @@ func NewRouter(repository audit.Repository, ruleRepository rule.Repository, stat
 		systemConfigRepository = systemconfig.NewMemoryRepository()
 	}
 	systemConfigHandler := systemconfig.NewHandler(systemConfigRepository)
+	if userAdminRepository == nil {
+		userAdminRepository = useradmin.NewMemoryRepository()
+	}
+	userAdminHandler := useradmin.NewHandler(userAdminRepository)
 	var riskStatusHandler *riskstatus.Handler
 	if riskStatusRepository != nil {
 		riskStatusHandler = riskstatus.NewHandler(riskStatusRepository)
@@ -114,6 +119,42 @@ func NewRouter(repository audit.Repository, ruleRepository rule.Repository, stat
 			systemConfigHandler.GetCollectorFilter(w, r)
 		case http.MethodPut:
 			systemConfigHandler.SaveCollectorFilter(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})))
+	mux.Handle("/api/v1/users", protect(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			userAdminHandler.ListUsers(w, r)
+		case http.MethodPost:
+			userAdminHandler.CreateUser(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})))
+	mux.Handle("/api/v1/users/{id}", protect(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPut:
+			userAdminHandler.UpdateUser(w, r)
+		case http.MethodDelete:
+			userAdminHandler.DeleteUser(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})))
+	mux.Handle("/api/v1/users/{id}/password", protect(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			userAdminHandler.ResetPassword(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})))
+	mux.Handle("/api/v1/roles", protect(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			userAdminHandler.ListRoles(w, r)
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
