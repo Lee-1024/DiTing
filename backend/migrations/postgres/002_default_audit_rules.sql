@@ -2,8 +2,8 @@ INSERT INTO diting_audit_rules (id, name, description, event_type, enabled, seve
 VALUES
 (
     '00000000-0000-0000-0000-000000000101',
-    'Reverse shell command',
-    'Detects common reverse shell command patterns.',
+    '反弹 Shell 命令',
+    '检测 bash -i、nc -e、/dev/tcp 等常见反弹 Shell 行为。',
     'process_exec',
     true,
     'critical',
@@ -15,8 +15,8 @@ VALUES
 ),
 (
     '00000000-0000-0000-0000-000000000102',
-    'Download and execute',
-    'Detects shell pipelines that download and execute remote scripts.',
+    '下载并执行脚本',
+    '检测 curl、wget 下载后通过 sh/bash 执行远程脚本的行为。',
     'process_exec',
     true,
     'critical',
@@ -28,8 +28,8 @@ VALUES
 ),
 (
     '00000000-0000-0000-0000-000000000103',
-    'Privilege switch command',
-    'Detects sudo, su, and passwd command execution.',
+    '权限切换命令',
+    '检测 sudo、su、passwd 等权限切换或账号相关命令。',
     'process_exec',
     true,
     'high',
@@ -41,8 +41,8 @@ VALUES
 ),
 (
     '00000000-0000-0000-0000-000000000104',
-    'Sensitive file access',
-    'Detects access to sensitive Linux account and SSH files.',
+    '敏感文件访问',
+    '检测访问 /etc/shadow、/etc/passwd、SSH 私钥或 authorized_keys 等敏感文件的命令。',
     'process_exec',
     true,
     'high',
@@ -54,8 +54,8 @@ VALUES
 ),
 (
     '00000000-0000-0000-0000-000000000105',
-    'Dangerous permission change',
-    'Detects broad permission changes such as chmod 777.',
+    '危险权限变更',
+    '检测 chmod 777、递归放宽权限或修改 root 属主等高风险权限变更。',
     'process_exec',
     true,
     'high',
@@ -67,8 +67,8 @@ VALUES
 ),
 (
     '00000000-0000-0000-0000-000000000106',
-    'Container control command',
-    'Detects docker and kubectl command execution on audited hosts.',
+    '容器控制命令',
+    '检测 docker、kubectl、ctr、crictl 等容器管理命令。',
     'process_exec',
     true,
     'high',
