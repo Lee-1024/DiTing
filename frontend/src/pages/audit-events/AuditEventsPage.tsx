@@ -7,6 +7,7 @@ import FilterToolbar from '../../components/FilterToolbar';
 import SeverityTag from '../../components/SeverityTag';
 import type { AuditEvent, AuditEventQuery } from '../../types/audit';
 import { downloadBlob } from '../../utils/download';
+import { eventTypeLabel, eventTypeOptions, severityOptions } from '../../utils/labels';
 import { formatLocalDateTime } from '../../utils/time';
 import EventDetailDrawer from './EventDetailDrawer';
 
@@ -85,10 +86,10 @@ export default function AuditEventsPage() {
           <DatePicker.RangePicker />
         </Form.Item>
         <Form.Item name="eventType" label="事件">
-          <Select className="filter-control-compact" allowClear options={['process_exec', 'process_exit'].map((value) => ({ value }))} />
+          <Select className="filter-control-compact" allowClear options={eventTypeOptions} />
         </Form.Item>
         <Form.Item name="severity" label="等级">
-          <Select className="filter-control-compact" allowClear options={['info', 'low', 'medium', 'high', 'critical'].map((value) => ({ value }))} />
+          <Select className="filter-control-compact" allowClear options={severityOptions} />
         </Form.Item>
         <Form.Item name="keyword" label="关键字">
           <Input className="filter-control-compact" placeholder="命令 / 用户 / 进程" allowClear />
@@ -117,7 +118,7 @@ export default function AuditEventsPage() {
           columns={[
             { title: '时间', dataIndex: 'eventTime', width: 190, fixed: 'left', render: (value) => formatLocalDateTime(value) },
             { title: '等级', dataIndex: 'severity', width: 100, render: (value) => <SeverityTag value={value} /> },
-            { title: '事件', dataIndex: 'eventType', width: 140 },
+            { title: '事件', dataIndex: 'eventType', width: 140, render: (value) => eventTypeLabel(value) },
             { title: 'Namespace', dataIndex: 'namespace', width: 140 },
             { title: 'Pod', dataIndex: 'podName', width: 180 },
             { title: '登录用户', dataIndex: 'loginUsername', width: 120, render: (_, record) => record.loginUsername || record.username },

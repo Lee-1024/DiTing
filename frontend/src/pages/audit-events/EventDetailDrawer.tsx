@@ -4,6 +4,7 @@ import { getAuditEvent } from '../../api/audit';
 import SeverityTag from '../../components/SeverityTag';
 import type { AuditEvent } from '../../types/audit';
 import { formatJSON } from '../../utils/format';
+import { eventTypeLabel, ruleFieldLabel, ruleOperatorLabel } from '../../utils/labels';
 import { formatLocalDateTime } from '../../utils/time';
 
 interface Props {
@@ -56,6 +57,7 @@ export default function EventDetailDrawer({ event, eventId, open, onClose }: Pro
         <Space direction="vertical" size={16} style={{ width: '100%' }}>
           <Descriptions title="基础信息" column={1} bordered size="small">
             <Descriptions.Item label="事件 ID">{current.eventId}</Descriptions.Item>
+            <Descriptions.Item label="事件类型">{eventTypeLabel(current.eventType)}</Descriptions.Item>
             <Descriptions.Item label="时间">{formatLocalDateTime(current.eventTime)}</Descriptions.Item>
             <Descriptions.Item label="等级"><SeverityTag value={current.severity} /></Descriptions.Item>
             <Descriptions.Item label="风险分数">{current.riskScore}</Descriptions.Item>
@@ -95,8 +97,8 @@ export default function EventDetailDrawer({ event, eventId, open, onClose }: Pro
               dataSource={current.ruleMatches}
               columns={[
                 { title: '规则', dataIndex: 'ruleName', width: 180, render: (value) => value || '-' },
-                { title: '字段', dataIndex: 'field', width: 120 },
-                { title: '条件', dataIndex: 'operator', width: 100 },
+                { title: '字段', dataIndex: 'field', width: 120, render: (value) => ruleFieldLabel(value) },
+                { title: '条件', dataIndex: 'operator', width: 100, render: (value) => ruleOperatorLabel(value) },
                 { title: '期望值', dataIndex: 'value', width: 180 },
                 { title: '实际值', dataIndex: 'actual' },
               ]}

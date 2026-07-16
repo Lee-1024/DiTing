@@ -3,6 +3,7 @@ import { Button, Card, Empty, Form, Input, InputNumber, Modal, Popconfirm, Selec
 import { useEffect, useState } from 'react';
 import { createRule, deleteRule, getRule, listRules, updateRule } from '../../api/rules';
 import type { AuditRule, RuleCondition, RuleExpression, RulePayload } from '../../types/rule';
+import { eventTypeOptions, optionLabel, ruleFieldOptions, ruleOperatorOptions, severityOptions } from '../../utils/labels';
 
 interface RuleFormValues {
   name: string;
@@ -21,46 +22,6 @@ interface FormCondition {
   op?: string;
   conditionValue?: string;
 }
-
-const fieldOptions = [
-  { value: 'cmdline', label: '命令行' },
-  { value: 'process_name', label: '进程名' },
-  { value: 'username', label: '执行用户' },
-  { value: 'login_username', label: '登录用户' },
-  { value: 'host_name', label: '主机名' },
-  { value: 'node_name', label: '节点名' },
-  { value: 'namespace', label: 'Namespace' },
-  { value: 'pod_name', label: 'Pod' },
-  { value: 'container_id', label: '容器 ID' },
-  { value: 'binary_path', label: '二进制路径' },
-  { value: 'file_path', label: '文件路径' },
-  { value: 'dst_ip', label: '目标 IP' },
-  { value: 'domain', label: '域名' },
-  { value: 'event_type', label: '事件类型' },
-];
-
-const opOptions = [
-  { value: 'contains', label: '包含' },
-  { value: 'eq', label: '等于' },
-  { value: 'neq', label: '不等于' },
-  { value: 'prefix', label: '前缀匹配' },
-  { value: 'suffix', label: '后缀匹配' },
-  { value: 'in', label: '属于列表' },
-  { value: 'regex', label: '正则匹配' },
-];
-
-const severityOptions = [
-  { value: 'info', label: '提示' },
-  { value: 'low', label: '低危' },
-  { value: 'medium', label: '中危' },
-  { value: 'high', label: '高危' },
-  { value: 'critical', label: '严重' },
-];
-
-const eventTypeOptions = [
-  { value: 'process_exec', label: '进程执行' },
-  { value: 'process_exit', label: '进程退出' },
-];
 
 const defaultConditions: FormCondition[] = [{ field: 'cmdline', op: 'contains', conditionValue: 'bash -i' }];
 
@@ -242,10 +203,10 @@ export default function RulesPage() {
                 {fields.map((field) => (
                   <Space key={field.key} align="baseline" wrap>
                     <Form.Item name={[field.name, 'field']} rules={[{ required: true, message: '请选择字段' }]}>
-                      <Select style={{ width: 170 }} options={fieldOptions} />
+                      <Select style={{ width: 170 }} options={ruleFieldOptions} />
                     </Form.Item>
                     <Form.Item name={[field.name, 'op']} rules={[{ required: true, message: '请选择匹配方式' }]}>
-                      <Select style={{ width: 140 }} options={opOptions} />
+                      <Select style={{ width: 140 }} options={ruleOperatorOptions} />
                     </Form.Item>
                     <Form.Item name={[field.name, 'conditionValue']} rules={[{ required: true, message: '请输入匹配值' }]}>
                       <Input style={{ width: 360 }} />
@@ -299,10 +260,6 @@ function expressionSummary(expression?: RuleExpression) {
   const separator = expression.operator === 'or' ? ' 或 ' : ' 且 ';
   return expression.conditions.map((condition) => {
     const value = condition.op === 'in' ? (condition.values ?? []).join(', ') : condition.value;
-    return `${optionLabel(fieldOptions, condition.field)} ${optionLabel(opOptions, condition.op)} ${value ?? ''}`;
+    return `${optionLabel(ruleFieldOptions, condition.field)} ${optionLabel(ruleOperatorOptions, condition.op)} ${value ?? ''}`;
   }).join(separator);
-}
-
-function optionLabel(options: Array<{ value: string; label: string }>, value: string) {
-  return options.find((option) => option.value === value)?.label ?? value;
 }

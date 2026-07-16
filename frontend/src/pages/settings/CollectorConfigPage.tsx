@@ -3,8 +3,7 @@ import { Button, Card, Form, Select, Space, Switch, Typography, message } from '
 import { useEffect, useState } from 'react';
 import { getCollectorFilterConfig, saveCollectorFilterConfig } from '../../api/systemConfig';
 import type { CollectorFilterConfig } from '../../types/systemConfig';
-
-const severityOptions = ['info', 'low', 'medium', 'high', 'critical'].map((value) => ({ value, label: value }));
+import { severityOptions } from '../../utils/labels';
 
 export default function CollectorConfigPage() {
   const [loading, setLoading] = useState(false);

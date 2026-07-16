@@ -9,6 +9,7 @@ import SeverityTag from '../../components/SeverityTag';
 import type { AuditEvent, AuditEventQuery } from '../../types/audit';
 import type { RiskDisposition, RiskDispositionMap, RiskDispositionStatus } from '../../types/riskDisposition';
 import { downloadBlob } from '../../utils/download';
+import { severityLabel } from '../../utils/labels';
 import { formatLocalDateTime } from '../../utils/time';
 import EventDetailDrawer from '../audit-events/EventDetailDrawer';
 
@@ -139,9 +140,9 @@ export default function RiskEventsPage() {
           <Select
             className="filter-control-compact"
             options={[
-              { value: 'high,critical', label: 'high + critical' },
-              { value: 'high', label: 'high' },
-              { value: 'critical', label: 'critical' },
+              { value: 'high,critical', label: `${severityLabel('high')} + ${severityLabel('critical')}` },
+              { value: 'high', label: severityLabel('high') },
+              { value: 'critical', label: severityLabel('critical') },
             ]}
           />
         </Form.Item>
