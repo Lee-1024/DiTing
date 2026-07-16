@@ -62,6 +62,8 @@ type Repository interface {
 	Overview(ctx context.Context, query Query) (Overview, error)
 	EventTrend(ctx context.Context, query Query) ([]TrendPoint, error)
 	TopCommands(ctx context.Context, query Query) ([]TopItem, error)
+	TopHosts(ctx context.Context, query Query) ([]TopItem, error)
+	TopNamespaces(ctx context.Context, query Query) ([]TopItem, error)
 	CommandStats(ctx context.Context, query Query) ([]CommandItem, error)
 	UserAudits(ctx context.Context, query Query) ([]UserAuditItem, error)
 	HostAudits(ctx context.Context, query Query) ([]HostAuditItem, error)

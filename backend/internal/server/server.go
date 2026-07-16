@@ -164,6 +164,8 @@ func NewRouter(repository audit.Repository, ruleRepository rule.Repository, stat
 		mux.Handle("/api/v1/stats/overview", protect(http.HandlerFunc(statsHandler.Overview)))
 		mux.Handle("/api/v1/stats/event-trend", protect(http.HandlerFunc(statsHandler.EventTrend)))
 		mux.Handle("/api/v1/stats/top-commands", protect(http.HandlerFunc(statsHandler.TopCommands)))
+		mux.Handle("/api/v1/stats/top-hosts", protect(http.HandlerFunc(statsHandler.TopHosts)))
+		mux.Handle("/api/v1/stats/top-namespaces", protect(http.HandlerFunc(statsHandler.TopNamespaces)))
 		mux.Handle("/api/v1/stats/commands", protect(http.HandlerFunc(statsHandler.CommandStats)))
 		mux.Handle("/api/v1/stats/commands/export", protect(http.HandlerFunc(statsHandler.ExportCommandStats)))
 		mux.Handle("/api/v1/stats/users", protect(http.HandlerFunc(statsHandler.UserAudits)))

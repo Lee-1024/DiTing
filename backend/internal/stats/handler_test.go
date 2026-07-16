@@ -22,6 +22,14 @@ func (fakeRepository) TopCommands(context.Context, Query) ([]TopItem, error) {
 	return []TopItem{{Name: "bash", Count: 6}}, nil
 }
 
+func (fakeRepository) TopHosts(context.Context, Query) ([]TopItem, error) {
+	return []TopItem{{Name: "server-1", Count: 9}}, nil
+}
+
+func (fakeRepository) TopNamespaces(context.Context, Query) ([]TopItem, error) {
+	return []TopItem{{Name: "default", Count: 7}}, nil
+}
+
 func (fakeRepository) CommandStats(_ context.Context, query Query) ([]CommandItem, error) {
 	return []CommandItem{{ProcessName: "whoami", Cmdline: "/usr/bin/whoami", Username: query.Username, Count: 4}}, nil
 }
@@ -60,6 +68,36 @@ func TestTopCommandsHandlerReturnsItems(t *testing.T) {
 		t.Fatalf("expected 200, got %d", rec.Code)
 	}
 	if !strings.Contains(rec.Body.String(), `"name":"bash"`) {
+		t.Fatalf("unexpected body %s", rec.Body.String())
+	}
+}
+
+func TestTopHostsHandlerReturnsItems(t *testing.T) {
+	handler := NewHandler(fakeRepository{})
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/stats/top-hosts?limit=5", nil)
+
+	handler.TopHosts(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), `"name":"server-1"`) {
+		t.Fatalf("unexpected body %s", rec.Body.String())
+	}
+}
+
+func TestTopNamespacesHandlerReturnsItems(t *testing.T) {
+	handler := NewHandler(fakeRepository{})
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/stats/top-namespaces?limit=5", nil)
+
+	handler.TopNamespaces(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), `"name":"default"`) {
 		t.Fatalf("unexpected body %s", rec.Body.String())
 	}
 }

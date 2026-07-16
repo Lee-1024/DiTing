@@ -16,6 +16,16 @@ export async function getTopCommands(limit = 10): Promise<TopItem[]> {
   return response.data;
 }
 
+export async function getTopHosts(limit = 10): Promise<TopItem[]> {
+  const response = await apiClient.get<TopItem[]>('/stats/top-hosts', { params: { limit } });
+  return response.data;
+}
+
+export async function getTopNamespaces(limit = 10): Promise<TopItem[]> {
+  const response = await apiClient.get<TopItem[]>('/stats/top-namespaces', { params: { limit } });
+  return response.data;
+}
+
 export async function getCommandStats(params: CommandStatsQuery): Promise<CommandItem[]> {
   const response = await apiClient.get<CommandItem[]>('/stats/commands', { params });
   return response.data;

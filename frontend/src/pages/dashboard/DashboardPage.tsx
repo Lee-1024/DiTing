@@ -1,7 +1,7 @@
 import { Alert, Card, Col, Empty, Row, Statistic, Typography } from 'antd';
 import type { EChartsOption } from 'echarts';
 import { useEffect, useState } from 'react';
-import { getEventTrend, getOverview, getTopCommands } from '../../api/stats';
+import { getEventTrend, getOverview, getTopCommands, getTopHosts, getTopNamespaces } from '../../api/stats';
 import EChart from '../../components/EChart';
 import type { OverviewStats, TopItem, TrendPoint } from '../../types/stats';
 import { compactNumber } from '../../utils/format';
@@ -17,6 +17,8 @@ export default function DashboardPage() {
   const [overview, setOverview] = useState<OverviewStats>(emptyOverview);
   const [trend, setTrend] = useState<TrendPoint[]>([]);
   const [topCommands, setTopCommands] = useState<TopItem[]>([]);
+  const [topHosts, setTopHosts] = useState<TopItem[]>([]);
+  const [topNamespaces, setTopNamespaces] = useState<TopItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -24,14 +26,18 @@ export default function DashboardPage() {
     setLoading(true);
     setError('');
     try {
-      const [overviewData, trendData, commandData] = await Promise.all([
+      const [overviewData, trendData, commandData, hostData, namespaceData] = await Promise.all([
         getOverview(),
         getEventTrend(),
         getTopCommands(50),
+        getTopHosts(12),
+        getTopNamespaces(12),
       ]);
       setOverview(overviewData);
       setTrend(trendData ?? []);
       setTopCommands(commandData ?? []);
+      setTopHosts(hostData ?? []);
+      setTopNamespaces(namespaceData ?? []);
     } catch {
       setError('统计数据加载失败');
     } finally {
@@ -95,6 +101,9 @@ export default function DashboardPage() {
     }],
   };
 
+  const hostOption = topBarOption(topHosts, '#2563eb');
+  const namespaceOption = topBarOption(topNamespaces, '#7c3aed');
+
   return (
     <>
       <div className="page-heading">
@@ -132,7 +141,54 @@ export default function DashboardPage() {
             )}
           </Card>
         </Col>
+        <Col xs={24} lg={12}>
+          <Card title="TOP 主机" loading={loading}>
+            {topHosts.length === 0 ? (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无主机数据" />
+            ) : (
+              <EChart option={hostOption} />
+            )}
+          </Card>
+        </Col>
+        <Col xs={24} lg={12}>
+          <Card title="TOP Namespace" loading={loading}>
+            {topNamespaces.length === 0 ? (
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无 Namespace 数据" />
+            ) : (
+              <EChart option={namespaceOption} />
+            )}
+          </Card>
+        </Col>
       </Row>
     </>
   );
+}
+
+function topBarOption(items: TopItem[], color: string): EChartsOption {
+  return {
+    grid: { left: 112, right: 24, top: 16, bottom: 20 },
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+    xAxis: {
+      type: 'value',
+      axisLabel: { color: '#6b7280' },
+      splitLine: { lineStyle: { color: '#eef2f7' } },
+    },
+    yAxis: {
+      type: 'category',
+      inverse: true,
+      data: items.map((item) => item.name),
+      axisLabel: {
+        color: '#374151',
+        width: 100,
+        overflow: 'truncate',
+      },
+      axisLine: { lineStyle: { color: '#e5e7eb' } },
+    },
+    series: [{
+      type: 'bar',
+      barWidth: 12,
+      itemStyle: { color, borderRadius: [0, 4, 4, 0] },
+      data: items.map((item) => item.count),
+    }],
+  };
 }

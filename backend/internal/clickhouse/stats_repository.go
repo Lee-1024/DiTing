@@ -131,6 +131,56 @@ FORMAT JSONEachRow`, r.table(), statsWhere(query), limit)
 	return items, nil
 }
 
+func (r *StatsRepository) TopHosts(ctx context.Context, query stats.Query) ([]stats.TopItem, error) {
+	limit := query.Limit
+	if limit <= 0 {
+		limit = 10
+	}
+	sql := fmt.Sprintf(`SELECT
+	if(host_name != '', host_name, if(host_id != '', host_id, node_name)) AS name,
+	count() AS count
+FROM %s
+WHERE %s AND event_type = 'process_exec' AND name != ''
+GROUP BY name
+ORDER BY count DESC
+LIMIT %d
+FORMAT JSONEachRow`, r.table(), statsWhere(query), limit)
+	return r.topItems(ctx, sql)
+}
+
+func (r *StatsRepository) TopNamespaces(ctx context.Context, query stats.Query) ([]stats.TopItem, error) {
+	limit := query.Limit
+	if limit <= 0 {
+		limit = 10
+	}
+	sql := fmt.Sprintf(`SELECT
+	namespace AS name,
+	count() AS count
+FROM %s
+WHERE %s AND event_type = 'process_exec' AND namespace != ''
+GROUP BY namespace
+ORDER BY count DESC
+LIMIT %d
+FORMAT JSONEachRow`, r.table(), statsWhere(query), limit)
+	return r.topItems(ctx, sql)
+}
+
+func (r *StatsRepository) topItems(ctx context.Context, sql string) ([]stats.TopItem, error) {
+	data, err := r.client.Query(ctx, sql)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := decodeJSONRows[topItemRow](data)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]stats.TopItem, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, stats.TopItem{Name: row.Name, Count: uint64(row.Count)})
+	}
+	return items, nil
+}
+
 func (r *StatsRepository) CommandStats(ctx context.Context, query stats.Query) ([]stats.CommandItem, error) {
 	limit := query.Limit
 	if limit <= 0 {

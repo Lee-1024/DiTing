@@ -96,6 +96,62 @@ func TestStatsRepositoryTopCommandsOnlyCountsProcessExec(t *testing.T) {
 	}
 }
 
+func TestStatsRepositoryTopHostsUsesStableHostIdentity(t *testing.T) {
+	var body string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		data := make([]byte, r.ContentLength)
+		_, _ = r.Body.Read(data)
+		body = string(data)
+		_, _ = w.Write([]byte(`{"name":"server-1","count":"9"}` + "\n"))
+	}))
+	defer server.Close()
+
+	repository := NewStatsRepository(NewHTTPClient(HTTPConfig{URL: server.URL, Database: "diting"}), nil)
+	items, err := repository.TopHosts(context.Background(), stats.Query{
+		StartTime: time.Date(2026, 7, 9, 0, 0, 0, 0, time.UTC),
+		EndTime:   time.Date(2026, 7, 10, 0, 0, 0, 0, time.UTC),
+		Limit:     5,
+	})
+	if err != nil {
+		t.Fatalf("TopHosts returned error: %v", err)
+	}
+
+	if !strings.Contains(body, "if(host_name != '', host_name, if(host_id != '', host_id, node_name)) AS name") || !strings.Contains(body, "name != ''") {
+		t.Fatalf("expected stable host identity in query, got %s", body)
+	}
+	if len(items) != 1 || items[0].Name != "server-1" || items[0].Count != 9 {
+		t.Fatalf("unexpected items %#v", items)
+	}
+}
+
+func TestStatsRepositoryTopNamespacesFiltersEmptyNamespace(t *testing.T) {
+	var body string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		data := make([]byte, r.ContentLength)
+		_, _ = r.Body.Read(data)
+		body = string(data)
+		_, _ = w.Write([]byte(`{"name":"default","count":"7"}` + "\n"))
+	}))
+	defer server.Close()
+
+	repository := NewStatsRepository(NewHTTPClient(HTTPConfig{URL: server.URL, Database: "diting"}), nil)
+	items, err := repository.TopNamespaces(context.Background(), stats.Query{
+		StartTime: time.Date(2026, 7, 9, 0, 0, 0, 0, time.UTC),
+		EndTime:   time.Date(2026, 7, 10, 0, 0, 0, 0, time.UTC),
+		Limit:     5,
+	})
+	if err != nil {
+		t.Fatalf("TopNamespaces returned error: %v", err)
+	}
+
+	if !strings.Contains(body, "namespace AS name") || !strings.Contains(body, "namespace != ''") {
+		t.Fatalf("expected namespace query to skip empty values, got %s", body)
+	}
+	if len(items) != 1 || items[0].Name != "default" || items[0].Count != 7 {
+		t.Fatalf("unexpected items %#v", items)
+	}
+}
+
 func TestStatsRepositoryCommandStatsFiltersByKeywordAndUser(t *testing.T) {
 	var body string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

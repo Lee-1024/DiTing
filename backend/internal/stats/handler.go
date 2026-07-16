@@ -31,6 +31,16 @@ func (h *Handler) TopCommands(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, result, err)
 }
 
+func (h *Handler) TopHosts(w http.ResponseWriter, r *http.Request) {
+	result, err := h.repository.TopHosts(r.Context(), parseQuery(r))
+	writeJSON(w, result, err)
+}
+
+func (h *Handler) TopNamespaces(w http.ResponseWriter, r *http.Request) {
+	result, err := h.repository.TopNamespaces(r.Context(), parseQuery(r))
+	writeJSON(w, result, err)
+}
+
 func (h *Handler) CommandStats(w http.ResponseWriter, r *http.Request) {
 	result, err := h.repository.CommandStats(r.Context(), parseQuery(r))
 	writeJSON(w, result, err)
