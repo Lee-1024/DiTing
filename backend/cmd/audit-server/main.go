@@ -16,6 +16,7 @@ import (
 	"diting/backend/internal/auth"
 	ch "diting/backend/internal/clickhouse"
 	"diting/backend/internal/collector"
+	"diting/backend/internal/collectorhealth"
 	"diting/backend/internal/config"
 	"diting/backend/internal/hostasset"
 	"diting/backend/internal/operationlog"
@@ -53,6 +54,11 @@ func main() {
 			Username: cfg.ClickHouse.Username,
 			Password: cfg.ClickHouse.Password,
 		})
+		if err := ensureClickHouseMigrations(context.Background(), client); err != nil {
+			slog.Error("auto clickhouse migrations failed", "error", err)
+			fmt.Fprintf(os.Stderr, "auto clickhouse migrations: %v\n", err)
+			os.Exit(1)
+		}
 		pool, err := postgres.Connect(context.Background(), cfg.Postgres)
 		if err != nil {
 			slog.Error("connect postgres failed", "host", cfg.Postgres.Host, "port", cfg.Postgres.Port, "database", cfg.Postgres.Database, "error", err)
@@ -61,8 +67,14 @@ func main() {
 		}
 		slog.Info("postgres connected", "host", cfg.Postgres.Host, "port", cfg.Postgres.Port, "database", cfg.Postgres.Database)
 		defer pool.Close()
+		if err := ensurePostgresMigrations(context.Background(), pool); err != nil {
+			slog.Error("auto postgres migrations failed", "error", err)
+			fmt.Fprintf(os.Stderr, "auto postgres migrations: %v\n", err)
+			os.Exit(1)
+		}
 		ruleRepository := rule.NewPostgresRepository(pool)
 		systemConfigRepository := systemconfig.NewPostgresRepository(pool)
+		collectorHealthRepository := collectorhealth.NewPostgresRepository(pool)
 		writer := newRefreshingRuleWriter(client, repositoryRuleProvider{repository: ruleRepository})
 		writer.SetCollectorFilterProvider(systemConfigRepository)
 		if err := writer.Refresh(context.Background()); err != nil {
@@ -86,6 +98,8 @@ func main() {
 		}
 		hostMetadata := collector.ResolveHostMetadata(cfg.Collector.HostID, cfg.Collector.HostName)
 		slog.Info("collector host metadata resolved", "host_id", hostMetadata.ID, "host_name", hostMetadata.Name)
+		writer.SetHeartbeatRecorder(collectorHealthRepository)
+		go collectorHeartbeatLoop(context.Background(), collectorHealthRepository, hostMetadata, 30*time.Second)
 		eventWriter = collector.NewHostMetadataWriter(hostMetadata, eventWriter)
 
 		fileCollector := collector.NewFileCollector(cfg.Collector.TetragonLogFile, cfg.Collector.BatchSize, eventWriter)
@@ -143,7 +157,7 @@ func main() {
 		}
 		slog.Info("postgres connected", "host", cfg.Postgres.Host, "port", cfg.Postgres.Port, "database", cfg.Postgres.Database)
 		defer pool.Close()
-		files, err := migrationFiles(filepath.Join("migrations", "postgres"))
+		files, err := postgres.MigrationFiles(filepath.Join("migrations", "postgres"))
 		if err != nil {
 			slog.Error("list postgres migrations failed", "error", err)
 			fmt.Fprintf(os.Stderr, "list postgres migrations: %v\n", err)
@@ -168,6 +182,11 @@ func main() {
 			Username: cfg.ClickHouse.Username,
 			Password: cfg.ClickHouse.Password,
 		})
+		if err := ensureClickHouseMigrations(context.Background(), client); err != nil {
+			slog.Error("auto clickhouse migrations failed", "error", err)
+			fmt.Fprintf(os.Stderr, "auto clickhouse migrations: %v\n", err)
+			os.Exit(1)
+		}
 		auditTable := "audit_events"
 		if cfg.ClickHouse.Database != "" {
 			auditTable = cfg.ClickHouse.Database + "." + auditTable
@@ -185,6 +204,11 @@ func main() {
 			os.Exit(1)
 		}
 		defer pool.Close()
+		if err := ensurePostgresMigrations(context.Background(), pool); err != nil {
+			slog.Error("auto postgres migrations failed", "error", err)
+			fmt.Fprintf(os.Stderr, "auto postgres migrations: %v\n", err)
+			os.Exit(1)
+		}
 		slog.Warn("clearing postgres risk dispositions", "table", "diting_risk_dispositions")
 		if _, err := pool.Exec(context.Background(), "DELETE FROM diting_risk_dispositions"); err != nil {
 			slog.Error("clear postgres risk dispositions failed", "error", err)
@@ -201,6 +225,11 @@ func main() {
 		Username: cfg.ClickHouse.Username,
 		Password: cfg.ClickHouse.Password,
 	})
+	if err := ensureClickHouseMigrations(context.Background(), clickHouseClient); err != nil {
+		slog.Error("auto clickhouse migrations failed", "error", err)
+		fmt.Fprintf(os.Stderr, "auto clickhouse migrations: %v\n", err)
+		os.Exit(1)
+	}
 	auditRepository := ch.NewAuditRepository(clickHouseClient)
 	pool, err := postgres.Connect(context.Background(), cfg.Postgres)
 	if err != nil {
@@ -210,6 +239,11 @@ func main() {
 	}
 	slog.Info("postgres connected", "host", cfg.Postgres.Host, "port", cfg.Postgres.Port, "database", cfg.Postgres.Database)
 	defer pool.Close()
+	if err := ensurePostgresMigrations(context.Background(), pool); err != nil {
+		slog.Error("auto postgres migrations failed", "error", err)
+		fmt.Fprintf(os.Stderr, "auto postgres migrations: %v\n", err)
+		os.Exit(1)
+	}
 	ruleRepository := rule.NewPostgresRepository(pool)
 	statsRepository := ch.NewStatsRepository(clickHouseClient, ruleRepository)
 	userRepository := auth.NewPostgresUserRepository(pool)
@@ -219,10 +253,11 @@ func main() {
 	riskStatusRepository := riskstatus.NewPostgresRepository(pool)
 	systemConfigRepository := systemconfig.NewPostgresRepository(pool)
 	userAdminRepository := useradmin.NewPostgresRepository(pool)
+	collectorHealthRepository := collectorhealth.NewPostgresRepository(pool)
 
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
 	slog.Info("api server listening", "addr", addr)
-	if err := http.ListenAndServe(addr, server.NewRouter(auditRepository, ruleRepository, statsRepository, authService, operationRepository, hostAssetRepository, riskStatusRepository, systemConfigRepository, userAdminRepository)); err != nil {
+	if err := http.ListenAndServe(addr, server.NewRouter(auditRepository, ruleRepository, statsRepository, authService, operationRepository, hostAssetRepository, riskStatusRepository, systemConfigRepository, userAdminRepository, collectorHealthRepository)); err != nil {
 		slog.Error("api server stopped with error", "addr", addr, "error", err)
 		fmt.Fprintf(os.Stderr, "listen: %v\n", err)
 		os.Exit(1)
@@ -247,6 +282,38 @@ func newLogHandler(writer io.Writer) slog.Handler {
 func migrationFiles(dir string) ([]string, error) {
 	pattern := filepath.Join(dir, "*.sql")
 	return filepath.Glob(pattern)
+}
+
+func ensureClickHouseMigrations(ctx context.Context, client clickHouseMigrator) error {
+	files, err := migrationFiles(filepath.Join("migrations", "clickhouse"))
+	if err != nil {
+		return err
+	}
+	slog.Info("auto clickhouse migrations starting", "count", len(files))
+	for _, sqlPath := range files {
+		data, err := os.ReadFile(sqlPath)
+		if err != nil {
+			return err
+		}
+		if err := client.ExecuteStatements(ctx, string(data)); err != nil {
+			return fmt.Errorf("execute clickhouse migration %s: %w", sqlPath, err)
+		}
+	}
+	slog.Info("auto clickhouse migrations completed", "count", len(files))
+	return nil
+}
+
+type clickHouseMigrator interface {
+	ExecuteStatements(ctx context.Context, sql string) error
+}
+
+func ensurePostgresMigrations(ctx context.Context, pool postgres.Execer) error {
+	slog.Info("auto postgres migrations starting")
+	if err := postgres.ExecuteMigrations(ctx, pool, filepath.Join("migrations", "postgres")); err != nil {
+		return err
+	}
+	slog.Info("auto postgres migrations completed")
+	return nil
 }
 
 func parseArgs(args []string) (string, string) {
@@ -280,6 +347,10 @@ type collectorFilterProvider interface {
 	GetCollectorFilter(ctx context.Context) (systemconfig.CollectorFilterConfig, error)
 }
 
+type collectorHeartbeatRecorder interface {
+	Upsert(ctx context.Context, update collectorhealth.HeartbeatUpdate) error
+}
+
 type repositoryRuleProvider struct {
 	repository rule.Repository
 }
@@ -292,6 +363,7 @@ type refreshingRuleWriter struct {
 	sink           eventSink
 	provider       ruleProvider
 	filterProvider collectorFilterProvider
+	heartbeat      collectorHeartbeatRecorder
 	mu             sync.RWMutex
 	rules          []rule.Rule
 	filter         collectorNoiseFilter
@@ -321,6 +393,12 @@ func (w *refreshingRuleWriter) SetCollectorFilterProvider(provider collectorFilt
 	w.filterProvider = provider
 }
 
+func (w *refreshingRuleWriter) SetHeartbeatRecorder(recorder collectorHeartbeatRecorder) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.heartbeat = recorder
+}
+
 func collectorNoiseFilterFromSystemConfig(cfg systemconfig.CollectorFilterConfig) collectorNoiseFilter {
 	return collectorNoiseFilter{
 		Enabled:               cfg.Enabled,
@@ -328,6 +406,36 @@ func collectorNoiseFilterFromSystemConfig(cfg systemconfig.CollectorFilterConfig
 		IgnoreCommandKeywords: cfg.IgnoreCommandKeywords,
 		IgnoreUsers:           cfg.IgnoreUsers,
 		KeepSeverities:        cfg.KeepSeverities,
+	}
+}
+
+func collectorHeartbeatLoop(ctx context.Context, recorder collectorHeartbeatRecorder, metadata collector.HostMetadata, interval time.Duration) {
+	if recorder == nil || metadata.ID == "" {
+		return
+	}
+	if interval <= 0 {
+		interval = 30 * time.Second
+	}
+	recordCollectorSeen(ctx, recorder, metadata)
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			recordCollectorSeen(ctx, recorder, metadata)
+		}
+	}
+}
+
+func recordCollectorSeen(ctx context.Context, recorder collectorHeartbeatRecorder, metadata collector.HostMetadata) {
+	if err := recorder.Upsert(ctx, collectorhealth.HeartbeatUpdate{
+		HostID:     metadata.ID,
+		HostName:   metadata.Name,
+		LastSeenAt: time.Now().UTC(),
+	}); err != nil {
+		slog.Error("record collector heartbeat failed", "host_id", metadata.ID, "error", err)
 	}
 }
 
@@ -379,6 +487,7 @@ func (w *refreshingRuleWriter) Write(ctx context.Context, events []audit.Event) 
 	rules := make([]rule.Rule, len(w.rules))
 	copy(rules, w.rules)
 	filter := w.filter
+	heartbeat := w.heartbeat
 	w.mu.RUnlock()
 
 	enriched := make([]audit.Event, 0, len(events))
@@ -397,8 +506,50 @@ func (w *refreshingRuleWriter) Write(ctx context.Context, events []audit.Event) 
 		slog.Error("write events failed", "events", len(enriched), "rules", len(rules), "error", err)
 		return err
 	}
+	if heartbeat != nil {
+		lastEventTime := newestEventTime(enriched)
+		writeAt := time.Now().UTC()
+		if err := heartbeat.Upsert(ctx, collectorhealth.HeartbeatUpdate{
+			HostID:        firstHostID(enriched),
+			HostName:      firstHostName(enriched),
+			LastSeenAt:    writeAt,
+			LastEventTime: &lastEventTime,
+			LastWriteAt:   &writeAt,
+			EventsWritten: uint64(len(enriched)),
+		}); err != nil {
+			slog.Error("record collector heartbeat failed", "error", err)
+		}
+	}
 	slog.Info("events written", "events", len(enriched), "rules", len(rules))
 	return nil
+}
+
+func newestEventTime(events []audit.Event) time.Time {
+	var newest time.Time
+	for _, event := range events {
+		if event.EventTime.After(newest) {
+			newest = event.EventTime
+		}
+	}
+	return newest
+}
+
+func firstHostID(events []audit.Event) string {
+	for _, event := range events {
+		if event.HostID != "" {
+			return event.HostID
+		}
+	}
+	return ""
+}
+
+func firstHostName(events []audit.Event) string {
+	for _, event := range events {
+		if event.HostName != "" {
+			return event.HostName
+		}
+	}
+	return ""
 }
 
 func (f collectorNoiseFilter) ShouldDrop(event audit.Event) bool {

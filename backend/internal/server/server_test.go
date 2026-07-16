@@ -7,13 +7,15 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"diting/backend/internal/auth"
+	"diting/backend/internal/collectorhealth"
 	"diting/backend/internal/systemconfig"
 )
 
 func TestHealthzReturnsOK(t *testing.T) {
-	router := NewRouter(nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	router := NewRouter(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 
@@ -33,7 +35,7 @@ func TestRouterLogsRequests(t *testing.T) {
 	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
 	t.Cleanup(func() { slog.SetDefault(original) })
 
-	router := NewRouter(nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	router := NewRouter(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 
@@ -49,7 +51,7 @@ func TestRouterLogsRequests(t *testing.T) {
 }
 
 func TestAuditEventsRouteReturnsListEnvelope(t *testing.T) {
-	router := NewRouter(nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	router := NewRouter(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/audit/events", nil)
 
@@ -62,7 +64,7 @@ func TestAuditEventsRouteReturnsListEnvelope(t *testing.T) {
 
 func TestProtectedRouteRequiresAuthWhenAuthServiceConfigured(t *testing.T) {
 	service := auth.NewService(nil, auth.Config{Secret: "test-secret", ExpiresHours: 1})
-	router := NewRouter(nil, nil, nil, service, nil, nil, nil, nil, nil)
+	router := NewRouter(nil, nil, nil, service, nil, nil, nil, nil, nil, nil)
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/rules", nil)
 
@@ -74,7 +76,7 @@ func TestProtectedRouteRequiresAuthWhenAuthServiceConfigured(t *testing.T) {
 }
 
 func TestRuleDetailRouteAllowsGet(t *testing.T) {
-	router := NewRouter(nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	router := NewRouter(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 	createRec := httptest.NewRecorder()
 	createBody := bytes.NewBufferString(`{"name":"test","eventType":"process_exec","enabled":true,"severity":"info","riskScore":0,"matchExpr":{"operator":"and","conditions":[]}}`)
 	createReq := httptest.NewRequest(http.MethodPost, "/api/v1/rules", createBody)
@@ -94,7 +96,7 @@ func TestRuleDetailRouteAllowsGet(t *testing.T) {
 }
 
 func TestCollectorFilterConfigRouteAllowsGetAndPut(t *testing.T) {
-	router := NewRouter(nil, nil, nil, nil, nil, nil, nil, systemconfig.NewMemoryRepository(), nil)
+	router := NewRouter(nil, nil, nil, nil, nil, nil, nil, systemconfig.NewMemoryRepository(), nil, nil)
 
 	putRec := httptest.NewRecorder()
 	putBody := bytes.NewBufferString(`{"enabled":true,"ignoreProcessNames":["node_exporter"],"ignoreCommandKeywords":["/metrics"],"ignoreUsers":["prometheus"],"keepSeverities":["high","critical"]}`)
@@ -116,7 +118,7 @@ func TestCollectorFilterConfigRouteAllowsGetAndPut(t *testing.T) {
 }
 
 func TestUserAdminRoutesAllowCreateListAndRoles(t *testing.T) {
-	router := NewRouter(nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	router := NewRouter(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 
 	createRec := httptest.NewRecorder()
 	createBody := bytes.NewBufferString(`{"username":"operator","password":"secret123","displayName":"Operator","status":"active","roles":["admin"]}`)
@@ -144,5 +146,22 @@ func TestUserAdminRoutesAllowCreateListAndRoles(t *testing.T) {
 	}
 	if !strings.Contains(rolesRec.Body.String(), `"name":"admin"`) {
 		t.Fatalf("expected admin role, got %s", rolesRec.Body.String())
+	}
+}
+
+func TestCollectorHealthRouteAllowsList(t *testing.T) {
+	repository := collectorhealth.NewMemoryRepository()
+	_ = repository.Upsert(nil, collectorhealth.HeartbeatUpdate{HostID: "server-1", HostName: "server-1", LastSeenAt: time.Now().UTC(), EventsWritten: 5})
+	router := NewRouter(nil, nil, nil, nil, nil, nil, nil, nil, nil, repository)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/collectors/health", nil)
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"hostId":"server-1"`) {
+		t.Fatalf("expected collector health, got %s", rec.Body.String())
 	}
 }

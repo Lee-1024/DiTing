@@ -7,6 +7,7 @@ import (
 
 	"diting/backend/internal/audit"
 	"diting/backend/internal/auth"
+	"diting/backend/internal/collectorhealth"
 	"diting/backend/internal/hostasset"
 	"diting/backend/internal/operationlog"
 	"diting/backend/internal/riskstatus"
@@ -16,7 +17,7 @@ import (
 	"diting/backend/internal/useradmin"
 )
 
-func NewRouter(repository audit.Repository, ruleRepository rule.Repository, statsRepository stats.Repository, authService *auth.Service, operationRepository operationlog.Repository, hostAssetRepository hostasset.Repository, riskStatusRepository riskstatus.Repository, systemConfigRepository systemconfig.Repository, userAdminRepository useradmin.Repository) http.Handler {
+func NewRouter(repository audit.Repository, ruleRepository rule.Repository, statsRepository stats.Repository, authService *auth.Service, operationRepository operationlog.Repository, hostAssetRepository hostasset.Repository, riskStatusRepository riskstatus.Repository, systemConfigRepository systemconfig.Repository, userAdminRepository useradmin.Repository, collectorHealthRepository collectorhealth.Repository) http.Handler {
 	mux := http.NewServeMux()
 	auditHandler := audit.NewHandler(repository)
 	if ruleRepository == nil {
@@ -35,6 +36,10 @@ func NewRouter(repository audit.Repository, ruleRepository rule.Repository, stat
 		userAdminRepository = useradmin.NewMemoryRepository()
 	}
 	userAdminHandler := useradmin.NewHandler(userAdminRepository)
+	if collectorHealthRepository == nil {
+		collectorHealthRepository = collectorhealth.NewMemoryRepository()
+	}
+	collectorHealthHandler := collectorhealth.NewHandler(collectorHealthRepository)
 	var riskStatusHandler *riskstatus.Handler
 	if riskStatusRepository != nil {
 		riskStatusHandler = riskstatus.NewHandler(riskStatusRepository)
@@ -156,6 +161,14 @@ func NewRouter(repository audit.Repository, ruleRepository rule.Repository, stat
 		switch r.Method {
 		case http.MethodGet:
 			userAdminHandler.ListRoles(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})))
+	mux.Handle("/api/v1/collectors/health", protect(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			collectorHealthHandler.List(w, r)
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}

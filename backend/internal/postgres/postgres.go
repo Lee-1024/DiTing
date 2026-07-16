@@ -4,11 +4,18 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
+	"sort"
 	"strings"
 
 	"diting/backend/internal/config"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+type Execer interface {
+	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
+}
 
 func DSN(cfg config.PostgresConfig) string {
 	sslMode := cfg.SSLMode
@@ -23,7 +30,29 @@ func Connect(ctx context.Context, cfg config.PostgresConfig) (*pgxpool.Pool, err
 	return pgxpool.New(ctx, DSN(cfg))
 }
 
-func ExecuteMigrationFile(ctx context.Context, pool *pgxpool.Pool, path string) error {
+func MigrationFiles(dir string) ([]string, error) {
+	files, err := filepath.Glob(filepath.Join(dir, "*.sql"))
+	if err != nil {
+		return nil, err
+	}
+	sort.Strings(files)
+	return files, nil
+}
+
+func ExecuteMigrations(ctx context.Context, pool Execer, dir string) error {
+	files, err := MigrationFiles(dir)
+	if err != nil {
+		return err
+	}
+	for _, path := range files {
+		if err := ExecuteMigrationFile(ctx, pool, path); err != nil {
+			return fmt.Errorf("execute postgres migration %s: %w", path, err)
+		}
+	}
+	return nil
+}
+
+func ExecuteMigrationFile(ctx context.Context, pool Execer, path string) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return err
