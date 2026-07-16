@@ -285,7 +285,11 @@ func migrationFiles(dir string) ([]string, error) {
 }
 
 func ensureClickHouseMigrations(ctx context.Context, client clickHouseMigrator) error {
-	files, err := migrationFiles(filepath.Join("migrations", "clickhouse"))
+	dir, err := resolveMigrationDir("clickhouse")
+	if err != nil {
+		return err
+	}
+	files, err := migrationFiles(dir)
 	if err != nil {
 		return err
 	}
@@ -308,12 +312,41 @@ type clickHouseMigrator interface {
 }
 
 func ensurePostgresMigrations(ctx context.Context, pool postgres.Execer) error {
+	dir, err := resolveMigrationDir("postgres")
+	if err != nil {
+		return err
+	}
 	slog.Info("auto postgres migrations starting")
-	if err := postgres.ExecuteMigrations(ctx, pool, filepath.Join("migrations", "postgres")); err != nil {
+	if err := postgres.ExecuteMigrations(ctx, pool, dir); err != nil {
 		return err
 	}
 	slog.Info("auto postgres migrations completed")
 	return nil
+}
+
+func resolveMigrationDir(kind string) (string, error) {
+	candidates := []string{
+		filepath.Join("migrations", kind),
+		filepath.Join("backend", "migrations", kind),
+	}
+	if executable, err := os.Executable(); err == nil {
+		executableDir := filepath.Dir(executable)
+		candidates = append(candidates,
+			filepath.Join(executableDir, "migrations", kind),
+			filepath.Join(executableDir, "..", "backend", "migrations", kind),
+		)
+	}
+	for _, candidate := range candidates {
+		if hasSQLFiles(candidate) {
+			return candidate, nil
+		}
+	}
+	return "", fmt.Errorf("migration directory for %s not found; checked %s", kind, strings.Join(candidates, ", "))
+}
+
+func hasSQLFiles(dir string) bool {
+	files, err := filepath.Glob(filepath.Join(dir, "*.sql"))
+	return err == nil && len(files) > 0
 }
 
 func parseArgs(args []string) (string, string) {
