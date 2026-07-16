@@ -4,10 +4,42 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+
+	"diting/backend/internal/audit"
 )
 
 type Handler struct {
 	repository Repository
+}
+
+type TestRequest struct {
+	Rule  Rule      `json:"rule"`
+	Event TestEvent `json:"event"`
+}
+
+type TestEvent struct {
+	EventType     string `json:"eventType"`
+	Action        string `json:"action"`
+	Severity      string `json:"severity"`
+	HostName      string `json:"hostName"`
+	NodeName      string `json:"nodeName"`
+	Namespace     string `json:"namespace"`
+	PodName       string `json:"podName"`
+	ContainerID   string `json:"containerId"`
+	ProcessName   string `json:"processName"`
+	BinaryPath    string `json:"binaryPath"`
+	Cmdline       string `json:"cmdline"`
+	Username      string `json:"username"`
+	LoginUsername string `json:"loginUsername"`
+	FilePath      string `json:"filePath"`
+	DstIP         string `json:"dstIp"`
+	Domain        string `json:"domain"`
+}
+
+type TestResponse struct {
+	Matched bool              `json:"matched"`
+	Message string            `json:"message"`
+	Matches []audit.RuleMatch `json:"matches"`
 }
 
 func NewHandler(repository Repository) *Handler {
@@ -91,6 +123,56 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) Test(w http.ResponseWriter, r *http.Request) {
+	var request TestRequest
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	if request.Rule.Name == "" {
+		http.Error(w, "name is required", http.StatusBadRequest)
+		return
+	}
+	if !validSeverity(request.Rule.Severity) {
+		http.Error(w, "invalid severity", http.StatusBadRequest)
+		return
+	}
+
+	matches := MatchConditions(request.Rule.MatchExpr, request.Event.toAuditEvent())
+	response := TestResponse{
+		Matched: len(matches) > 0,
+		Message: "未命中",
+		Matches: matches,
+	}
+	if response.Matched {
+		response.Message = "命中"
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(response)
+}
+
+func (e TestEvent) toAuditEvent() audit.Event {
+	return audit.Event{
+		EventType:     e.EventType,
+		Action:        e.Action,
+		Severity:      e.Severity,
+		HostName:      e.HostName,
+		NodeName:      e.NodeName,
+		Namespace:     e.Namespace,
+		PodName:       e.PodName,
+		ContainerID:   e.ContainerID,
+		ProcessName:   e.ProcessName,
+		BinaryPath:    e.BinaryPath,
+		Cmdline:       e.Cmdline,
+		Username:      e.Username,
+		LoginUsername: e.LoginUsername,
+		FilePath:      e.FilePath,
+		DstIP:         e.DstIP,
+		Domain:        e.Domain,
+	}
 }
 
 func writeRuleError(w http.ResponseWriter, err error) {

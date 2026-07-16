@@ -81,6 +81,55 @@ func TestListRulesReturnsEmptyArray(t *testing.T) {
 	}
 }
 
+func TestTestRuleReturnsMatchedConditions(t *testing.T) {
+	handler := NewHandler(NewMemoryRepository())
+	body := bytes.NewBufferString(`{"rule":{"name":"反弹 Shell 命令","eventType":"process_exec","enabled":true,"severity":"critical","riskScore":95,"matchExpr":{"operator":"and","conditions":[{"field":"cmdline","op":"contains","value":"bash -i"},{"field":"username","op":"eq","value":"ubuntu"}]}},"event":{"eventType":"process_exec","cmdline":"/bin/bash -i","username":"ubuntu"}}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/rules/test", body)
+	rec := httptest.NewRecorder()
+
+	handler.Test(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var response TestResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if !response.Matched {
+		t.Fatal("expected rule to match")
+	}
+	if len(response.Matches) != 2 {
+		t.Fatalf("expected two matched conditions, got %d", len(response.Matches))
+	}
+	if response.Matches[0].Field != "cmdline" || response.Matches[0].Actual != "/bin/bash -i" {
+		t.Fatalf("unexpected first match: %#v", response.Matches[0])
+	}
+}
+
+func TestTestRuleReturnsUnmatchedReason(t *testing.T) {
+	handler := NewHandler(NewMemoryRepository())
+	body := bytes.NewBufferString(`{"rule":{"name":"docker","eventType":"process_exec","enabled":true,"severity":"high","riskScore":70,"matchExpr":{"operator":"and","conditions":[{"field":"process_name","op":"eq","value":"docker"}]}},"event":{"eventType":"process_exec","processName":"bash","cmdline":"id"}}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/rules/test", body)
+	rec := httptest.NewRecorder()
+
+	handler.Test(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var response TestResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if response.Matched {
+		t.Fatal("expected rule not to match")
+	}
+	if response.Message == "" {
+		t.Fatal("expected unmatched message")
+	}
+}
+
 func TestUpdateAndDeleteRule(t *testing.T) {
 	repository := NewMemoryRepository()
 	handler := NewHandler(repository)

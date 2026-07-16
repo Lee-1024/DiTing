@@ -85,6 +85,14 @@ func NewRouter(repository audit.Repository, ruleRepository rule.Repository, stat
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
 	})))
+	mux.Handle("/api/v1/rules/test", protect(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			ruleHandler.Test(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})))
 	mux.Handle("/api/v1/rules/{id}", protect(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:

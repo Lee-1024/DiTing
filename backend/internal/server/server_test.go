@@ -95,6 +95,22 @@ func TestRuleDetailRouteAllowsGet(t *testing.T) {
 	}
 }
 
+func TestRuleTestRouteAllowsPost(t *testing.T) {
+	router := NewRouter(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	rec := httptest.NewRecorder()
+	body := bytes.NewBufferString(`{"rule":{"name":"test","eventType":"process_exec","enabled":true,"severity":"info","riskScore":0,"matchExpr":{"operator":"and","conditions":[{"field":"cmdline","op":"contains","value":"id"}]}},"event":{"eventType":"process_exec","cmdline":"/usr/bin/id"}}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/rules/test", body)
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200 from rule test handler, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"matched":true`) {
+		t.Fatalf("expected matched response, got %s", rec.Body.String())
+	}
+}
+
 func TestCollectorFilterConfigRouteAllowsGetAndPut(t *testing.T) {
 	router := NewRouter(nil, nil, nil, nil, nil, nil, nil, systemconfig.NewMemoryRepository(), nil, nil)
 

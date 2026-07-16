@@ -24,3 +24,32 @@ export interface AuditRule {
 }
 
 export type RulePayload = Omit<AuditRule, 'id' | 'updatedAt'>;
+
+export interface RuleTestEvent {
+  eventType?: string;
+  severity?: string;
+  hostName?: string;
+  nodeName?: string;
+  namespace?: string;
+  podName?: string;
+  containerId?: string;
+  processName?: string;
+  binaryPath?: string;
+  cmdline?: string;
+  username?: string;
+  loginUsername?: string;
+  filePath?: string;
+  dstIp?: string;
+  domain?: string;
+}
+
+export interface RuleTestResponse {
+  matched: boolean;
+  message: string;
+  matches: Array<{
+    field: string;
+    operator: string;
+    value: string;
+    actual: string;
+  }>;
+}

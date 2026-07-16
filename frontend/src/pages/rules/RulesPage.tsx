@@ -1,9 +1,9 @@
-import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
-import { Button, Card, Empty, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Switch, Table, Tag, Typography, message } from 'antd';
+import { DeleteOutlined, EditOutlined, ExperimentOutlined, PlusOutlined } from '@ant-design/icons';
+import { Alert, Button, Card, Empty, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Switch, Table, Tag, Typography, message } from 'antd';
 import { useEffect, useState } from 'react';
-import { createRule, deleteRule, getRule, listRules, updateRule } from '../../api/rules';
-import type { AuditRule, RuleCondition, RuleExpression, RulePayload } from '../../types/rule';
-import { eventTypeOptions, optionLabel, ruleFieldOptions, ruleOperatorOptions, severityOptions } from '../../utils/labels';
+import { createRule, deleteRule, getRule, listRules, testRule, updateRule } from '../../api/rules';
+import type { AuditRule, RuleCondition, RuleExpression, RulePayload, RuleTestEvent, RuleTestResponse } from '../../types/rule';
+import { eventTypeOptions, optionLabel, ruleFieldLabel, ruleFieldOptions, ruleOperatorLabel, ruleOperatorOptions, severityOptions } from '../../utils/labels';
 
 interface RuleFormValues {
   name: string;
@@ -29,10 +29,14 @@ export default function RulesPage() {
   const [rules, setRules] = useState<AuditRule[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
   const [open, setOpen] = useState(false);
+  const [testOpen, setTestOpen] = useState(false);
+  const [testResult, setTestResult] = useState<RuleTestResponse>();
   const [editing, setEditing] = useState<AuditRule>();
   const [tablePageSize, setTablePageSize] = useState(10);
   const [form] = Form.useForm<RuleFormValues>();
+  const [testForm] = Form.useForm<RuleTestEvent>();
 
   async function load() {
     setLoading(true);
@@ -60,6 +64,7 @@ export default function RulesPage() {
       operator: 'and',
       conditions: defaultConditions,
     });
+    setTestResult(undefined);
     setOpen(true);
   }
 
@@ -72,6 +77,7 @@ export default function RulesPage() {
       operator: detail.matchExpr?.operator ?? 'and',
       conditions: expressionToForm(detail.matchExpr),
     });
+    setTestResult(undefined);
     setOpen(true);
   }
 
@@ -120,6 +126,34 @@ export default function RulesPage() {
     await load();
   }
 
+  async function openTest() {
+    await form.validateFields();
+    const values = form.getFieldsValue();
+    testForm.setFieldsValue({
+      eventType: values.eventType,
+      severity: values.severity,
+      username: 'ubuntu',
+      loginUsername: 'ubuntu',
+      processName: 'bash',
+      cmdline: '/bin/bash -i',
+    });
+    setTestResult(undefined);
+    setTestOpen(true);
+  }
+
+  async function submitTest() {
+    const ruleValues = await form.validateFields();
+    const eventValues = await testForm.validateFields();
+    setTesting(true);
+    try {
+      setTestResult(await testRule(toPayload(ruleValues), eventValues));
+    } catch {
+      message.error('规则测试失败');
+    } finally {
+      setTesting(false);
+    }
+  }
+
   return (
     <>
       <Space className="page-heading">
@@ -163,7 +197,18 @@ export default function RulesPage() {
           ]}
         />
       </Card>
-      <Modal title={editing ? '编辑规则' : '新建规则'} open={open} onOk={submit} confirmLoading={saving} onCancel={() => setOpen(false)} width={880}>
+      <Modal
+        title={editing ? '编辑规则' : '新建规则'}
+        open={open}
+        confirmLoading={saving}
+        onCancel={() => setOpen(false)}
+        width={880}
+        footer={[
+          <Button key="test" icon={<ExperimentOutlined />} onClick={() => void openTest()}>测试规则</Button>,
+          <Button key="cancel" onClick={() => setOpen(false)}>取消</Button>,
+          <Button key="submit" type="primary" loading={saving} onClick={() => void submit()}>保存</Button>,
+        ]}
+      >
         <Form form={form} layout="vertical">
           <Form.Item name="name" label="规则名称" rules={[{ required: true, message: '请输入规则名称' }]}>
             <Input />
@@ -219,6 +264,78 @@ export default function RulesPage() {
               </Space>
             )}
           </Form.List>
+        </Form>
+      </Modal>
+      <Modal
+        title="测试规则"
+        open={testOpen}
+        confirmLoading={testing}
+        onOk={() => void submitTest()}
+        onCancel={() => setTestOpen(false)}
+        width={760}
+      >
+        <Form form={testForm} layout="vertical">
+          <Space size={16} align="start" wrap>
+            <Form.Item name="eventType" label="事件类型">
+              <Select style={{ width: 160 }} options={eventTypeOptions} />
+            </Form.Item>
+            <Form.Item name="severity" label="风险等级">
+              <Select style={{ width: 140 }} options={severityOptions} />
+            </Form.Item>
+            <Form.Item name="username" label="执行用户">
+              <Input style={{ width: 160 }} />
+            </Form.Item>
+            <Form.Item name="loginUsername" label="登录用户">
+              <Input style={{ width: 160 }} />
+            </Form.Item>
+          </Space>
+          <Space size={16} align="start" wrap>
+            <Form.Item name="processName" label="进程名">
+              <Input style={{ width: 160 }} />
+            </Form.Item>
+            <Form.Item name="binaryPath" label="二进制路径">
+              <Input style={{ width: 240 }} />
+            </Form.Item>
+            <Form.Item name="hostName" label="主机名">
+              <Input style={{ width: 160 }} />
+            </Form.Item>
+            <Form.Item name="namespace" label="Namespace">
+              <Input style={{ width: 160 }} />
+            </Form.Item>
+          </Space>
+          <Form.Item name="cmdline" label="命令行">
+            <Input />
+          </Form.Item>
+          <Space size={16} align="start" wrap>
+            <Form.Item name="podName" label="Pod">
+              <Input style={{ width: 180 }} />
+            </Form.Item>
+            <Form.Item name="containerId" label="容器 ID">
+              <Input style={{ width: 220 }} />
+            </Form.Item>
+            <Form.Item name="filePath" label="文件路径">
+              <Input style={{ width: 220 }} />
+            </Form.Item>
+          </Space>
+          {testResult && (
+            <Space direction="vertical" size={12} style={{ width: '100%' }}>
+              <Alert type={testResult.matched ? 'success' : 'warning'} showIcon message={testResult.matched ? '规则命中' : '规则未命中'} />
+              {testResult.matches?.length ? (
+                <Table
+                  size="small"
+                  pagination={false}
+                  rowKey={(record, index) => `${record.field}-${record.operator}-${index}`}
+                  dataSource={testResult.matches}
+                  columns={[
+                    { title: '字段', dataIndex: 'field', width: 130, render: (value) => ruleFieldLabel(value) },
+                    { title: '条件', dataIndex: 'operator', width: 120, render: (value) => ruleOperatorLabel(value) },
+                    { title: '期望值', dataIndex: 'value', width: 180 },
+                    { title: '实际值', dataIndex: 'actual' },
+                  ]}
+                />
+              ) : null}
+            </Space>
+          )}
         </Form>
       </Modal>
     </>
