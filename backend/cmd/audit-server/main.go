@@ -312,15 +312,21 @@ type clickHouseMigrator interface {
 }
 
 func ensurePostgresMigrations(ctx context.Context, pool postgres.Execer) error {
-	dir, err := resolveMigrationDir("postgres")
-	if err != nil {
+	slog.Info("auto postgres bootstrap starting")
+	if err := postgres.ExecuteBootstrap(ctx, pool); err != nil {
 		return err
 	}
-	slog.Info("auto postgres migrations starting")
+	slog.Info("auto postgres bootstrap completed")
+	dir, err := resolveMigrationDir("postgres")
+	if err != nil {
+		slog.Warn("postgres migration directory not found; built-in bootstrap already ran", "error", err)
+		return nil
+	}
+	slog.Info("auto postgres file migrations starting", "dir", dir)
 	if err := postgres.ExecuteMigrations(ctx, pool, dir); err != nil {
 		return err
 	}
-	slog.Info("auto postgres migrations completed")
+	slog.Info("auto postgres file migrations completed")
 	return nil
 }
 
