@@ -19,4 +19,16 @@ type Entry struct {
 
 type Repository interface {
 	Create(ctx context.Context, entry Entry) error
+	List(ctx context.Context, query Query) ([]Entry, int, error)
+}
+
+type Query struct {
+	StartTime time.Time
+	EndTime   time.Time
+	Username  string
+	Method    string
+	Keyword   string
+	Status    int
+	Page      int
+	PageSize  int
 }

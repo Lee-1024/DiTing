@@ -165,3 +165,18 @@ func TestCollectorHealthRouteAllowsList(t *testing.T) {
 		t.Fatalf("expected collector health, got %s", rec.Body.String())
 	}
 }
+
+func TestOperationLogsRouteAllowsList(t *testing.T) {
+	router := NewRouter(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/operation-logs", nil)
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"items"`) {
+		t.Fatalf("expected operation log list envelope, got %s", rec.Body.String())
+	}
+}

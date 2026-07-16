@@ -173,6 +173,15 @@ func NewRouter(repository audit.Repository, ruleRepository rule.Repository, stat
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
 	})))
+	operationLogHandler := operationlog.NewHandler(operationRepository)
+	mux.Handle("/api/v1/operation-logs", protect(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			operationLogHandler.List(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})))
 	if statsRepository != nil {
 		mux.Handle("/api/v1/stats/overview", protect(http.HandlerFunc(statsHandler.Overview)))
 		mux.Handle("/api/v1/stats/event-trend", protect(http.HandlerFunc(statsHandler.EventTrend)))

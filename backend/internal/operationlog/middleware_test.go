@@ -18,6 +18,10 @@ func (f *fakeRepository) Create(_ context.Context, entry Entry) error {
 	return nil
 }
 
+func (f *fakeRepository) List(_ context.Context, query Query) ([]Entry, int, error) {
+	return f.entries, len(f.entries), nil
+}
+
 func TestMiddlewareRecordsAuthenticatedOperation(t *testing.T) {
 	repository := &fakeRepository{}
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
