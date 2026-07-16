@@ -10,12 +10,18 @@ func ApplyRules(event audit.Event, rules []Rule) audit.Event {
 		if candidate.EventType != "" && candidate.EventType != event.EventType {
 			continue
 		}
-		if !Match(candidate.MatchExpr, event) {
+		matches := MatchConditions(candidate.MatchExpr, event)
+		if len(matches) == 0 {
 			continue
 		}
 
 		event.RuleIDs = appendUnique(event.RuleIDs, candidate.ID)
 		event.RuleNames = appendUnique(event.RuleNames, candidate.Name)
+		for _, match := range matches {
+			match.RuleID = candidate.ID
+			match.RuleName = candidate.Name
+			event.RuleMatches = append(event.RuleMatches, match)
+		}
 		for _, tag := range candidate.Tags {
 			event.Tags = appendUnique(event.Tags, tag)
 		}

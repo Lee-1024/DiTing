@@ -22,7 +22,7 @@ func TestAuditRepositoryQueriesEventsAsJSON(t *testing.T) {
 			_, _ = w.Write([]byte(`{"total":"42"}` + "\n"))
 			return
 		}
-		_, _ = w.Write([]byte(`{"event_id":"evt-1","event_time":"2026-07-09 13:00:00.000","event_type":"process_exec","severity":"info","cmdline":"id","tags":[],"rule_ids":["rule-1"],"rule_names":["Download and execute"]}` + "\n"))
+		_, _ = w.Write([]byte(`{"event_id":"evt-1","event_time":"2026-07-09 13:00:00.000","event_type":"process_exec","severity":"info","cmdline":"id","tags":[],"rule_ids":["rule-1"],"rule_names":["Download and execute"],"rule_matches":"[{\"ruleId\":\"rule-1\",\"ruleName\":\"Download and execute\",\"field\":\"cmdline\",\"operator\":\"contains\",\"value\":\"id\",\"actual\":\"id\"}]"}` + "\n"))
 	}))
 	defer server.Close()
 
@@ -52,6 +52,9 @@ func TestAuditRepositoryQueriesEventsAsJSON(t *testing.T) {
 	}
 	if len(events[0].RuleNames) != 1 || events[0].RuleNames[0] != "Download and execute" {
 		t.Fatalf("expected rule names to be decoded, got %#v", events[0].RuleNames)
+	}
+	if len(events[0].RuleMatches) != 1 || events[0].RuleMatches[0].Field != "cmdline" || events[0].RuleMatches[0].Value != "id" {
+		t.Fatalf("expected rule matches to be decoded, got %#v", events[0].RuleMatches)
 	}
 }
 

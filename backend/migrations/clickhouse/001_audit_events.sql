@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS diting.audit_events
 
     rule_ids Array(String),
     rule_names Array(String),
+    rule_matches String,
 
     raw_event String
 )
@@ -62,3 +63,5 @@ ENGINE = MergeTree
 PARTITION BY toYYYYMM(event_date)
 ORDER BY (event_date, event_type, severity, host_id, host_name, namespace, pod_name, event_time)
 TTL event_date + INTERVAL 90 DAY;
+
+ALTER TABLE diting.audit_events ADD COLUMN IF NOT EXISTS rule_matches String AFTER rule_names;

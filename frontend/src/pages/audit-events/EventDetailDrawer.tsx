@@ -1,4 +1,4 @@
-import { Descriptions, Drawer, Space, Spin, Tag, Typography, message } from 'antd';
+import { Descriptions, Drawer, Space, Spin, Table, Tag, Typography, message } from 'antd';
 import { useEffect, useState } from 'react';
 import { getAuditEvent } from '../../api/audit';
 import SeverityTag from '../../components/SeverityTag';
@@ -87,6 +87,21 @@ export default function EventDetailDrawer({ event, eventId, open, onClose }: Pro
               {current.ruleNames?.map((name) => <Tag key={name}>{name}</Tag>)}
             </Descriptions.Item>
           </Descriptions>
+          {current.ruleMatches?.length ? (
+            <Table
+              rowKey={(record, index) => `${record.ruleId}-${record.field}-${index}`}
+              size="small"
+              pagination={false}
+              dataSource={current.ruleMatches}
+              columns={[
+                { title: '规则', dataIndex: 'ruleName', width: 180, render: (value) => value || '-' },
+                { title: '字段', dataIndex: 'field', width: 120 },
+                { title: '条件', dataIndex: 'operator', width: 100 },
+                { title: '期望值', dataIndex: 'value', width: 180 },
+                { title: '实际值', dataIndex: 'actual' },
+              ]}
+            />
+          ) : null}
           <Typography.Title level={5}>原始事件</Typography.Title>
           <pre className="detail-json">{formatJSON(current.rawEvent)}</pre>
         </Space>

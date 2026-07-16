@@ -2,7 +2,9 @@ package operationlog
 
 import (
 	"log/slog"
+	"net"
 	"net/http"
+	"strings"
 
 	"diting/backend/internal/auth"
 )
@@ -25,13 +27,30 @@ func Middleware(repository Repository) func(http.Handler) http.Handler {
 				Method:    r.Method,
 				Path:      r.URL.Path,
 				Status:    recorder.status,
-				IP:        r.RemoteAddr,
+				IP:        clientIP(r),
 				UserAgent: r.UserAgent(),
 			}); err != nil {
 				slog.Error("operation log write failed", "method", r.Method, "path", r.URL.Path, "status", recorder.status, "username", claims.Username, "error", err)
 			}
 		})
 	}
+}
+
+func clientIP(r *http.Request) string {
+	if forwardedFor := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); forwardedFor != "" {
+		if first, _, ok := strings.Cut(forwardedFor, ","); ok {
+			return strings.TrimSpace(first)
+		}
+		return forwardedFor
+	}
+	if realIP := strings.TrimSpace(r.Header.Get("X-Real-IP")); realIP != "" {
+		return realIP
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err == nil {
+		return host
+	}
+	return r.RemoteAddr
 }
 
 type statusRecorder struct {

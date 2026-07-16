@@ -189,6 +189,7 @@ type clickHouseRow struct {
 	Domain            string   `json:"domain"`
 	RuleIDs           []string `json:"rule_ids"`
 	RuleNames         []string `json:"rule_names"`
+	RuleMatches       string   `json:"rule_matches"`
 	RawEvent          string   `json:"raw_event"`
 }
 
@@ -200,6 +201,7 @@ func toClickHouseRow(event audit.Event) clickHouseRow {
 	tags := nonNilStrings(event.Tags)
 	ruleIDs := nonNilStrings(event.RuleIDs)
 	ruleNames := nonNilStrings(event.RuleNames)
+	ruleMatches, _ := json.Marshal(event.RuleMatches)
 	return clickHouseRow{
 		EventID: event.EventID, EventTime: formatDateTime64(event.EventTime), EventDate: eventDate.Format("2006-01-02"), IngestTime: formatDateTime64(event.IngestTime),
 		EventType: event.EventType, Action: event.Action, Severity: event.Severity, RiskScore: event.RiskScore, Tags: tags,
@@ -210,7 +212,7 @@ func toClickHouseRow(event audit.Event) clickHouseRow {
 		UID: event.UID, GID: event.GID, Username: event.Username, AUID: event.AUID, EUID: event.EUID, EGID: event.EGID, LoginUsername: event.LoginUsername,
 		FilePath: event.FilePath, FileOperation: event.FileOperation,
 		SrcIP: event.SrcIP, SrcPort: event.SrcPort, DstIP: event.DstIP, DstPort: event.DstPort, Protocol: event.Protocol, Domain: event.Domain,
-		RuleIDs: ruleIDs, RuleNames: ruleNames, RawEvent: event.RawEvent,
+		RuleIDs: ruleIDs, RuleNames: ruleNames, RuleMatches: string(ruleMatches), RawEvent: event.RawEvent,
 	}
 }
 

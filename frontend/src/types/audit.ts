@@ -28,7 +28,17 @@ export interface AuditEvent {
   tags: string[];
   ruleIds?: string[];
   ruleNames?: string[];
+  ruleMatches?: RuleMatch[];
   rawEvent?: string;
+}
+
+export interface RuleMatch {
+  ruleId: string;
+  ruleName: string;
+  field: string;
+  operator: string;
+  value: string;
+  actual: string;
 }
 
 export interface AuditEventQuery {

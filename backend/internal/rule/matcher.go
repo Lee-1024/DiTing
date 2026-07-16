@@ -13,15 +13,19 @@ type Expression struct {
 }
 
 type Condition struct {
-	Field string   `json:"field"`
-	Op    string   `json:"op"`
-	Value string   `json:"value"`
+	Field  string   `json:"field"`
+	Op     string   `json:"op"`
+	Value  string   `json:"value"`
 	Values []string `json:"values"`
 }
 
 func Match(expr Expression, event audit.Event) bool {
+	return len(MatchConditions(expr, event)) > 0
+}
+
+func MatchConditions(expr Expression, event audit.Event) []audit.RuleMatch {
 	if len(expr.Conditions) == 0 {
-		return false
+		return nil
 	}
 
 	operator := strings.ToLower(expr.Operator)
@@ -31,46 +35,65 @@ func Match(expr Expression, event audit.Event) bool {
 
 	if operator == "or" {
 		for _, condition := range expr.Conditions {
-			if matchCondition(condition, event) {
-				return true
+			if match, actual := matchCondition(condition, event); match {
+				return []audit.RuleMatch{conditionMatch(condition, actual)}
 			}
 		}
-		return false
+		return nil
 	}
 
+	matches := make([]audit.RuleMatch, 0, len(expr.Conditions))
 	for _, condition := range expr.Conditions {
-		if !matchCondition(condition, event) {
-			return false
+		match, actual := matchCondition(condition, event)
+		if !match {
+			return nil
 		}
+		matches = append(matches, conditionMatch(condition, actual))
 	}
-	return true
+	return matches
 }
 
-func matchCondition(condition Condition, event audit.Event) bool {
+func conditionMatch(condition Condition, actual string) audit.RuleMatch {
+	return audit.RuleMatch{
+		Field:    condition.Field,
+		Operator: condition.Op,
+		Value:    conditionValue(condition),
+		Actual:   actual,
+	}
+}
+
+func conditionValue(condition Condition) string {
+	if len(condition.Values) > 0 {
+		return strings.Join(condition.Values, ",")
+	}
+	return condition.Value
+}
+
+func matchCondition(condition Condition, event audit.Event) (bool, string) {
 	actual := fieldValue(condition.Field, event)
 	switch strings.ToLower(condition.Op) {
 	case "eq":
-		return actual == condition.Value
+		return actual == condition.Value, actual
 	case "neq":
-		return actual != condition.Value
+		return actual != condition.Value, actual
 	case "contains":
-		return strings.Contains(actual, condition.Value)
+		return strings.Contains(actual, condition.Value), actual
 	case "prefix":
-		return strings.HasPrefix(actual, condition.Value)
+		return strings.HasPrefix(actual, condition.Value), actual
 	case "suffix":
-		return strings.HasSuffix(actual, condition.Value)
+		return strings.HasSuffix(actual, condition.Value), actual
 	case "in":
 		for _, value := range condition.Values {
 			if actual == value {
-				return true
+				return true, actual
 			}
 		}
-		return false
+		return false, actual
 	case "regex":
 		matched, err := regexp.MatchString(condition.Value, actual)
-		return err == nil && matched
+		return err == nil && matched, actual
 	default:
-		return false
+		return false, actual
 	}
 }
 

@@ -122,7 +122,7 @@ FORMAT JSONEachRow`, auditEventSelectFields(), auditTable(database), escapeSQL(e
 }
 
 func auditEventSelectFields() string {
-	return "event_id, event_time, event_type, severity, risk_score, host_name, host_id, node_name, namespace, pod_name, username, uid, gid, auid, euid, egid, login_username, process_name, binary_path, cmdline, cwd, parent_process_name, parent_binary_path, parent_cmdline, tags, rule_ids, rule_names, raw_event"
+	return "event_id, event_time, event_type, severity, risk_score, host_name, host_id, node_name, namespace, pod_name, username, uid, gid, auid, euid, egid, login_username, process_name, binary_path, cmdline, cwd, parent_process_name, parent_binary_path, parent_cmdline, tags, rule_ids, rule_names, rule_matches, raw_event"
 }
 
 func buildCountEventsSQL(database string, query audit.Query) string {
@@ -240,6 +240,7 @@ type eventRow struct {
 	Tags              []string `json:"tags"`
 	RuleIDs           []string `json:"rule_ids"`
 	RuleNames         []string `json:"rule_names"`
+	RuleMatches       string   `json:"rule_matches"`
 	RawEvent          string   `json:"raw_event"`
 }
 
@@ -249,12 +250,16 @@ func decodeEventRow(data []byte) (audit.Event, error) {
 		return audit.Event{}, err
 	}
 	eventTime, _ := time.Parse("2006-01-02 15:04:05.000", row.EventTime)
+	ruleMatches := []audit.RuleMatch{}
+	if strings.TrimSpace(row.RuleMatches) != "" {
+		_ = json.Unmarshal([]byte(row.RuleMatches), &ruleMatches)
+	}
 	return audit.Event{
 		EventID: row.EventID, EventTime: eventTime, EventType: row.EventType, Severity: row.Severity, RiskScore: row.RiskScore,
 		HostName: row.HostName, HostID: row.HostID, NodeName: row.NodeName, Namespace: row.Namespace, PodName: row.PodName,
 		Username: row.Username, UID: row.UID, GID: row.GID, AUID: row.AUID, EUID: row.EUID, EGID: row.EGID, LoginUsername: row.LoginUsername,
 		ProcessName: row.ProcessName, BinaryPath: row.BinaryPath, Cmdline: row.Cmdline, CWD: row.CWD,
 		ParentProcessName: row.ParentProcessName, ParentBinaryPath: row.ParentBinaryPath, ParentCmdline: row.ParentCmdline,
-		Tags: row.Tags, RuleIDs: row.RuleIDs, RuleNames: row.RuleNames, RawEvent: row.RawEvent,
+		Tags: row.Tags, RuleIDs: row.RuleIDs, RuleNames: row.RuleNames, RuleMatches: ruleMatches, RawEvent: row.RawEvent,
 	}, nil
 }

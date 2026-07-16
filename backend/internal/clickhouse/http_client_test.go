@@ -25,6 +25,7 @@ func TestHTTPClientWritesJSONEachRow(t *testing.T) {
 	err := client.WriteEvents(context.Background(), []audit.Event{{
 		EventID: "evt-1", EventTime: time.Unix(1, 0).UTC(), EventDate: time.Unix(0, 0).UTC(), IngestTime: time.Unix(2, 0).UTC(),
 		EventType: "process_exec", Action: "exec", Severity: "info", HostID: "machine-1", HostName: "app-01", ProcessName: "bash", Cmdline: "bash -c id",
+		RuleMatches: []audit.RuleMatch{{RuleID: "rule-1", RuleName: "test", Field: "cmdline", Operator: "contains", Value: "id", Actual: "bash -c id"}},
 	}})
 	if err != nil {
 		t.Fatalf("WriteEvents returned error: %v", err)
@@ -44,6 +45,9 @@ func TestHTTPClientWritesJSONEachRow(t *testing.T) {
 	}
 	if strings.Contains(body, `"tags":null`) {
 		t.Fatalf("expected empty tags array instead of null, got %s", body)
+	}
+	if !strings.Contains(body, `"rule_matches":"[{\"ruleId\":\"rule-1\"`) {
+		t.Fatalf("expected rule match JSON string in event json, got %s", body)
 	}
 }
 

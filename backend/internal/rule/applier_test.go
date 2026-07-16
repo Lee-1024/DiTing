@@ -48,6 +48,13 @@ func TestApplyRulesEnrichesMatchingEvent(t *testing.T) {
 	if len(enriched.RuleNames) != 1 || enriched.RuleNames[0] != "reverse shell" {
 		t.Fatalf("expected rule name, got %#v", enriched.RuleNames)
 	}
+	if len(enriched.RuleMatches) != 1 {
+		t.Fatalf("expected one rule match, got %#v", enriched.RuleMatches)
+	}
+	match := enriched.RuleMatches[0]
+	if match.RuleID != "rule-1" || match.RuleName != "reverse shell" || match.Field != "cmdline" || match.Operator != "contains" || match.Value != "bash -i" || match.Actual != "/usr/bin/bash -i" {
+		t.Fatalf("unexpected rule match %#v", match)
+	}
 }
 
 func TestApplyRulesIgnoresDisabledRules(t *testing.T) {

@@ -55,8 +55,18 @@ type Event struct {
 	Protocol string `json:"protocol"`
 	Domain   string `json:"domain"`
 
-	RuleIDs   []string `json:"ruleIds"`
-	RuleNames []string `json:"ruleNames"`
+	RuleIDs     []string    `json:"ruleIds"`
+	RuleNames   []string    `json:"ruleNames"`
+	RuleMatches []RuleMatch `json:"ruleMatches"`
 
 	RawEvent string `json:"rawEvent"`
+}
+
+type RuleMatch struct {
+	RuleID   string `json:"ruleId"`
+	RuleName string `json:"ruleName"`
+	Field    string `json:"field"`
+	Operator string `json:"operator"`
+	Value    string `json:"value"`
+	Actual   string `json:"actual"`
 }
