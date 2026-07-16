@@ -1,28 +1,28 @@
 import { apiClient } from './client';
-import type { CommandItem, CommandStatsQuery, HostAuditItem, HostAuditQuery, OverviewStats, TopItem, TrendPoint, UserAuditItem, UserAuditQuery } from '../types/stats';
+import type { CommandItem, CommandStatsQuery, HostAuditItem, HostAuditQuery, OverviewStats, StatsQuery, TopItem, TrendPoint, UserAuditItem, UserAuditQuery } from '../types/stats';
 
-export async function getOverview(): Promise<OverviewStats> {
-  const response = await apiClient.get<OverviewStats>('/stats/overview');
+export async function getOverview(params?: StatsQuery): Promise<OverviewStats> {
+  const response = await apiClient.get<OverviewStats>('/stats/overview', { params });
   return response.data;
 }
 
-export async function getEventTrend(): Promise<TrendPoint[]> {
-  const response = await apiClient.get<TrendPoint[]>('/stats/event-trend');
+export async function getEventTrend(params?: StatsQuery): Promise<TrendPoint[]> {
+  const response = await apiClient.get<TrendPoint[]>('/stats/event-trend', { params });
   return response.data;
 }
 
-export async function getTopCommands(limit = 10): Promise<TopItem[]> {
-  const response = await apiClient.get<TopItem[]>('/stats/top-commands', { params: { limit } });
+export async function getTopCommands(limit = 10, params?: StatsQuery): Promise<TopItem[]> {
+  const response = await apiClient.get<TopItem[]>('/stats/top-commands', { params: { ...params, limit } });
   return response.data;
 }
 
-export async function getTopHosts(limit = 10): Promise<TopItem[]> {
-  const response = await apiClient.get<TopItem[]>('/stats/top-hosts', { params: { limit } });
+export async function getTopHosts(limit = 10, params?: StatsQuery): Promise<TopItem[]> {
+  const response = await apiClient.get<TopItem[]>('/stats/top-hosts', { params: { ...params, limit } });
   return response.data;
 }
 
-export async function getTopNamespaces(limit = 10): Promise<TopItem[]> {
-  const response = await apiClient.get<TopItem[]>('/stats/top-namespaces', { params: { limit } });
+export async function getTopNamespaces(limit = 10, params?: StatsQuery): Promise<TopItem[]> {
+  const response = await apiClient.get<TopItem[]>('/stats/top-namespaces', { params: { ...params, limit } });
   return response.data;
 }
 

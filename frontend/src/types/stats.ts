@@ -15,6 +15,11 @@ export interface TopItem {
   count: number;
 }
 
+export interface StatsQuery {
+  start_time?: string;
+  end_time?: string;
+}
+
 export interface CommandItem {
   processName: string;
   cmdline: string;

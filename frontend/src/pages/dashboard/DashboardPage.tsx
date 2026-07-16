@@ -1,4 +1,5 @@
 import { Alert, Card, Col, Empty, Row, Statistic, Typography } from 'antd';
+import dayjs from 'dayjs';
 import type { EChartsOption } from 'echarts';
 import { useEffect, useState } from 'react';
 import { getEventTrend, getOverview, getTopCommands, getTopHosts, getTopNamespaces } from '../../api/stats';
@@ -26,12 +27,16 @@ export default function DashboardPage() {
     setLoading(true);
     setError('');
     try {
+      const todayQuery = {
+        start_time: dayjs().startOf('day').toISOString(),
+        end_time: dayjs().endOf('day').toISOString(),
+      };
       const [overviewData, trendData, commandData, hostData, namespaceData] = await Promise.all([
-        getOverview(),
-        getEventTrend(),
-        getTopCommands(50),
-        getTopHosts(12),
-        getTopNamespaces(12),
+        getOverview(todayQuery),
+        getEventTrend(todayQuery),
+        getTopCommands(50, todayQuery),
+        getTopHosts(12, todayQuery),
+        getTopNamespaces(12, todayQuery),
       ]);
       setOverview(overviewData);
       setTrend(trendData ?? []);
@@ -112,7 +117,7 @@ export default function DashboardPage() {
       {error && <Alert className="toolbar" type="error" showIcon message={error} />}
       <Row gutter={[16, 16]}>
         <Col xs={24} md={6}>
-          <Card className="stat-card" loading={loading}><Statistic title="近 7 天事件" value={compactNumber(overview.totalEvents)} /></Card>
+          <Card className="stat-card" loading={loading}><Statistic title="今日事件" value={compactNumber(overview.totalEvents)} /></Card>
         </Col>
         <Col xs={24} md={6}>
           <Card className="stat-card stat-card-danger" loading={loading}><Statistic title="高危事件" value={compactNumber(overview.highRiskEvents)} /></Card>
@@ -124,7 +129,7 @@ export default function DashboardPage() {
           <Card className="stat-card" loading={loading}><Statistic title="启用规则" value={compactNumber(overview.activeRules)} /></Card>
         </Col>
         <Col xs={24} lg={12}>
-          <Card title="事件趋势" loading={loading}>
+          <Card title="今日事件趋势" loading={loading}>
             {trend.length === 0 ? (
               <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无趋势数据" />
             ) : (
