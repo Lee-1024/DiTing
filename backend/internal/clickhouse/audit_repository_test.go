@@ -84,6 +84,43 @@ func TestAuditRepositoryFiltersCommandDetails(t *testing.T) {
 	}
 }
 
+func TestAuditRepositoryGetsEventByID(t *testing.T) {
+	var body string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		data := make([]byte, r.ContentLength)
+		_, _ = r.Body.Read(data)
+		body = string(data)
+		_, _ = w.Write([]byte(`{"event_id":"evt-1","event_time":"2026-07-09 13:00:00.000","event_type":"process_exec","username":"root","process_name":"id","cmdline":"/usr/bin/id","tags":[],"rule_ids":[],"rule_names":[],"raw_event":"{\"process_exec\":{}}"}` + "\n"))
+	}))
+	defer server.Close()
+
+	repository := NewAuditRepository(NewHTTPClient(HTTPConfig{URL: server.URL, Database: "diting"}))
+	event, err := repository.GetEvent(context.Background(), "evt-1")
+	if err != nil {
+		t.Fatalf("GetEvent returned error: %v", err)
+	}
+
+	if !strings.Contains(body, "FROM diting.audit_events") || !strings.Contains(body, "WHERE event_id = 'evt-1'") || !strings.Contains(body, "LIMIT 1") {
+		t.Fatalf("expected event detail query by id, got %s", body)
+	}
+	if event.EventID != "evt-1" || event.Cmdline != "/usr/bin/id" {
+		t.Fatalf("unexpected event detail %#v", event)
+	}
+}
+
+func TestAuditRepositoryReturnsNotFoundWhenEventMissing(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(""))
+	}))
+	defer server.Close()
+
+	repository := NewAuditRepository(NewHTTPClient(HTTPConfig{URL: server.URL, Database: "diting"}))
+	_, err := repository.GetEvent(context.Background(), "missing")
+	if err != audit.ErrNotFound {
+		t.Fatalf("expected ErrNotFound, got %v", err)
+	}
+}
+
 func TestAuditRepositoryFiltersMultipleSeverities(t *testing.T) {
 	var body string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

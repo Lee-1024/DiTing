@@ -51,6 +51,25 @@ func (r *AuditRepository) ListEvents(ctx context.Context, query audit.Query) ([]
 	return events, total, nil
 }
 
+func (r *AuditRepository) GetEvent(ctx context.Context, eventID string) (audit.Event, error) {
+	sql := buildGetEventSQL(r.client.config.Database, eventID)
+	data, err := r.client.Query(ctx, sql)
+	if err != nil {
+		return audit.Event{}, err
+	}
+	scanner := bufio.NewScanner(bytes.NewReader(data))
+	for scanner.Scan() {
+		if strings.TrimSpace(scanner.Text()) == "" {
+			continue
+		}
+		return decodeEventRow(scanner.Bytes())
+	}
+	if err := scanner.Err(); err != nil {
+		return audit.Event{}, err
+	}
+	return audit.Event{}, audit.ErrNotFound
+}
+
 func (r *AuditRepository) countEvents(ctx context.Context, query audit.Query) (int, error) {
 	sql := buildCountEventsSQL(r.client.config.Database, query)
 	data, err := r.client.Query(ctx, sql)
@@ -86,12 +105,24 @@ func buildListEventsSQL(database string, query audit.Query) string {
 	}
 
 	where := buildAuditWhere(query)
-	return fmt.Sprintf(`SELECT event_id, event_time, event_type, severity, risk_score, host_name, host_id, node_name, namespace, pod_name, username, uid, gid, auid, euid, egid, login_username, process_name, binary_path, cmdline, cwd, parent_process_name, parent_binary_path, parent_cmdline, tags, rule_ids, rule_names, raw_event
+	return fmt.Sprintf(`SELECT %s
 FROM %s
 WHERE %s
 ORDER BY event_time DESC
 LIMIT %d OFFSET %d
-FORMAT JSONEachRow`, table, where, limit, offset)
+FORMAT JSONEachRow`, auditEventSelectFields(), table, where, limit, offset)
+}
+
+func buildGetEventSQL(database string, eventID string) string {
+	return fmt.Sprintf(`SELECT %s
+FROM %s
+WHERE event_id = '%s'
+LIMIT 1
+FORMAT JSONEachRow`, auditEventSelectFields(), auditTable(database), escapeSQL(eventID))
+}
+
+func auditEventSelectFields() string {
+	return "event_id, event_time, event_type, severity, risk_score, host_name, host_id, node_name, namespace, pod_name, username, uid, gid, auid, euid, egid, login_username, process_name, binary_path, cmdline, cwd, parent_process_name, parent_binary_path, parent_cmdline, tags, rule_ids, rule_names, raw_event"
 }
 
 func buildCountEventsSQL(database string, query audit.Query) string {

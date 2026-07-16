@@ -1,8 +1,13 @@
 import { apiClient } from './client';
-import type { AuditEventQuery, PagedAuditEvents } from '../types/audit';
+import type { AuditEvent, AuditEventQuery, PagedAuditEvents } from '../types/audit';
 
 export async function queryAuditEvents(params: AuditEventQuery): Promise<PagedAuditEvents> {
   const response = await apiClient.get<PagedAuditEvents>('/audit/events', { params });
+  return response.data;
+}
+
+export async function getAuditEvent(eventId: string): Promise<AuditEvent> {
+  const response = await apiClient.get<AuditEvent>(`/audit/events/${eventId}`);
   return response.data;
 }
 

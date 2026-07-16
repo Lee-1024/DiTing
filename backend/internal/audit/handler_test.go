@@ -62,6 +62,15 @@ func (f *fakeRepository) ListEvents(_ context.Context, query Query) ([]Event, in
 	return f.events, len(f.events), nil
 }
 
+func (f *fakeRepository) GetEvent(_ context.Context, eventID string) (Event, error) {
+	for _, event := range f.events {
+		if event.EventID == eventID {
+			return event, nil
+		}
+	}
+	return Event{}, ErrNotFound
+}
+
 func TestHandlerReturnsRepositoryEvents(t *testing.T) {
 	repository := &fakeRepository{events: []Event{{EventID: "evt-1", EventType: "process_exec"}}}
 	handler := NewHandler(repository)
@@ -78,6 +87,36 @@ func TestHandlerReturnsRepositoryEvents(t *testing.T) {
 	}
 	if repository.query.PageSize != 10 {
 		t.Fatalf("expected page size 10, got %d", repository.query.PageSize)
+	}
+}
+
+func TestHandlerReturnsEventDetailByID(t *testing.T) {
+	repository := &fakeRepository{events: []Event{{EventID: "evt-1", EventType: "process_exec", Cmdline: "id"}}}
+	handler := NewHandler(repository)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/audit/events/evt-1", nil)
+	req.SetPathValue("event_id", "evt-1")
+	rec := httptest.NewRecorder()
+
+	handler.GetEvent(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), `"eventId":"evt-1"`) || !strings.Contains(rec.Body.String(), `"cmdline":"id"`) {
+		t.Fatalf("expected event detail in response, got %s", rec.Body.String())
+	}
+}
+
+func TestHandlerReturnsNotFoundForMissingEventDetail(t *testing.T) {
+	handler := NewHandler(&fakeRepository{})
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/audit/events/missing", nil)
+	req.SetPathValue("event_id", "missing")
+	rec := httptest.NewRecorder()
+
+	handler.GetEvent(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d", rec.Code)
 	}
 }
 

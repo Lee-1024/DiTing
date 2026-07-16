@@ -65,6 +65,7 @@ func NewRouter(repository audit.Repository, ruleRepository rule.Repository, stat
 	}
 	mux.Handle("/api/v1/audit/events", protect(http.HandlerFunc(auditHandler.ListEvents)))
 	mux.Handle("/api/v1/audit/events/export", protect(http.HandlerFunc(auditHandler.ExportEvents)))
+	mux.Handle("/api/v1/audit/events/{event_id}", protect(http.HandlerFunc(auditHandler.GetEvent)))
 	if riskStatusHandler != nil {
 		mux.Handle("/api/v1/risk-dispositions/batch", protect(http.HandlerFunc(riskStatusHandler.BatchGet)))
 		mux.Handle("/api/v1/risk-dispositions/{event_id}", protect(http.HandlerFunc(riskStatusHandler.Upsert)))

@@ -4,13 +4,17 @@ import (
 	"context"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 )
 
 type Repository interface {
 	ListEvents(ctx context.Context, query Query) ([]Event, int, error)
+	GetEvent(ctx context.Context, eventID string) (Event, error)
 }
+
+var ErrNotFound = errors.New("audit event not found")
 
 type Handler struct {
 	repository Repository
@@ -45,6 +49,29 @@ func (h *Handler) ListEvents(w http.ResponseWriter, r *http.Request) {
 		"pageSize": query.PageSize,
 		"total":    total,
 	})
+}
+
+func (h *Handler) GetEvent(w http.ResponseWriter, r *http.Request) {
+	eventID := strings.TrimSpace(r.PathValue("event_id"))
+	if eventID == "" {
+		http.Error(w, "event_id is required", http.StatusBadRequest)
+		return
+	}
+	if h.repository == nil {
+		http.Error(w, "audit event not found", http.StatusNotFound)
+		return
+	}
+	event, err := h.repository.GetEvent(r.Context(), eventID)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			http.Error(w, "audit event not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(event)
 }
 
 func (h *Handler) ExportEvents(w http.ResponseWriter, r *http.Request) {
