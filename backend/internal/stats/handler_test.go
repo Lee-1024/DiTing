@@ -31,7 +31,7 @@ func (fakeRepository) TopNamespaces(context.Context, Query) ([]TopItem, error) {
 }
 
 func (fakeRepository) CommandStats(_ context.Context, query Query) ([]CommandItem, error) {
-	return []CommandItem{{ProcessName: "whoami", Cmdline: "/usr/bin/whoami", Username: query.Username, Count: 4}}, nil
+	return []CommandItem{{ProcessName: "whoami", Cmdline: "/usr/bin/whoami", Username: query.Username, HostName: query.HostName, HostCount: 1, Count: 4}}, nil
 }
 
 func (fakeRepository) UserAudits(_ context.Context, query Query) ([]UserAuditItem, error) {
@@ -44,6 +44,10 @@ func (fakeRepository) HostAudits(_ context.Context, query Query) ([]HostAuditIte
 
 func (fakeRepository) HostUsers(_ context.Context, query Query) ([]HostUserItem, error) {
 	return []HostUserItem{{Username: query.HostName + ":root", CommandCount: 6, HighRiskEvents: 1}}, nil
+}
+
+func (fakeRepository) RuleHits(_ context.Context, query Query) ([]RuleHitItem, error) {
+	return []RuleHitItem{{RuleName: query.Keyword, HitCount: 5, ActiveHosts: 2, ActiveUsers: 1}}, nil
 }
 
 func TestOverviewHandlerReturnsOverview(t *testing.T) {
@@ -136,7 +140,26 @@ func TestExportCommandStatsHandlerReturnsCSV(t *testing.T) {
 		t.Fatalf("unexpected content type %q", rec.Header().Get("Content-Type"))
 	}
 	body := rec.Body.String()
-	if !strings.Contains(body, "process_name,cmdline,login_username,username,count,first_seen,last_seen") || !strings.Contains(body, "whoami") {
+	if !strings.Contains(body, "process_name,cmdline,login_username,username,host_name,host_id,node_name,host_count,count,first_seen,last_seen") || !strings.Contains(body, "whoami") {
+		t.Fatalf("unexpected body %s", body)
+	}
+}
+
+func TestExportHostAuditsHandlerReturnsCSV(t *testing.T) {
+	handler := NewHandler(fakeRepository{})
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/stats/hosts/export?keyword=node-1", nil)
+
+	handler.ExportHostAudits(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	if rec.Header().Get("Content-Type") != "text/csv; charset=utf-8" {
+		t.Fatalf("unexpected content type %q", rec.Header().Get("Content-Type"))
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, "host_name,host_id,node_name,command_count,active_users,high_risk_events,first_seen,last_seen") || !strings.Contains(body, "node-1") {
 		t.Fatalf("unexpected body %s", body)
 	}
 }
@@ -144,7 +167,7 @@ func TestExportCommandStatsHandlerReturnsCSV(t *testing.T) {
 func TestUserAuditsHandlerPassesFilters(t *testing.T) {
 	handler := NewHandler(fakeRepository{})
 	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/stats/users?limit=20&keyword=root", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/stats/users?limit=20&keyword=root&host_name=host-001", nil)
 
 	handler.UserAudits(rec, req)
 
@@ -185,6 +208,22 @@ func TestHostUsersHandlerPassesHostFilter(t *testing.T) {
 	}
 	body := rec.Body.String()
 	if !strings.Contains(body, `"username":"host-001:root"`) || !strings.Contains(body, `"commandCount":6`) {
+		t.Fatalf("unexpected body %s", body)
+	}
+}
+
+func TestRuleHitsHandlerPassesFilters(t *testing.T) {
+	handler := NewHandler(fakeRepository{})
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/stats/rules?limit=20&keyword=反弹", nil)
+
+	handler.RuleHits(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `"ruleName":"反弹"`) || !strings.Contains(body, `"hitCount":5`) {
 		t.Fatalf("unexpected body %s", body)
 	}
 }

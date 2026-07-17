@@ -34,6 +34,7 @@ export default function CommandStatsPage() {
       end_time: range?.[1]?.endOf('day').toISOString(),
       keyword: values.keyword,
       username: values.username,
+      host_name: values.hostName,
       limit: 50,
     };
   }
@@ -69,6 +70,7 @@ export default function CommandStatsPage() {
         end_time: range?.[1]?.endOf('day').toISOString(),
         event_type: 'process_exec',
         username: item.loginUsername || item.username,
+        host_name: item.hostId || item.nodeName || item.hostName,
         cmdline: item.cmdline,
         page: 1,
         page_size: 100,
@@ -98,6 +100,9 @@ export default function CommandStatsPage() {
         <Form.Item name="username" label="用户">
           <Input className="filter-control-compact" placeholder="root / ubuntu" allowClear />
         </Form.Item>
+        <Form.Item name="hostName" label="主机">
+          <Input className="filter-control-compact" placeholder="主机名 / Host ID" allowClear />
+        </Form.Item>
       </FilterToolbar>
       <Card className="data-card">
         <Table
@@ -119,6 +124,8 @@ export default function CommandStatsPage() {
             { title: '完整命令', dataIndex: 'cmdline', render: (value, record) => <CommandText value={value} onView={() => void openDetails(record)} /> },
             { title: '登录用户', dataIndex: 'loginUsername', width: 120, render: (_, record) => record.loginUsername || record.username },
             { title: '执行用户', dataIndex: 'username', width: 120 },
+            { title: '最近主机', dataIndex: 'hostName', width: 170, render: (_, record) => record.hostName || record.nodeName || record.hostId || '-' },
+            { title: '涉及主机', dataIndex: 'hostCount', width: 100 },
             { title: '次数', dataIndex: 'count', width: 90 },
             { title: '首次执行', dataIndex: 'firstSeen', width: 190, render: (value) => formatLocalDateTime(value) },
             { title: '最近执行', dataIndex: 'lastSeen', width: 190, render: (value) => formatLocalDateTime(value) },

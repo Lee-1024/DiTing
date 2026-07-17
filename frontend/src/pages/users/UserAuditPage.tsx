@@ -28,6 +28,7 @@ export default function UserAuditPage() {
       start_time: range?.[0]?.startOf('day').toISOString(),
       end_time: range?.[1]?.endOf('day').toISOString(),
       keyword: values.keyword,
+      host_name: values.hostName,
       limit: 50,
     };
   }
@@ -58,6 +59,7 @@ export default function UserAuditPage() {
         end_time: range?.[1]?.endOf('day').toISOString(),
         event_type: 'process_exec',
         username: item.username,
+        host_name: values.hostName,
         page: 1,
         page_size: 100,
       });
@@ -82,6 +84,9 @@ export default function UserAuditPage() {
         </Form.Item>
         <Form.Item name="keyword" label="用户">
           <Input className="filter-control-compact" placeholder="root / ubuntu" allowClear />
+        </Form.Item>
+        <Form.Item name="hostName" label="主机">
+          <Input className="filter-control-compact" placeholder="主机名 / Host ID" allowClear />
         </Form.Item>
       </FilterToolbar>
       <Card className="data-card">

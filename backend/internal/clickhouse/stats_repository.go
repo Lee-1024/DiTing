@@ -199,11 +199,19 @@ func (r *StatsRepository) CommandStats(ctx context.Context, query stats.Query) (
 		username := escapeSQL(query.Username)
 		conditions = append(conditions, "(username = '"+username+"' OR login_username = '"+username+"')")
 	}
+	if query.HostName != "" {
+		hostName := escapeSQL(query.HostName)
+		conditions = append(conditions, "(host_id = '"+hostName+"' OR node_name = '"+hostName+"' OR host_name = '"+hostName+"')")
+	}
 	sql := fmt.Sprintf(`SELECT
 	process_name,
 	cmdline,
 	username,
 	login_username,
+	anyLast(host_id) AS host_id,
+	anyLast(host_name) AS host_name,
+	anyLast(node_name) AS node_name,
+	uniqExact(if(host_id != '', host_id, if(node_name != '', node_name, host_name))) AS host_count,
 	count() AS count,
 	min(event_time) AS first_seen,
 	max(event_time) AS last_seen,
@@ -229,6 +237,10 @@ FORMAT JSONEachRow`, r.table(), strings.Join(conditions, " AND "), limit)
 			Cmdline:       row.Cmdline,
 			Username:      row.Username,
 			LoginUsername: row.LoginUsername,
+			HostID:        row.HostID,
+			HostName:      row.HostName,
+			NodeName:      row.NodeName,
+			HostCount:     uint64(row.HostCount),
 			Count:         uint64(row.Count),
 			FirstSeen:     row.FirstSeen,
 			LastSeen:      row.LastSeen,
@@ -251,6 +263,10 @@ func (r *StatsRepository) UserAudits(ctx context.Context, query stats.Query) ([]
 		keyword := escapeSQL(query.Keyword)
 		conditions = append(conditions, "positionCaseInsensitive(audit_user, '"+keyword+"') > 0")
 	}
+	if query.HostName != "" {
+		hostName := escapeSQL(query.HostName)
+		conditions = append(conditions, "(host_id = '"+hostName+"' OR node_name = '"+hostName+"' OR host_name = '"+hostName+"')")
+	}
 	sql := fmt.Sprintf(`SELECT
 	audit_user AS username,
 	count() AS command_count,
@@ -262,7 +278,9 @@ FROM
 (
 	SELECT
 		if(login_username != '', login_username, username) AS audit_user,
+		host_id,
 		node_name,
+		host_name,
 		severity,
 		event_time,
 		event_type
@@ -415,6 +433,60 @@ FORMAT JSONEachRow`, r.table(), statsWhere(query), strings.Join(conditions, " AN
 	return items, nil
 }
 
+func (r *StatsRepository) RuleHits(ctx context.Context, query stats.Query) ([]stats.RuleHitItem, error) {
+	limit := query.Limit
+	if limit <= 0 {
+		limit = 20
+	}
+	conditions := []string{"rule_name != ''"}
+	if query.Keyword != "" {
+		keyword := escapeSQL(query.Keyword)
+		conditions = append(conditions, "positionCaseInsensitive(rule_name, '"+keyword+"') > 0")
+	}
+	sql := fmt.Sprintf(`SELECT
+	rule_name,
+	count() AS hit_count,
+	uniqExact(audit_host) AS active_hosts,
+	uniqExact(audit_user) AS active_users,
+	min(event_time) AS first_seen,
+	max(event_time) AS last_seen
+FROM
+(
+	SELECT
+		arrayJoin(rule_names) AS rule_name,
+		if(host_id != '', host_id, if(node_name != '', node_name, host_name)) AS audit_host,
+		if(login_username != '', login_username, username) AS audit_user,
+		event_time
+	FROM %s
+	WHERE %s AND length(rule_names) > 0
+)
+WHERE %s
+GROUP BY rule_name
+ORDER BY hit_count DESC, last_seen DESC
+LIMIT %d
+FORMAT JSONEachRow`, r.table(), statsWhere(query), strings.Join(conditions, " AND "), limit)
+	data, err := r.client.Query(ctx, sql)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := decodeJSONRows[ruleHitRow](data)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]stats.RuleHitItem, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, stats.RuleHitItem{
+			RuleName:    row.RuleName,
+			HitCount:    uint64(row.HitCount),
+			ActiveHosts: uint64(row.ActiveHosts),
+			ActiveUsers: uint64(row.ActiveUsers),
+			FirstSeen:   row.FirstSeen,
+			LastSeen:    row.LastSeen,
+		})
+	}
+	return items, nil
+}
+
 type trendRow struct {
 	Time  string         `json:"time"`
 	Count flexibleUint64 `json:"count"`
@@ -430,6 +502,10 @@ type commandItemRow struct {
 	Cmdline       string         `json:"cmdline"`
 	Username      string         `json:"username"`
 	LoginUsername string         `json:"login_username"`
+	HostID        string         `json:"host_id"`
+	HostName      string         `json:"host_name"`
+	NodeName      string         `json:"node_name"`
+	HostCount     flexibleUint64 `json:"host_count"`
 	Count         flexibleUint64 `json:"count"`
 	FirstSeen     string         `json:"first_seen"`
 	LastSeen      string         `json:"last_seen"`
@@ -461,6 +537,15 @@ type hostUserRow struct {
 	HighRiskEvents flexibleUint64 `json:"high_risk_events"`
 	FirstSeen      string         `json:"first_seen"`
 	LastSeen       string         `json:"last_seen"`
+}
+
+type ruleHitRow struct {
+	RuleName    string         `json:"rule_name"`
+	HitCount    flexibleUint64 `json:"hit_count"`
+	ActiveHosts flexibleUint64 `json:"active_hosts"`
+	ActiveUsers flexibleUint64 `json:"active_users"`
+	FirstSeen   string         `json:"first_seen"`
+	LastSeen    string         `json:"last_seen"`
 }
 
 func (r *StatsRepository) table() string {

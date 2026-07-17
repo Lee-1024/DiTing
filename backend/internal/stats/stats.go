@@ -27,6 +27,10 @@ type CommandItem struct {
 	Cmdline       string `json:"cmdline"`
 	Username      string `json:"username"`
 	LoginUsername string `json:"loginUsername"`
+	HostID        string `json:"hostId"`
+	HostName      string `json:"hostName"`
+	NodeName      string `json:"nodeName"`
+	HostCount     uint64 `json:"hostCount"`
 	Count         uint64 `json:"count"`
 	FirstSeen     string `json:"firstSeen"`
 	LastSeen      string `json:"lastSeen"`
@@ -60,6 +64,15 @@ type HostUserItem struct {
 	LastSeen       string `json:"lastSeen"`
 }
 
+type RuleHitItem struct {
+	RuleName    string `json:"ruleName"`
+	HitCount    uint64 `json:"hitCount"`
+	ActiveHosts uint64 `json:"activeHosts"`
+	ActiveUsers uint64 `json:"activeUsers"`
+	FirstSeen   string `json:"firstSeen"`
+	LastSeen    string `json:"lastSeen"`
+}
+
 type Query struct {
 	StartTime time.Time
 	EndTime   time.Time
@@ -79,4 +92,5 @@ type Repository interface {
 	UserAudits(ctx context.Context, query Query) ([]UserAuditItem, error)
 	HostAudits(ctx context.Context, query Query) ([]HostAuditItem, error)
 	HostUsers(ctx context.Context, query Query) ([]HostUserItem, error)
+	RuleHits(ctx context.Context, query Query) ([]RuleHitItem, error)
 }

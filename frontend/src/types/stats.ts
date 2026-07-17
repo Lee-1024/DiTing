@@ -25,6 +25,10 @@ export interface CommandItem {
   cmdline: string;
   username: string;
   loginUsername: string;
+  hostId?: string;
+  hostName?: string;
+  nodeName?: string;
+  hostCount: number;
   count: number;
   firstSeen: string;
   lastSeen: string;
@@ -35,6 +39,7 @@ export interface CommandStatsQuery {
   end_time?: string;
   keyword?: string;
   username?: string;
+  host_name?: string;
   limit?: number;
 }
 
@@ -51,6 +56,7 @@ export interface UserAuditQuery {
   start_time?: string;
   end_time?: string;
   keyword?: string;
+  host_name?: string;
   limit?: number;
 }
 
@@ -73,10 +79,26 @@ export interface HostUserItem {
   lastSeen: string;
 }
 
+export interface RuleHitItem {
+  ruleName: string;
+  hitCount: number;
+  activeHosts: number;
+  activeUsers: number;
+  firstSeen: string;
+  lastSeen: string;
+}
+
 export interface HostAuditQuery {
   start_time?: string;
   end_time?: string;
   keyword?: string;
   host_name?: string;
+  limit?: number;
+}
+
+export interface RuleHitQuery {
+  start_time?: string;
+  end_time?: string;
+  keyword?: string;
   limit?: number;
 }

@@ -169,6 +169,7 @@ func TestStatsRepositoryCommandStatsFiltersByKeywordAndUser(t *testing.T) {
 		Limit:     50,
 		Keyword:   "whoami",
 		Username:  "root",
+		HostName:  "host-001",
 	})
 	if err != nil {
 		t.Fatalf("CommandStats returned error: %v", err)
@@ -176,6 +177,9 @@ func TestStatsRepositoryCommandStatsFiltersByKeywordAndUser(t *testing.T) {
 
 	if !strings.Contains(body, "event_type = 'process_exec'") || !strings.Contains(body, "positionCaseInsensitive(cmdline, 'whoami')") || !strings.Contains(body, "username = 'root'") {
 		t.Fatalf("expected command filters in query, got %s", body)
+	}
+	if !strings.Contains(body, "(host_id = 'host-001' OR node_name = 'host-001' OR host_name = 'host-001')") {
+		t.Fatalf("expected command host filter, got %s", body)
 	}
 	if !strings.Contains(body, "event_time >= parseDateTime64BestEffort('2026-07-09 00:00:00.000', 3)") || !strings.Contains(body, "event_time <= parseDateTime64BestEffort('2026-07-10 00:00:00.000', 3)") {
 		t.Fatalf("expected command stats to apply time range, got %s", body)
@@ -197,7 +201,7 @@ func TestStatsRepositoryCommandStatsIncludesEventsWithoutProcessName(t *testing.
 		data := make([]byte, r.ContentLength)
 		_, _ = r.Body.Read(data)
 		body = string(data)
-		_, _ = w.Write([]byte(`{"process_name":"","cmdline":"id","username":"ubuntu","login_username":"ubuntu","count":"1","first_seen":"2026-07-15 09:10:00","last_seen":"2026-07-15 09:10:00"}` + "\n"))
+		_, _ = w.Write([]byte(`{"process_name":"","cmdline":"id","username":"ubuntu","login_username":"ubuntu","host_id":"host-001","host_name":"prod-web-01","node_name":"node-1","host_count":"1","count":"1","first_seen":"2026-07-15 09:10:00","last_seen":"2026-07-15 09:10:00"}` + "\n"))
 	}))
 	defer server.Close()
 
@@ -220,7 +224,7 @@ func TestStatsRepositoryCommandStatsIncludesEventsWithoutProcessName(t *testing.
 	if !strings.Contains(body, "max(event_time) AS last_seen_sort") || !strings.Contains(body, "ORDER BY last_seen_sort DESC, count DESC") {
 		t.Fatalf("expected command stats to order by newest execution first, got %s", body)
 	}
-	if len(items) != 1 || items[0].Cmdline != "id" || items[0].Username != "ubuntu" {
+	if len(items) != 1 || items[0].Cmdline != "id" || items[0].Username != "ubuntu" || items[0].HostID != "host-001" || items[0].HostCount != 1 {
 		t.Fatalf("unexpected command stats %#v", items)
 	}
 }
@@ -251,6 +255,31 @@ func TestStatsRepositoryUserAuditsAggregatesLinuxUsers(t *testing.T) {
 	}
 	if len(items) != 1 || items[0].Username != "root" || items[0].CommandCount != 8 {
 		t.Fatalf("unexpected items %#v", items)
+	}
+}
+
+func TestStatsRepositoryUserAuditsFiltersHostName(t *testing.T) {
+	var body string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		data := make([]byte, r.ContentLength)
+		_, _ = r.Body.Read(data)
+		body = string(data)
+		_, _ = w.Write([]byte(""))
+	}))
+	defer server.Close()
+
+	repository := NewStatsRepository(NewHTTPClient(HTTPConfig{URL: server.URL, Database: "diting"}), nil)
+	_, err := repository.UserAudits(context.Background(), stats.Query{
+		StartTime: time.Date(2026, 7, 9, 0, 0, 0, 0, time.UTC),
+		EndTime:   time.Date(2026, 7, 10, 0, 0, 0, 0, time.UTC),
+		HostName:  "host-001",
+	})
+	if err != nil {
+		t.Fatalf("UserAudits returned error: %v", err)
+	}
+
+	if !strings.Contains(body, "(host_id = 'host-001' OR node_name = 'host-001' OR host_name = 'host-001')") {
+		t.Fatalf("expected host filter, got %s", body)
 	}
 }
 
@@ -310,6 +339,37 @@ func TestStatsRepositoryHostUsersAggregatesUsersForHost(t *testing.T) {
 		t.Fatalf("expected host user query filters, got %s", body)
 	}
 	if len(items) != 1 || items[0].Username != "ubuntu" || items[0].CommandCount != 6 || items[0].HighRiskEvents != 1 {
+		t.Fatalf("unexpected items %#v", items)
+	}
+}
+
+func TestStatsRepositoryRuleHitsAggregatesRules(t *testing.T) {
+	var body string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		data := make([]byte, r.ContentLength)
+		_, _ = r.Body.Read(data)
+		body = string(data)
+		_, _ = w.Write([]byte(`{"rule_name":"反弹 Shell 命令","hit_count":"5","active_hosts":"2","active_users":"1","first_seen":"2026-07-10 02:13:38.363","last_seen":"2026-07-10 02:14:25.564"}` + "\n"))
+	}))
+	defer server.Close()
+
+	repository := NewStatsRepository(NewHTTPClient(HTTPConfig{URL: server.URL, Database: "diting"}), nil)
+	items, err := repository.RuleHits(context.Background(), stats.Query{
+		StartTime: time.Date(2026, 7, 9, 0, 0, 0, 0, time.UTC),
+		EndTime:   time.Date(2026, 7, 10, 0, 0, 0, 0, time.UTC),
+		Keyword:   "反弹",
+		Limit:     20,
+	})
+	if err != nil {
+		t.Fatalf("RuleHits returned error: %v", err)
+	}
+
+	if !strings.Contains(body, "arrayJoin(rule_names) AS rule_name") ||
+		!strings.Contains(body, "positionCaseInsensitive(rule_name, '反弹')") ||
+		!strings.Contains(body, "uniqExact(audit_host) AS active_hosts") {
+		t.Fatalf("expected rule hit query, got %s", body)
+	}
+	if len(items) != 1 || items[0].RuleName != "反弹 Shell 命令" || items[0].HitCount != 5 || items[0].ActiveHosts != 2 {
 		t.Fatalf("unexpected items %#v", items)
 	}
 }

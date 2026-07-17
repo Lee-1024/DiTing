@@ -58,14 +58,46 @@ func (h *Handler) ExportCommandStats(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
 	w.Header().Set("Content-Disposition", `attachment; filename="command-stats.csv"`)
 	writer := csv.NewWriter(w)
-	_ = writer.Write([]string{"process_name", "cmdline", "login_username", "username", "count", "first_seen", "last_seen"})
+	_ = writer.Write([]string{"process_name", "cmdline", "login_username", "username", "host_name", "host_id", "node_name", "host_count", "count", "first_seen", "last_seen"})
 	for _, item := range result {
 		_ = writer.Write([]string{
 			item.ProcessName,
 			item.Cmdline,
 			item.LoginUsername,
 			item.Username,
+			item.HostName,
+			item.HostID,
+			item.NodeName,
+			strconv.FormatUint(item.HostCount, 10),
 			strconv.FormatUint(item.Count, 10),
+			item.FirstSeen,
+			item.LastSeen,
+		})
+	}
+	writer.Flush()
+}
+
+func (h *Handler) ExportHostAudits(w http.ResponseWriter, r *http.Request) {
+	query := parseQuery(r)
+	query.Limit = 5000
+	result, err := h.repository.HostAudits(r.Context(), query)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", `attachment; filename="host-audits.csv"`)
+	writer := csv.NewWriter(w)
+	_ = writer.Write([]string{"host_name", "host_id", "node_name", "command_count", "active_users", "high_risk_events", "first_seen", "last_seen"})
+	for _, item := range result {
+		_ = writer.Write([]string{
+			item.HostName,
+			item.HostID,
+			item.NodeName,
+			strconv.FormatUint(item.CommandCount, 10),
+			strconv.FormatUint(item.ActiveUsers, 10),
+			strconv.FormatUint(item.HighRiskEvents, 10),
 			item.FirstSeen,
 			item.LastSeen,
 		})
@@ -85,6 +117,11 @@ func (h *Handler) HostAudits(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) HostUsers(w http.ResponseWriter, r *http.Request) {
 	result, err := h.repository.HostUsers(r.Context(), parseQuery(r))
+	writeJSON(w, result, err)
+}
+
+func (h *Handler) RuleHits(w http.ResponseWriter, r *http.Request) {
+	result, err := h.repository.RuleHits(r.Context(), parseQuery(r))
 	writeJSON(w, result, err)
 }
 

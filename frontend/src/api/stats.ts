@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import type { CommandItem, CommandStatsQuery, HostAuditItem, HostAuditQuery, HostUserItem, OverviewStats, StatsQuery, TopItem, TrendPoint, UserAuditItem, UserAuditQuery } from '../types/stats';
+import type { CommandItem, CommandStatsQuery, HostAuditItem, HostAuditQuery, HostUserItem, OverviewStats, RuleHitItem, RuleHitQuery, StatsQuery, TopItem, TrendPoint, UserAuditItem, UserAuditQuery } from '../types/stats';
 
 export async function getOverview(params?: StatsQuery): Promise<OverviewStats> {
   const response = await apiClient.get<OverviewStats>('/stats/overview', { params });
@@ -46,7 +46,17 @@ export async function getHostAudits(params: HostAuditQuery): Promise<HostAuditIt
   return response.data;
 }
 
+export async function exportHostAudits(params: HostAuditQuery): Promise<Blob> {
+  const response = await apiClient.get('/stats/hosts/export', { params, responseType: 'blob' });
+  return response.data;
+}
+
 export async function getHostUsers(params: HostAuditQuery): Promise<HostUserItem[]> {
   const response = await apiClient.get<HostUserItem[]>('/stats/hosts/users', { params });
+  return response.data;
+}
+
+export async function getRuleHits(params: RuleHitQuery): Promise<RuleHitItem[]> {
+  const response = await apiClient.get<RuleHitItem[]>('/stats/rules', { params });
   return response.data;
 }

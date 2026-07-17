@@ -58,6 +58,7 @@ export default function MainLayout() {
                 { key: '/audit/commands', icon: <CodeOutlined />, label: '命令审计' },
                 { key: '/audit/users', icon: <UserOutlined />, label: '用户审计' },
                 { key: '/audit/hosts', icon: <HddOutlined />, label: '主机审计' },
+                { key: '/audit/rules', icon: <SafetyCertificateOutlined />, label: '规则分析' },
               ],
             },
             {

@@ -9,6 +9,7 @@ import HostAuditPage from '../pages/hosts/HostAuditPage';
 import HostAssetsPage from '../pages/host-assets/HostAssetsPage';
 import RiskEventsPage from '../pages/risks/RiskEventsPage';
 import RulesPage from '../pages/rules/RulesPage';
+import RuleHitsPage from '../pages/rules/RuleHitsPage';
 import OperationLogsPage from '../pages/settings/OperationLogsPage';
 import CollectorHealthPage from '../pages/settings/CollectorHealthPage';
 import CollectorConfigPage from '../pages/settings/CollectorConfigPage';
@@ -31,6 +32,7 @@ export const router = createBrowserRouter([
       { path: 'audit/users', element: <UserAuditPage /> },
       { path: 'audit/hosts', element: <HostAuditPage /> },
       { path: 'audit/risks', element: <RiskEventsPage /> },
+      { path: 'audit/rules', element: <RuleHitsPage /> },
       { path: 'assets/hosts', element: <HostAssetsPage /> },
       { path: 'rules', element: <RulesPage /> },
       { path: 'settings/users', element: <UserManagementPage /> },

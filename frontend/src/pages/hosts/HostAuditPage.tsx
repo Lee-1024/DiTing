@@ -2,7 +2,7 @@ import { Button, Card, DatePicker, Descriptions, Drawer, Empty, Form, Input, Row
 import dayjs from 'dayjs';
 import { useEffect, useState } from 'react';
 import { exportAuditEvents, queryAuditEvents } from '../../api/audit';
-import { getHostAudits, getHostUsers } from '../../api/stats';
+import { exportHostAudits, getHostAudits, getHostUsers } from '../../api/stats';
 import CommandText from '../../components/CommandText';
 import FilterToolbar from '../../components/FilterToolbar';
 import SeverityTag from '../../components/SeverityTag';
@@ -60,6 +60,11 @@ export default function HostAuditPage() {
     form.resetFields();
     await Promise.resolve();
     await load();
+  }
+
+  async function exportHosts() {
+    const blob = await exportHostAudits(buildQuery());
+    downloadBlob(blob, 'host-audits.csv');
   }
 
   async function openDetails(item: HostAuditItem) {
@@ -157,7 +162,7 @@ export default function HostAuditPage() {
       <div className="page-heading">
         <Typography.Title level={3} className="page-title">主机审计</Typography.Title>
       </div>
-      <FilterToolbar form={form} initialValues={{ timeRange: defaultRange }} onSearch={() => void load()} onReset={() => void resetAndLoad()}>
+      <FilterToolbar form={form} initialValues={{ timeRange: defaultRange }} onSearch={() => void load()} onReset={() => void resetAndLoad()} onExport={() => void exportHosts()}>
         <Form.Item name="timeRange" label="时间" className="filter-field-time">
           <DatePicker.RangePicker />
         </Form.Item>
