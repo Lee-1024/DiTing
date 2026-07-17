@@ -154,9 +154,21 @@ func buildAuditWhere(query audit.Query) string {
 		hostName := escapeSQL(query.HostName)
 		conditions = append(conditions, "(host_id = '"+hostName+"' OR node_name = '"+hostName+"' OR host_name = '"+hostName+"')")
 	}
+	if query.Namespace != "" {
+		conditions = append(conditions, "namespace = '"+escapeSQL(query.Namespace)+"'")
+	}
+	if query.PodName != "" {
+		conditions = append(conditions, "pod_name = '"+escapeSQL(query.PodName)+"'")
+	}
 	if query.Username != "" {
 		username := escapeSQL(query.Username)
 		conditions = append(conditions, "(username = '"+username+"' OR login_username = '"+username+"')")
+	}
+	if query.LoginUsername != "" {
+		conditions = append(conditions, "login_username = '"+escapeSQL(query.LoginUsername)+"'")
+	}
+	if query.ExecUsername != "" {
+		conditions = append(conditions, "username = '"+escapeSQL(query.ExecUsername)+"'")
 	}
 	if query.Cmdline != "" {
 		conditions = append(conditions, "cmdline = '"+escapeSQL(query.Cmdline)+"'")
@@ -190,7 +202,19 @@ func eventMatchesQuery(event audit.Event, query audit.Query) bool {
 	if query.HostName != "" && event.HostID != query.HostName && event.NodeName != query.HostName && event.HostName != query.HostName {
 		return false
 	}
+	if query.Namespace != "" && event.Namespace != query.Namespace {
+		return false
+	}
+	if query.PodName != "" && event.PodName != query.PodName {
+		return false
+	}
 	if query.Username != "" && event.Username != query.Username && event.LoginUsername != query.Username {
+		return false
+	}
+	if query.LoginUsername != "" && event.LoginUsername != query.LoginUsername {
+		return false
+	}
+	if query.ExecUsername != "" && event.Username != query.ExecUsername {
 		return false
 	}
 	if query.Cmdline != "" && event.Cmdline != query.Cmdline {

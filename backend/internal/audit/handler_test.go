@@ -40,6 +40,19 @@ func TestParseQueryCapsPageSizeAt500(t *testing.T) {
 	}
 }
 
+func TestParseQueryReadsExtendedAuditFilters(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/audit/events?namespace=default&pod_name=api-0&login_username=ubuntu&exec_username=root", nil)
+
+	query, err := ParseQuery(req)
+	if err != nil {
+		t.Fatalf("ParseQuery returned error: %v", err)
+	}
+
+	if query.Namespace != "default" || query.PodName != "api-0" || query.LoginUsername != "ubuntu" || query.ExecUsername != "root" {
+		t.Fatalf("unexpected filters: %#v", query)
+	}
+}
+
 func TestParseQueryRejectsInvalidTime(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/audit/events?start_time=bad-time", nil)
 

@@ -48,7 +48,11 @@ export interface AuditEventQuery {
   severity?: string;
   severity_in?: string;
   host_name?: string;
+  namespace?: string;
+  pod_name?: string;
   username?: string;
+  login_username?: string;
+  exec_username?: string;
   keyword?: string;
   cmdline?: string;
   page?: number;

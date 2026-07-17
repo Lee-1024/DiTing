@@ -31,6 +31,11 @@ export default function AuditEventsPage() {
       end_time: range?.[1]?.endOf('day').toISOString(),
       event_type: values.eventType,
       severity: values.severity,
+      host_name: values.hostName,
+      namespace: values.namespace,
+      pod_name: values.podName,
+      login_username: values.loginUsername,
+      exec_username: values.execUsername,
       keyword: values.keyword,
       page: nextPage,
       page_size: nextPageSize,
@@ -90,6 +95,21 @@ export default function AuditEventsPage() {
         </Form.Item>
         <Form.Item name="severity" label="等级">
           <Select className="filter-control-compact" allowClear options={severityOptions} />
+        </Form.Item>
+        <Form.Item name="hostName" label="主机">
+          <Input className="filter-control-compact" placeholder="主机名 / 节点" allowClear />
+        </Form.Item>
+        <Form.Item name="namespace" label="Namespace">
+          <Input className="filter-control-compact" allowClear />
+        </Form.Item>
+        <Form.Item name="podName" label="Pod">
+          <Input className="filter-control-compact" allowClear />
+        </Form.Item>
+        <Form.Item name="loginUsername" label="登录用户">
+          <Input className="filter-control-compact" allowClear />
+        </Form.Item>
+        <Form.Item name="execUsername" label="执行用户">
+          <Input className="filter-control-compact" allowClear />
         </Form.Item>
         <Form.Item name="keyword" label="关键字">
           <Input className="filter-control-compact" placeholder="命令 / 用户 / 进程" allowClear />

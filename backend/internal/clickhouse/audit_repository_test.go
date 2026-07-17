@@ -249,3 +249,40 @@ func TestAuditRepositoryFiltersHostName(t *testing.T) {
 		t.Fatalf("expected host filter, got %s", body)
 	}
 }
+
+func TestAuditRepositoryFiltersNamespacePodAndSeparateUsers(t *testing.T) {
+	var body string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		data := make([]byte, r.ContentLength)
+		_, _ = r.Body.Read(data)
+		body = string(data)
+		_, _ = w.Write([]byte(""))
+	}))
+	defer server.Close()
+
+	repository := NewAuditRepository(NewHTTPClient(HTTPConfig{URL: server.URL, Database: "diting"}))
+	_, _, err := repository.ListEvents(context.Background(), audit.Query{
+		StartTime:     time.Date(2026, 7, 9, 0, 0, 0, 0, time.UTC),
+		EndTime:       time.Date(2026, 7, 10, 0, 0, 0, 0, time.UTC),
+		Namespace:     "default",
+		PodName:       "api-0",
+		LoginUsername: "ubuntu",
+		ExecUsername:  "root",
+		Page:          1,
+		PageSize:      50,
+	})
+	if err != nil {
+		t.Fatalf("ListEvents returned error: %v", err)
+	}
+
+	for _, expected := range []string{
+		"namespace = 'default'",
+		"pod_name = 'api-0'",
+		"login_username = 'ubuntu'",
+		"username = 'root'",
+	} {
+		if !strings.Contains(body, expected) {
+			t.Fatalf("expected %q in query, got %s", expected, body)
+		}
+	}
+}

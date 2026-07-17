@@ -9,38 +9,42 @@ import (
 )
 
 type Query struct {
-	StartTime  time.Time
-	EndTime    time.Time
-	EventType  string
-	Severity   string
-	SeverityIn []string
-	HostName   string
-	Namespace  string
-	PodName    string
-	Username   string
-	Keyword    string
-	Cmdline    string
-	Page       int
-	PageSize   int
+	StartTime     time.Time
+	EndTime       time.Time
+	EventType     string
+	Severity      string
+	SeverityIn    []string
+	HostName      string
+	Namespace     string
+	PodName       string
+	Username      string
+	LoginUsername string
+	ExecUsername  string
+	Keyword       string
+	Cmdline       string
+	Page          int
+	PageSize      int
 }
 
 func ParseQuery(r *http.Request) (Query, error) {
 	values := r.URL.Query()
 	now := time.Now().UTC()
 	query := Query{
-		StartTime:  now.Add(-24 * time.Hour),
-		EndTime:    now,
-		Page:       parsePositiveInt(values.Get("page"), 1),
-		PageSize:   parsePositiveInt(values.Get("page_size"), 10),
-		EventType:  strings.TrimSpace(values.Get("event_type")),
-		Severity:   strings.TrimSpace(values.Get("severity")),
-		SeverityIn: parseCSV(values.Get("severity_in")),
-		HostName:   strings.TrimSpace(values.Get("host_name")),
-		Namespace:  strings.TrimSpace(values.Get("namespace")),
-		PodName:    strings.TrimSpace(values.Get("pod_name")),
-		Username:   strings.TrimSpace(values.Get("username")),
-		Keyword:    strings.TrimSpace(values.Get("keyword")),
-		Cmdline:    strings.TrimSpace(values.Get("cmdline")),
+		StartTime:     now.Add(-24 * time.Hour),
+		EndTime:       now,
+		Page:          parsePositiveInt(values.Get("page"), 1),
+		PageSize:      parsePositiveInt(values.Get("page_size"), 10),
+		EventType:     strings.TrimSpace(values.Get("event_type")),
+		Severity:      strings.TrimSpace(values.Get("severity")),
+		SeverityIn:    parseCSV(values.Get("severity_in")),
+		HostName:      strings.TrimSpace(values.Get("host_name")),
+		Namespace:     strings.TrimSpace(values.Get("namespace")),
+		PodName:       strings.TrimSpace(values.Get("pod_name")),
+		Username:      strings.TrimSpace(values.Get("username")),
+		LoginUsername: strings.TrimSpace(values.Get("login_username")),
+		ExecUsername:  strings.TrimSpace(values.Get("exec_username")),
+		Keyword:       strings.TrimSpace(values.Get("keyword")),
+		Cmdline:       strings.TrimSpace(values.Get("cmdline")),
 	}
 	if query.PageSize > 500 {
 		query.PageSize = 500
