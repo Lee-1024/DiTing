@@ -19,6 +19,45 @@ func TestStatusMarksOfflineAfterTwoMinutes(t *testing.T) {
 	}
 }
 
+func TestEnrichHeartbeatAddsHealthSignals(t *testing.T) {
+	now := time.Date(2026, 7, 16, 10, 0, 0, 0, time.UTC)
+	lastEvent := now.Add(-90 * time.Second)
+	lastWrite := now.Add(-80 * time.Second)
+
+	item := Enrich(Heartbeat{
+		HostID:        "server-1",
+		LastSeenAt:    now.Add(-30 * time.Second),
+		LastEventTime: &lastEvent,
+		LastWriteAt:   &lastWrite,
+		EventsWritten: 10,
+	}, now)
+
+	if item.Status != "online" || item.HealthLevel != "healthy" {
+		t.Fatalf("expected healthy online collector, got status=%s health=%s", item.Status, item.HealthLevel)
+	}
+	if item.EventLagSeconds != 90 || item.WriteLagSeconds != 80 {
+		t.Fatalf("expected lag seconds to be calculated, got event=%d write=%d", item.EventLagSeconds, item.WriteLagSeconds)
+	}
+}
+
+func TestEnrichHeartbeatWarnsWhenNoRecentEvents(t *testing.T) {
+	now := time.Date(2026, 7, 16, 10, 0, 0, 0, time.UTC)
+	lastEvent := now.Add(-11 * time.Minute)
+
+	item := Enrich(Heartbeat{
+		HostID:        "server-1",
+		LastSeenAt:    now.Add(-30 * time.Second),
+		LastEventTime: &lastEvent,
+	}, now)
+
+	if item.Status != "online" || item.HealthLevel != "warning" {
+		t.Fatalf("expected warning online collector, got status=%s health=%s", item.Status, item.HealthLevel)
+	}
+	if !strings.Contains(item.Message, "长时间未收到事件") {
+		t.Fatalf("expected stale event message, got %q", item.Message)
+	}
+}
+
 func TestHandlerListsCollectorHealth(t *testing.T) {
 	repository := NewMemoryRepository()
 	_ = repository.Upsert(context.Background(), HeartbeatUpdate{HostID: "server-1", HostName: "server-1", LastSeenAt: time.Now().UTC(), EventsWritten: 3})

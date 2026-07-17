@@ -20,8 +20,7 @@ func (r *MemoryRepository) List(_ context.Context, now time.Time) ([]Heartbeat, 
 	defer r.mu.Unlock()
 	result := make([]Heartbeat, 0, len(r.items))
 	for _, item := range r.items {
-		item.Status = Status(item.LastSeenAt, now)
-		result = append(result, item)
+		result = append(result, Enrich(item, now))
 	}
 	return result, nil
 }

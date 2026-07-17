@@ -32,8 +32,7 @@ ORDER BY last_seen_at DESC
 		if err := rows.Scan(&item.HostID, &item.HostName, &item.LastSeenAt, &item.LastEventTime, &item.LastWriteAt, &item.EventsWritten, &item.UpdatedAt); err != nil {
 			return nil, err
 		}
-		item.Status = Status(item.LastSeenAt, now)
-		items = append(items, item)
+		items = append(items, Enrich(item, now))
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
