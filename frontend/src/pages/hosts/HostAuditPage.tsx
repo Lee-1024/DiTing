@@ -1,16 +1,24 @@
-import { Card, DatePicker, Descriptions, Drawer, Empty, Form, Input, Row, Col, Space, Statistic, Table, Typography } from 'antd';
+import { Button, Card, DatePicker, Descriptions, Drawer, Empty, Form, Input, Row, Col, Select, Space, Statistic, Table, Typography } from 'antd';
 import dayjs from 'dayjs';
 import { useEffect, useState } from 'react';
-import { queryAuditEvents } from '../../api/audit';
+import { exportAuditEvents, queryAuditEvents } from '../../api/audit';
 import { getHostAudits, getHostUsers } from '../../api/stats';
 import CommandText from '../../components/CommandText';
 import FilterToolbar from '../../components/FilterToolbar';
 import SeverityTag from '../../components/SeverityTag';
 import type { AuditEvent } from '../../types/audit';
 import type { HostAuditItem, HostAuditQuery, HostUserItem } from '../../types/stats';
+import { downloadBlob } from '../../utils/download';
+import { severityOptions } from '../../utils/labels';
 import { formatLocalDateTime } from '../../utils/time';
 
 const defaultRange = [dayjs().subtract(7, 'day'), dayjs()] as const;
+
+interface DetailFilters {
+  username?: string;
+  keyword?: string;
+  severity?: string;
+}
 
 export default function HostAuditPage() {
   const [items, setItems] = useState<HostAuditItem[]>([]);
@@ -20,7 +28,10 @@ export default function HostAuditPage() {
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [riskEvents, setRiskEvents] = useState<AuditEvent[]>([]);
   const [hostUsers, setHostUsers] = useState<HostUserItem[]>([]);
-  const [selectedUser, setSelectedUser] = useState<string>();
+  const [detailFilters, setDetailFilters] = useState<DetailFilters>({});
+  const [detailPage, setDetailPage] = useState(1);
+  const [detailPageSize, setDetailPageSize] = useState(10);
+  const [detailTotal, setDetailTotal] = useState(0);
   const [tablePageSize, setTablePageSize] = useState(10);
   const [form] = Form.useForm();
 
@@ -74,7 +85,7 @@ export default function HostAuditPage() {
       const [data, riskData, usersData] = await Promise.all([
         queryAuditEvents({
           ...baseQuery,
-          page_size: 100,
+          page_size: detailPageSize,
         }),
         queryAuditEvents({
           ...baseQuery,
@@ -84,12 +95,57 @@ export default function HostAuditPage() {
         getHostUsers(hostUserQuery),
       ]);
       setEvents(data.items ?? []);
+      setDetailPage(data.page);
+      setDetailTotal(data.total);
       setRiskEvents(riskData.items ?? []);
       setHostUsers(usersData ?? []);
-      setSelectedUser(undefined);
+      setDetailFilters({});
     } finally {
       setDetailLoading(false);
     }
+  }
+
+  async function loadDetailEvents(item: HostAuditItem, filters: DetailFilters, nextPage = detailPage, nextPageSize = detailPageSize) {
+    const values = form.getFieldsValue();
+    const range = values.timeRange ?? defaultRange;
+    setDetailLoading(true);
+    try {
+      const data = await queryAuditEvents({
+        start_time: range?.[0]?.startOf('day').toISOString(),
+        end_time: range?.[1]?.endOf('day').toISOString(),
+        event_type: 'process_exec',
+        host_name: item.hostId || item.nodeName || item.hostName,
+        username: filters.username,
+        keyword: filters.keyword,
+        severity: filters.severity,
+        page: nextPage,
+        page_size: nextPageSize,
+      });
+      setEvents(data.items ?? []);
+      setDetailPage(data.page);
+      setDetailPageSize(nextPageSize);
+      setDetailTotal(data.total);
+    } finally {
+      setDetailLoading(false);
+    }
+  }
+
+  async function exportDetailEvents() {
+    if (!selected) {
+      return;
+    }
+    const values = form.getFieldsValue();
+    const range = values.timeRange ?? defaultRange;
+    const blob = await exportAuditEvents({
+      start_time: range?.[0]?.startOf('day').toISOString(),
+      end_time: range?.[1]?.endOf('day').toISOString(),
+      event_type: 'process_exec',
+      host_name: selected.hostId || selected.nodeName || selected.hostName,
+      username: detailFilters.username,
+      keyword: detailFilters.keyword,
+      severity: detailFilters.severity,
+    });
+    downloadBlob(blob, `${selected.hostName || 'host'}-commands.csv`);
   }
 
   useEffect(() => {
@@ -148,7 +204,15 @@ export default function HostAuditPage() {
         title={selected?.hostName ? `${selected.hostName} 主机审计详情` : '主机审计详情'}
         width={1080}
         open={Boolean(selected)}
-        onClose={() => { setSelected(undefined); setEvents([]); setRiskEvents([]); setHostUsers([]); setSelectedUser(undefined); }}
+        onClose={() => {
+          setSelected(undefined);
+          setEvents([]);
+          setRiskEvents([]);
+          setHostUsers([]);
+          setDetailFilters({});
+          setDetailPage(1);
+          setDetailTotal(0);
+        }}
       >
         {selected && (
           <Space direction="vertical" size={16} style={{ width: '100%' }}>
@@ -188,7 +252,15 @@ export default function HostAuditPage() {
               dataSource={hostUsers}
               locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无用户分布" /> }}
               pagination={false}
-              onRow={(record) => ({ onClick: () => setSelectedUser(record.username) })}
+              onRow={(record) => ({
+                onClick: () => {
+                  const nextFilters = { ...detailFilters, username: record.username };
+                  setDetailFilters(nextFilters);
+                  if (selected) {
+                    void loadDetailEvents(selected, nextFilters, 1, detailPageSize);
+                  }
+                },
+              })}
               columns={[
                 { title: '用户', dataIndex: 'username', width: 160 },
                 { title: '命令数', dataIndex: 'commandCount', width: 100 },
@@ -198,15 +270,60 @@ export default function HostAuditPage() {
               ]}
             />
             <Typography.Title level={5}>命令明细</Typography.Title>
+            <Space wrap>
+              <Select
+                allowClear
+                placeholder="用户"
+                style={{ width: 180 }}
+                value={detailFilters.username}
+                onChange={(value) => setDetailFilters((current) => ({ ...current, username: value }))}
+                options={hostUsers.map((item) => ({ value: item.username, label: item.username }))}
+              />
+              <Input
+                allowClear
+                placeholder="命令 / 进程"
+                style={{ width: 220 }}
+                value={detailFilters.keyword}
+                onChange={(event) => setDetailFilters((current) => ({ ...current, keyword: event.target.value }))}
+              />
+              <Select
+                allowClear
+                placeholder="风险等级"
+                style={{ width: 140 }}
+                value={detailFilters.severity}
+                onChange={(value) => setDetailFilters((current) => ({ ...current, severity: value }))}
+                options={severityOptions}
+              />
+              <Button type="primary" onClick={() => selected && void loadDetailEvents(selected, detailFilters, 1, detailPageSize)}>查询</Button>
+              <Button onClick={() => {
+                setDetailFilters({});
+                if (selected) {
+                  void loadDetailEvents(selected, {}, 1, detailPageSize);
+                }
+              }}>清空筛选</Button>
+              <Button onClick={() => void exportDetailEvents()}>导出明细</Button>
+            </Space>
           </Space>
         )}
         <Table
           rowKey="eventId"
           size="small"
           loading={detailLoading}
-          dataSource={selectedUser ? events.filter((event) => (event.loginUsername || event.username) === selectedUser) : events}
+          dataSource={events}
           locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无命令明细" /> }}
-          pagination={{ pageSize: 10 }}
+          pagination={{
+            current: detailPage,
+            pageSize: detailPageSize,
+            total: detailTotal,
+            showSizeChanger: true,
+            pageSizeOptions: [10, 20, 50, 100],
+            showTotal: (value) => `共 ${value} 条`,
+            onChange: (nextPage, nextPageSize) => {
+              if (selected) {
+                void loadDetailEvents(selected, detailFilters, nextPage, nextPageSize);
+              }
+            },
+          }}
           columns={commandColumns()}
         />
       </Drawer>

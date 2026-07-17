@@ -333,3 +333,4 @@ npm run build
 3. 是否新增采集降噪配置。
 4. 是否把 Collector 通信方式从直连数据库改为 API ingest。
 
+后续整体开发方向以 `docs/diting-development-roadmap.md` 为准：近期主线是把 Linux 主机审计做完整，中长期必须充分利用 Tetragon gRPC stream、文件/网络/DNS 等内核级事件能力，不要把系统做成单纯的日志查询页面，也不要在 K8s 页面能力上偏离当前主线。
