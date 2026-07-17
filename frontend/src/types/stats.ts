@@ -55,7 +55,9 @@ export interface UserAuditQuery {
 }
 
 export interface HostAuditItem {
+  hostId?: string;
   hostName: string;
+  nodeName?: string;
   commandCount: number;
   activeUsers: number;
   highRiskEvents: number;

@@ -56,9 +56,9 @@ export default function HostAuditPage() {
     try {
       const data = await queryAuditEvents({
         start_time: range?.[0]?.startOf('day').toISOString(),
-        end_time: range?.[1]?.endOf('day').toISOString(),
-        event_type: 'process_exec',
-        host_name: item.hostName,
+		end_time: range?.[1]?.endOf('day').toISOString(),
+		event_type: 'process_exec',
+		host_name: item.hostId || item.nodeName || item.hostName,
         page: 1,
         page_size: 100,
       });
@@ -87,12 +87,12 @@ export default function HostAuditPage() {
       </FilterToolbar>
       <Card className="data-card">
         <Table
-          rowKey="hostName"
+          rowKey={(record) => record.hostId || record.nodeName || record.hostName}
           loading={loading}
           dataSource={items}
           locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无主机审计数据" /> }}
           onRow={(record) => ({ onClick: () => void openDetails(record) })}
-          scroll={{ x: 960 }}
+          scroll={{ x: 1120 }}
           pagination={{
             pageSize: tablePageSize,
             showSizeChanger: true,
@@ -104,9 +104,11 @@ export default function HostAuditPage() {
             {
               title: '主机',
               dataIndex: 'hostName',
-              render: (value: string) => (
+              render: (value: string, record) => (
                 <Space direction="vertical" size={0}>
                   <Typography.Text>{value}</Typography.Text>
+                  {record.hostId && record.hostId !== value && <Typography.Text type="secondary">{record.hostId}</Typography.Text>}
+                  {record.nodeName && record.nodeName !== value && record.nodeName !== record.hostId && <Typography.Text type="secondary">{record.nodeName}</Typography.Text>}
                 </Space>
               ),
             },

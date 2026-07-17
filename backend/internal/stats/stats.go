@@ -42,7 +42,9 @@ type UserAuditItem struct {
 }
 
 type HostAuditItem struct {
+	HostID         string `json:"hostId"`
 	HostName       string `json:"hostName"`
+	NodeName       string `json:"nodeName"`
 	CommandCount   uint64 `json:"commandCount"`
 	ActiveUsers    uint64 `json:"activeUsers"`
 	HighRiskEvents uint64 `json:"highRiskEvents"`

@@ -310,7 +310,9 @@ func (r *StatsRepository) HostAudits(ctx context.Context, query stats.Query) ([]
 		conditions = append(conditions, "positionCaseInsensitive(audit_host, '"+keyword+"') > 0")
 	}
 	sql := fmt.Sprintf(`SELECT
-	audit_host AS host_name,
+	audit_host_key AS host_id,
+	anyLast(audit_host) AS host_name,
+	anyLast(node_name) AS node_name,
 	count() AS command_count,
 	uniqExact(audit_user) AS active_users,
 	countIf(severity IN ('high', 'critical')) AS high_risk_events,
@@ -319,7 +321,9 @@ func (r *StatsRepository) HostAudits(ctx context.Context, query stats.Query) ([]
 FROM
 (
 	SELECT
+		if(host_id != '', host_id, if(node_name != '', node_name, host_name)) AS audit_host_key,
 		if(host_name != '', host_name, if(host_id != '', host_id, node_name)) AS audit_host,
+		node_name,
 		if(login_username != '', login_username, username) AS audit_user,
 		severity,
 		event_time,
@@ -328,7 +332,7 @@ FROM
 	WHERE %s
 )
 WHERE %s
-GROUP BY audit_host
+GROUP BY audit_host_key
 ORDER BY command_count DESC, last_seen DESC
 LIMIT %d
 FORMAT JSONEachRow`, r.table(), statsWhere(query), strings.Join(conditions, " AND "), limit)
@@ -343,7 +347,9 @@ FORMAT JSONEachRow`, r.table(), statsWhere(query), strings.Join(conditions, " AN
 	items := make([]stats.HostAuditItem, 0, len(rows))
 	for _, row := range rows {
 		items = append(items, stats.HostAuditItem{
+			HostID:         row.HostID,
 			HostName:       row.HostName,
+			NodeName:       row.NodeName,
 			CommandCount:   uint64(row.CommandCount),
 			ActiveUsers:    uint64(row.ActiveUsers),
 			HighRiskEvents: uint64(row.HighRiskEvents),
@@ -384,7 +390,9 @@ type userAuditRow struct {
 }
 
 type hostAuditRow struct {
+	HostID         string         `json:"host_id"`
 	HostName       string         `json:"host_name"`
+	NodeName       string         `json:"node_name"`
 	CommandCount   flexibleUint64 `json:"command_count"`
 	ActiveUsers    flexibleUint64 `json:"active_users"`
 	HighRiskEvents flexibleUint64 `json:"high_risk_events"`

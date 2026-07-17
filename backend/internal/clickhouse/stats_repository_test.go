@@ -260,7 +260,7 @@ func TestStatsRepositoryHostAuditsAggregatesHosts(t *testing.T) {
 		data := make([]byte, r.ContentLength)
 		_, _ = r.Body.Read(data)
 		body = string(data)
-		_, _ = w.Write([]byte(`{"host_name":"node-1","command_count":"12","active_users":"2","high_risk_events":"3","first_seen":"2026-07-10 02:13:38.363","last_seen":"2026-07-10 02:14:25.564"}` + "\n"))
+		_, _ = w.Write([]byte(`{"host_id":"host-001","host_name":"prod-web-01","node_name":"node-1","command_count":"12","active_users":"2","high_risk_events":"3","first_seen":"2026-07-10 02:13:38.363","last_seen":"2026-07-10 02:14:25.564"}` + "\n"))
 	}))
 	defer server.Close()
 
@@ -275,10 +275,10 @@ func TestStatsRepositoryHostAuditsAggregatesHosts(t *testing.T) {
 		t.Fatalf("HostAudits returned error: %v", err)
 	}
 
-	if !strings.Contains(body, "event_type = 'process_exec'") || !strings.Contains(body, "if(host_name != '', host_name, if(host_id != '', host_id, node_name)) AS audit_host") || !strings.Contains(body, "positionCaseInsensitive(audit_host, 'node')") {
+	if !strings.Contains(body, "event_type = 'process_exec'") || !strings.Contains(body, "if(host_id != '', host_id, if(node_name != '', node_name, host_name)) AS audit_host_key") || !strings.Contains(body, "positionCaseInsensitive(audit_host, 'node')") {
 		t.Fatalf("expected host audit query filters, got %s", body)
 	}
-	if len(items) != 1 || items[0].HostName != "node-1" || items[0].CommandCount != 12 {
+	if len(items) != 1 || items[0].HostID != "host-001" || items[0].HostName != "prod-web-01" || items[0].NodeName != "node-1" || items[0].CommandCount != 12 {
 		t.Fatalf("unexpected items %#v", items)
 	}
 }
