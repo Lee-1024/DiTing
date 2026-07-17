@@ -53,13 +53,16 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
 ON CONFLICT (host_id) DO UPDATE
 SET host_name = EXCLUDED.host_name,
     input_mode = EXCLUDED.input_mode,
-    last_error = EXCLUDED.last_error,
+    last_error = CASE
+        WHEN EXCLUDED.last_error != '' OR $9 THEN EXCLUDED.last_error
+        ELSE diting_collector_heartbeats.last_error
+    END,
     last_seen_at = EXCLUDED.last_seen_at,
     last_event_time = COALESCE(EXCLUDED.last_event_time, diting_collector_heartbeats.last_event_time),
     last_write_at = COALESCE(EXCLUDED.last_write_at, diting_collector_heartbeats.last_write_at),
     events_written = diting_collector_heartbeats.events_written + EXCLUDED.events_written,
     updated_at = NOW()
-`, update.HostID, update.HostName, inputMode(update.InputMode), update.LastError, update.LastSeenAt, update.LastEventTime, update.LastWriteAt, update.EventsWritten)
+`, update.HostID, update.HostName, inputMode(update.InputMode), update.LastError, update.LastSeenAt, update.LastEventTime, update.LastWriteAt, update.EventsWritten, update.ClearError)
 	return err
 }
 

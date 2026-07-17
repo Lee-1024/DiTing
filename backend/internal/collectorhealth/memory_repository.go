@@ -32,7 +32,9 @@ func (r *MemoryRepository) Upsert(_ context.Context, update HeartbeatUpdate) err
 	item.HostID = update.HostID
 	item.HostName = update.HostName
 	item.InputMode = inputMode(update.InputMode)
-	item.LastError = update.LastError
+	if update.LastError != "" || update.ClearError {
+		item.LastError = update.LastError
+	}
 	item.LastSeenAt = update.LastSeenAt
 	if item.LastSeenAt.IsZero() {
 		item.LastSeenAt = time.Now().UTC()

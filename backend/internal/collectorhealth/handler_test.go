@@ -58,6 +58,34 @@ func TestEnrichHeartbeatWarnsWhenNoRecentEvents(t *testing.T) {
 	}
 }
 
+func TestMemoryRepositoryKeepsLastErrorUntilCleared(t *testing.T) {
+	repository := NewMemoryRepository()
+	now := time.Date(2026, 7, 16, 10, 0, 0, 0, time.UTC)
+	if err := repository.Upsert(context.Background(), HeartbeatUpdate{HostID: "server-1", LastSeenAt: now, LastError: "grpc unavailable"}); err != nil {
+		t.Fatalf("Upsert error heartbeat: %v", err)
+	}
+	if err := repository.Upsert(context.Background(), HeartbeatUpdate{HostID: "server-1", LastSeenAt: now.Add(time.Second)}); err != nil {
+		t.Fatalf("Upsert heartbeat: %v", err)
+	}
+	items, err := repository.List(context.Background(), now.Add(2*time.Second))
+	if err != nil {
+		t.Fatalf("List returned error: %v", err)
+	}
+	if items[0].LastError != "grpc unavailable" {
+		t.Fatalf("expected heartbeat to keep last error, got %q", items[0].LastError)
+	}
+	if err := repository.Upsert(context.Background(), HeartbeatUpdate{HostID: "server-1", LastSeenAt: now.Add(3 * time.Second), ClearError: true}); err != nil {
+		t.Fatalf("Upsert clear heartbeat: %v", err)
+	}
+	items, err = repository.List(context.Background(), now.Add(4*time.Second))
+	if err != nil {
+		t.Fatalf("List returned error: %v", err)
+	}
+	if items[0].LastError != "" {
+		t.Fatalf("expected successful write to clear last error, got %q", items[0].LastError)
+	}
+}
+
 func TestHandlerListsCollectorHealth(t *testing.T) {
 	repository := NewMemoryRepository()
 	_ = repository.Upsert(context.Background(), HeartbeatUpdate{HostID: "server-1", HostName: "server-1", LastSeenAt: time.Now().UTC(), EventsWritten: 3})

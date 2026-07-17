@@ -30,6 +30,7 @@ type HeartbeatUpdate struct {
 	HostName      string
 	InputMode     string
 	LastError     string
+	ClearError    bool
 	LastSeenAt    time.Time
 	LastEventTime *time.Time
 	LastWriteAt   *time.Time

@@ -115,6 +115,9 @@ func main() {
 		case "grpc":
 			grpcCollector := collector.NewGRPCCollector(cfg.Collector.TetragonGRPCAddr, cfg.Collector.BatchSize, eventWriter)
 			grpcCollector.SetReconnectInterval(time.Duration(cfg.Collector.ReconnectIntervalSeconds) * time.Second)
+			grpcCollector.SetErrorHandler(func(err error) {
+				recordCollectorError(context.Background(), collectorHealthRepository, hostMetadata, inputMode, err)
+			})
 			if mode == "collector-once" {
 				err = grpcCollector.RunOnce(context.Background())
 			} else {
@@ -597,6 +600,7 @@ func (w *refreshingRuleWriter) Write(ctx context.Context, events []audit.Event) 
 			HostID:        firstHostID(enriched),
 			HostName:      firstHostName(enriched),
 			InputMode:     heartbeatInputMode,
+			ClearError:    true,
 			LastSeenAt:    writeAt,
 			LastEventTime: &lastEventTime,
 			LastWriteAt:   &writeAt,

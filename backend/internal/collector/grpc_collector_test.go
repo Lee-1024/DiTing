@@ -56,6 +56,53 @@ func TestGRPCCollectorReconnectsAfterStreamError(t *testing.T) {
 	}
 }
 
+func TestGRPCCollectorReconnectsAfterStreamEOF(t *testing.T) {
+	writer := &recordingWriter{}
+	attempts := 0
+	collector := NewGRPCCollector("127.0.0.1:54321", 1, writer)
+	collector.reconnectInterval = time.Millisecond
+	collector.dial = func(context.Context, string) (eventStream, func() error, error) {
+		attempts++
+		if attempts == 1 {
+			return &fakeEventStream{}, func() error { return nil }, nil
+		}
+		return &fakeEventStream{events: []*tetragon.GetEventsResponse{grpcExecResponse("node-1", "/usr/bin/id", "")}}, func() error { return nil }, nil
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	collector.afterWrite = cancel
+	if err := collector.Run(ctx); err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if attempts != 2 {
+		t.Fatalf("expected reconnect after stream EOF, got attempts=%d", attempts)
+	}
+	if len(writer.batches) != 1 {
+		t.Fatalf("expected one written batch, got %d", len(writer.batches))
+	}
+}
+
+func TestGRPCCollectorReportsStreamErrors(t *testing.T) {
+	var reported error
+	collector := NewGRPCCollector("127.0.0.1:54321", 1, &recordingWriter{})
+	collector.dial = func(context.Context, string) (eventStream, func() error, error) {
+		return &fakeEventStream{err: io.ErrUnexpectedEOF}, func() error { return nil }, nil
+	}
+	collector.SetErrorHandler(func(err error) {
+		reported = err
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	collector.reconnectInterval = time.Millisecond
+	collector.afterErrorForTest = cancel
+	if err := collector.Run(ctx); err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if reported == nil {
+		t.Fatal("expected stream error to be reported")
+	}
+}
+
 type fakeEventStream struct {
 	events []*tetragon.GetEventsResponse
 	err    error
