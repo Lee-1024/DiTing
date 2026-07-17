@@ -1,4 +1,4 @@
-import { Card, DatePicker, Drawer, Empty, Form, Input, Space, Table, Typography } from 'antd';
+import { Card, DatePicker, Descriptions, Drawer, Empty, Form, Input, Row, Col, Space, Statistic, Table, Typography } from 'antd';
 import dayjs from 'dayjs';
 import { useEffect, useState } from 'react';
 import { queryAuditEvents } from '../../api/audit';
@@ -18,6 +18,7 @@ export default function HostAuditPage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [selected, setSelected] = useState<HostAuditItem>();
   const [events, setEvents] = useState<AuditEvent[]>([]);
+  const [riskEvents, setRiskEvents] = useState<AuditEvent[]>([]);
   const [tablePageSize, setTablePageSize] = useState(10);
   const [form] = Form.useForm();
 
@@ -54,15 +55,27 @@ export default function HostAuditPage() {
     setSelected(item);
     setDetailLoading(true);
     try {
-      const data = await queryAuditEvents({
+      const hostName = item.hostId || item.nodeName || item.hostName;
+      const baseQuery = {
         start_time: range?.[0]?.startOf('day').toISOString(),
-		end_time: range?.[1]?.endOf('day').toISOString(),
-		event_type: 'process_exec',
-		host_name: item.hostId || item.nodeName || item.hostName,
+        end_time: range?.[1]?.endOf('day').toISOString(),
+        event_type: 'process_exec',
+        host_name: hostName,
         page: 1,
-        page_size: 100,
-      });
+      };
+      const [data, riskData] = await Promise.all([
+        queryAuditEvents({
+          ...baseQuery,
+          page_size: 100,
+        }),
+        queryAuditEvents({
+          ...baseQuery,
+          severity_in: 'high,critical',
+          page_size: 10,
+        }),
+      ]);
       setEvents(data.items ?? []);
+      setRiskEvents(riskData.items ?? []);
     } finally {
       setDetailLoading(false);
     }
@@ -121,11 +134,44 @@ export default function HostAuditPage() {
         />
       </Card>
       <Drawer
-        title={selected?.hostName ? `${selected.hostName} 命令明细` : '命令明细'}
-        width={960}
+        title={selected?.hostName ? `${selected.hostName} 主机审计详情` : '主机审计详情'}
+        width={1080}
         open={Boolean(selected)}
-        onClose={() => { setSelected(undefined); setEvents([]); }}
+        onClose={() => { setSelected(undefined); setEvents([]); setRiskEvents([]); }}
       >
+        {selected && (
+          <Space direction="vertical" size={16} style={{ width: '100%' }}>
+            <Descriptions column={1} bordered size="small">
+              <Descriptions.Item label="主机名">{selected.hostName || '-'}</Descriptions.Item>
+              <Descriptions.Item label="Host ID">{selected.hostId || '-'}</Descriptions.Item>
+              <Descriptions.Item label="节点名">{selected.nodeName || '-'}</Descriptions.Item>
+              <Descriptions.Item label="首次活动">{formatLocalDateTime(selected.firstSeen)}</Descriptions.Item>
+              <Descriptions.Item label="最近活动">{formatLocalDateTime(selected.lastSeen)}</Descriptions.Item>
+            </Descriptions>
+            <Row gutter={[12, 12]}>
+              <Col xs={24} md={8}>
+                <Card className="stat-card" size="small"><Statistic title="命令数" value={selected.commandCount} /></Card>
+              </Col>
+              <Col xs={24} md={8}>
+                <Card className="stat-card" size="small"><Statistic title="活跃用户" value={selected.activeUsers} /></Card>
+              </Col>
+              <Col xs={24} md={8}>
+                <Card className="stat-card stat-card-danger" size="small"><Statistic title="高危事件" value={selected.highRiskEvents} /></Card>
+              </Col>
+            </Row>
+            <Typography.Title level={5}>高危命令</Typography.Title>
+            <Table
+              rowKey="eventId"
+              size="small"
+              loading={detailLoading}
+              dataSource={riskEvents}
+              locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无高危命令" /> }}
+              pagination={false}
+              columns={commandColumns()}
+            />
+            <Typography.Title level={5}>命令明细</Typography.Title>
+          </Space>
+        )}
         <Table
           rowKey="eventId"
           size="small"
@@ -133,16 +179,20 @@ export default function HostAuditPage() {
           dataSource={events}
           locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无命令明细" /> }}
           pagination={{ pageSize: 10 }}
-          columns={[
-            { title: '时间', dataIndex: 'eventTime', width: 190, render: (value) => formatLocalDateTime(value) },
-            { title: '登录用户', dataIndex: 'loginUsername', width: 110, render: (_, record) => record.loginUsername || record.username },
-            { title: '执行用户', dataIndex: 'username', width: 110 },
-            { title: '进程', dataIndex: 'processName', width: 120 },
-            { title: '命令', dataIndex: 'cmdline', render: (value) => <CommandText value={value} /> },
-            { title: '等级', dataIndex: 'severity', width: 90, render: (value) => <SeverityTag value={value} /> },
-          ]}
+          columns={commandColumns()}
         />
       </Drawer>
     </>
   );
+}
+
+function commandColumns() {
+  return [
+    { title: '时间', dataIndex: 'eventTime', width: 190, render: (value: string) => formatLocalDateTime(value) },
+    { title: '登录用户', dataIndex: 'loginUsername', width: 110, render: (_: string, record: AuditEvent) => record.loginUsername || record.username },
+    { title: '执行用户', dataIndex: 'username', width: 110 },
+    { title: '进程', dataIndex: 'processName', width: 120 },
+    { title: '命令', dataIndex: 'cmdline', render: (value: string) => <CommandText value={value} /> },
+    { title: '等级', dataIndex: 'severity', width: 90, render: (value: string) => <SeverityTag value={value} /> },
+  ];
 }
