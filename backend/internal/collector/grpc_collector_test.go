@@ -37,6 +37,27 @@ func TestGRPCCollectorWritesBatchesFromStream(t *testing.T) {
 	}
 }
 
+func TestGRPCCollectorFlushesOpenStreamByInterval(t *testing.T) {
+	writer := &recordingWriter{}
+	stream := &blockingEventStream{events: []*tetragon.GetEventsResponse{
+		grpcExecResponse("node-1", "/usr/bin/id", ""),
+	}}
+	collector := NewGRPCCollector("127.0.0.1:54321", 1000, writer)
+	collector.SetFlushInterval(time.Millisecond)
+	collector.dial = func(context.Context, string) (eventStream, func() error, error) {
+		return stream, func() error { return nil }, nil
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	collector.afterWrite = cancel
+	if err := collector.Run(ctx); err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if len(writer.batches) != 1 || len(writer.batches[0]) != 1 {
+		t.Fatalf("expected interval flush to write one event, got %#v", writer.batches)
+	}
+}
+
 func TestGRPCCollectorReconnectsAfterStreamError(t *testing.T) {
 	writer := &recordingWriter{}
 	attempts := 0
@@ -121,6 +142,19 @@ func (s *fakeEventStream) Recv() (*tetragon.GetEventsResponse, error) {
 			return nil, s.err
 		}
 		return nil, io.EOF
+	}
+	next := s.events[0]
+	s.events = s.events[1:]
+	return next, nil
+}
+
+type blockingEventStream struct {
+	events []*tetragon.GetEventsResponse
+}
+
+func (s *blockingEventStream) Recv() (*tetragon.GetEventsResponse, error) {
+	if len(s.events) == 0 {
+		select {}
 	}
 	next := s.events[0]
 	s.events = s.events[1:]

@@ -115,6 +115,7 @@ func main() {
 		case "grpc":
 			grpcCollector := collector.NewGRPCCollector(cfg.Collector.TetragonGRPCAddr, cfg.Collector.BatchSize, eventWriter)
 			grpcCollector.SetReconnectInterval(time.Duration(cfg.Collector.ReconnectIntervalSeconds) * time.Second)
+			grpcCollector.SetFlushInterval(time.Duration(cfg.Collector.FlushIntervalSeconds) * time.Second)
 			grpcCollector.SetConnectHandler(func() {
 				recordCollectorConnected(context.Background(), collectorHealthRepository, hostMetadata, inputMode)
 			})

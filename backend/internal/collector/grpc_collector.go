@@ -21,6 +21,7 @@ type GRPCCollector struct {
 	addr              string
 	batchSize         int
 	writer            EventWriter
+	flushInterval     time.Duration
 	reconnectInterval time.Duration
 	dial              func(context.Context, string) (eventStream, func() error, error)
 	afterWrite        func()
@@ -36,6 +37,7 @@ func NewGRPCCollector(addr string, batchSize int, writer EventWriter) *GRPCColle
 	collector := &GRPCCollector{
 		addr:              addr,
 		batchSize:         batchSize,
+		flushInterval:     time.Second,
 		writer:            writer,
 		reconnectInterval: 5 * time.Second,
 	}
@@ -46,6 +48,12 @@ func NewGRPCCollector(addr string, batchSize int, writer EventWriter) *GRPCColle
 func (c *GRPCCollector) SetReconnectInterval(interval time.Duration) {
 	if interval > 0 {
 		c.reconnectInterval = interval
+	}
+}
+
+func (c *GRPCCollector) SetFlushInterval(interval time.Duration) {
+	if interval > 0 {
+		c.flushInterval = interval
 	}
 }
 
@@ -121,40 +129,78 @@ func (c *GRPCCollector) consume(ctx context.Context, stream eventStream) error {
 		return nil
 	}
 
+	responses := make(chan *tetragon.GetEventsResponse)
+	errs := make(chan error, 1)
+	go func() {
+		defer close(responses)
+		for {
+			response, err := stream.Recv()
+			if err != nil {
+				errs <- err
+				return
+			}
+			select {
+			case responses <- response:
+			case <-ctx.Done():
+				errs <- ctx.Err()
+				return
+			}
+		}
+	}()
+
+	ticker := time.NewTicker(c.flushInterval)
+	defer ticker.Stop()
+
 	for {
-		response, err := stream.Recv()
-		if errors.Is(err, io.EOF) {
+		select {
+		case <-ctx.Done():
 			if flushErr := flush(); flushErr != nil {
 				c.reportError(flushErr)
 				return flushErr
 			}
-			return io.EOF
-		}
-		if err != nil {
+			return ctx.Err()
+		case <-ticker.C:
+			if flushErr := flush(); flushErr != nil {
+				c.reportError(flushErr)
+				return flushErr
+			}
+			continue
+		case err := <-errs:
+			if errors.Is(err, io.EOF) {
+				if flushErr := flush(); flushErr != nil {
+					c.reportError(flushErr)
+					return flushErr
+				}
+				return io.EOF
+			}
 			if flushErr := flush(); flushErr != nil {
 				c.reportError(flushErr)
 				return flushErr
 			}
 			return err
-		}
-		event, err := ParseTetragonGRPCEvent(response)
-		if err != nil {
-			if errors.Is(err, ErrUnsupportedEvent) {
-				slog.Debug("collector grpc skipped unsupported event", "addr", c.addr)
+		case response, ok := <-responses:
+			if !ok {
 				continue
 			}
-			c.reportError(err)
-			return err
-		}
-		received++
-		if received == 1 {
-			slog.Info("collector grpc received first supported event", "addr", c.addr, "event_type", event.EventType, "node_name", event.NodeName)
-		}
-		batch = append(batch, event)
-		if len(batch) >= c.batchSize {
-			if err := flush(); err != nil {
+			event, err := ParseTetragonGRPCEvent(response)
+			if err != nil {
+				if errors.Is(err, ErrUnsupportedEvent) {
+					slog.Debug("collector grpc skipped unsupported event", "addr", c.addr)
+					continue
+				}
 				c.reportError(err)
 				return err
+			}
+			received++
+			if received == 1 {
+				slog.Info("collector grpc received first supported event", "addr", c.addr, "event_type", event.EventType, "node_name", event.NodeName)
+			}
+			batch = append(batch, event)
+			if len(batch) >= c.batchSize {
+				if err := flush(); err != nil {
+					c.reportError(err)
+					return err
+				}
 			}
 		}
 	}
