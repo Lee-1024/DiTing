@@ -224,6 +224,15 @@ func TestStatsRepositoryCommandStatsIncludesEventsWithoutProcessName(t *testing.
 	if !strings.Contains(body, "count() AS command_count") {
 		t.Fatalf("expected command stats to avoid count alias conflicts, got %s", body)
 	}
+	for _, expected := range []string{
+		"argMax(host_id, event_time) AS host_id",
+		"argMax(host_name, event_time) AS host_name",
+		"argMax(node_name, event_time) AS node_name",
+	} {
+		if !strings.Contains(body, expected) {
+			t.Fatalf("expected latest host field %q, got %s", expected, body)
+		}
+	}
 	if !strings.Contains(body, "max(event_time) AS last_seen_sort") || !strings.Contains(body, "ORDER BY last_seen_sort DESC, command_count DESC") {
 		t.Fatalf("expected command stats to order by newest execution first, got %s", body)
 	}

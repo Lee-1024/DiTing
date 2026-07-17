@@ -3,6 +3,7 @@ package stats
 import (
 	"encoding/csv"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
@@ -156,6 +157,7 @@ func parseQuery(r *http.Request) Query {
 
 func writeJSON(w http.ResponseWriter, value any, err error) {
 	if err != nil {
+		slog.Error("stats request failed", "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
