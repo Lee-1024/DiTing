@@ -42,6 +42,10 @@ func (fakeRepository) HostAudits(_ context.Context, query Query) ([]HostAuditIte
 	return []HostAuditItem{{HostName: query.Keyword, CommandCount: 12, ActiveUsers: 2}}, nil
 }
 
+func (fakeRepository) HostUsers(_ context.Context, query Query) ([]HostUserItem, error) {
+	return []HostUserItem{{Username: query.HostName + ":root", CommandCount: 6, HighRiskEvents: 1}}, nil
+}
+
 func TestOverviewHandlerReturnsOverview(t *testing.T) {
 	handler := NewHandler(fakeRepository{})
 	rec := httptest.NewRecorder()
@@ -165,6 +169,22 @@ func TestHostAuditsHandlerPassesFilters(t *testing.T) {
 	}
 	body := rec.Body.String()
 	if !strings.Contains(body, `"hostName":"node-1"`) || !strings.Contains(body, `"commandCount":12`) {
+		t.Fatalf("unexpected body %s", body)
+	}
+}
+
+func TestHostUsersHandlerPassesHostFilter(t *testing.T) {
+	handler := NewHandler(fakeRepository{})
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/stats/hosts/users?host_name=host-001&limit=20", nil)
+
+	handler.HostUsers(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `"username":"host-001:root"`) || !strings.Contains(body, `"commandCount":6`) {
 		t.Fatalf("unexpected body %s", body)
 	}
 }

@@ -283,6 +283,37 @@ func TestStatsRepositoryHostAuditsAggregatesHosts(t *testing.T) {
 	}
 }
 
+func TestStatsRepositoryHostUsersAggregatesUsersForHost(t *testing.T) {
+	var body string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		data := make([]byte, r.ContentLength)
+		_, _ = r.Body.Read(data)
+		body = string(data)
+		_, _ = w.Write([]byte(`{"username":"ubuntu","command_count":"6","high_risk_events":"1","first_seen":"2026-07-10 02:13:38.363","last_seen":"2026-07-10 02:14:25.564"}` + "\n"))
+	}))
+	defer server.Close()
+
+	repository := NewStatsRepository(NewHTTPClient(HTTPConfig{URL: server.URL, Database: "diting"}), nil)
+	items, err := repository.HostUsers(context.Background(), stats.Query{
+		StartTime: time.Date(2026, 7, 9, 0, 0, 0, 0, time.UTC),
+		EndTime:   time.Date(2026, 7, 10, 0, 0, 0, 0, time.UTC),
+		HostName:  "host-001",
+		Limit:     20,
+	})
+	if err != nil {
+		t.Fatalf("HostUsers returned error: %v", err)
+	}
+
+	if !strings.Contains(body, "event_type = 'process_exec'") ||
+		!strings.Contains(body, "(host_id = 'host-001' OR node_name = 'host-001' OR host_name = 'host-001')") ||
+		!strings.Contains(body, "if(login_username != '', login_username, username) AS audit_user") {
+		t.Fatalf("expected host user query filters, got %s", body)
+	}
+	if len(items) != 1 || items[0].Username != "ubuntu" || items[0].CommandCount != 6 || items[0].HighRiskEvents != 1 {
+		t.Fatalf("unexpected items %#v", items)
+	}
+}
+
 type fakeRuleCounter struct {
 	count uint64
 }

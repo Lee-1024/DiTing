@@ -200,6 +200,7 @@ func NewRouter(repository audit.Repository, ruleRepository rule.Repository, stat
 		mux.Handle("/api/v1/stats/commands/export", protect(http.HandlerFunc(statsHandler.ExportCommandStats)))
 		mux.Handle("/api/v1/stats/users", protect(http.HandlerFunc(statsHandler.UserAudits)))
 		mux.Handle("/api/v1/stats/hosts", protect(http.HandlerFunc(statsHandler.HostAudits)))
+		mux.Handle("/api/v1/stats/hosts/users", protect(http.HandlerFunc(statsHandler.HostUsers)))
 	}
 	return loggingMiddleware(mux)
 }

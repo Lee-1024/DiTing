@@ -2,12 +2,12 @@ import { Card, DatePicker, Descriptions, Drawer, Empty, Form, Input, Row, Col, S
 import dayjs from 'dayjs';
 import { useEffect, useState } from 'react';
 import { queryAuditEvents } from '../../api/audit';
-import { getHostAudits } from '../../api/stats';
+import { getHostAudits, getHostUsers } from '../../api/stats';
 import CommandText from '../../components/CommandText';
 import FilterToolbar from '../../components/FilterToolbar';
 import SeverityTag from '../../components/SeverityTag';
 import type { AuditEvent } from '../../types/audit';
-import type { HostAuditItem, HostAuditQuery } from '../../types/stats';
+import type { HostAuditItem, HostAuditQuery, HostUserItem } from '../../types/stats';
 import { formatLocalDateTime } from '../../utils/time';
 
 const defaultRange = [dayjs().subtract(7, 'day'), dayjs()] as const;
@@ -19,6 +19,8 @@ export default function HostAuditPage() {
   const [selected, setSelected] = useState<HostAuditItem>();
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [riskEvents, setRiskEvents] = useState<AuditEvent[]>([]);
+  const [hostUsers, setHostUsers] = useState<HostUserItem[]>([]);
+  const [selectedUser, setSelectedUser] = useState<string>();
   const [tablePageSize, setTablePageSize] = useState(10);
   const [form] = Form.useForm();
 
@@ -63,7 +65,13 @@ export default function HostAuditPage() {
         host_name: hostName,
         page: 1,
       };
-      const [data, riskData] = await Promise.all([
+      const hostUserQuery = {
+        start_time: baseQuery.start_time,
+        end_time: baseQuery.end_time,
+        host_name: hostName,
+        limit: 20,
+      };
+      const [data, riskData, usersData] = await Promise.all([
         queryAuditEvents({
           ...baseQuery,
           page_size: 100,
@@ -73,9 +81,12 @@ export default function HostAuditPage() {
           severity_in: 'high,critical',
           page_size: 10,
         }),
+        getHostUsers(hostUserQuery),
       ]);
       setEvents(data.items ?? []);
       setRiskEvents(riskData.items ?? []);
+      setHostUsers(usersData ?? []);
+      setSelectedUser(undefined);
     } finally {
       setDetailLoading(false);
     }
@@ -137,7 +148,7 @@ export default function HostAuditPage() {
         title={selected?.hostName ? `${selected.hostName} 主机审计详情` : '主机审计详情'}
         width={1080}
         open={Boolean(selected)}
-        onClose={() => { setSelected(undefined); setEvents([]); setRiskEvents([]); }}
+        onClose={() => { setSelected(undefined); setEvents([]); setRiskEvents([]); setHostUsers([]); setSelectedUser(undefined); }}
       >
         {selected && (
           <Space direction="vertical" size={16} style={{ width: '100%' }}>
@@ -169,6 +180,23 @@ export default function HostAuditPage() {
               pagination={false}
               columns={commandColumns()}
             />
+            <Typography.Title level={5}>用户分布</Typography.Title>
+            <Table
+              rowKey="username"
+              size="small"
+              loading={detailLoading}
+              dataSource={hostUsers}
+              locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无用户分布" /> }}
+              pagination={false}
+              onRow={(record) => ({ onClick: () => setSelectedUser(record.username) })}
+              columns={[
+                { title: '用户', dataIndex: 'username', width: 160 },
+                { title: '命令数', dataIndex: 'commandCount', width: 100 },
+                { title: '高危事件', dataIndex: 'highRiskEvents', width: 100 },
+                { title: '首次活动', dataIndex: 'firstSeen', width: 180, render: (value) => formatLocalDateTime(value) },
+                { title: '最近活动', dataIndex: 'lastSeen', width: 180, render: (value) => formatLocalDateTime(value) },
+              ]}
+            />
             <Typography.Title level={5}>命令明细</Typography.Title>
           </Space>
         )}
@@ -176,7 +204,7 @@ export default function HostAuditPage() {
           rowKey="eventId"
           size="small"
           loading={detailLoading}
-          dataSource={events}
+          dataSource={selectedUser ? events.filter((event) => (event.loginUsername || event.username) === selectedUser) : events}
           locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无命令明细" /> }}
           pagination={{ pageSize: 10 }}
           columns={commandColumns()}

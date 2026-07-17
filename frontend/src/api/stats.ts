@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import type { CommandItem, CommandStatsQuery, HostAuditItem, HostAuditQuery, OverviewStats, StatsQuery, TopItem, TrendPoint, UserAuditItem, UserAuditQuery } from '../types/stats';
+import type { CommandItem, CommandStatsQuery, HostAuditItem, HostAuditQuery, HostUserItem, OverviewStats, StatsQuery, TopItem, TrendPoint, UserAuditItem, UserAuditQuery } from '../types/stats';
 
 export async function getOverview(params?: StatsQuery): Promise<OverviewStats> {
   const response = await apiClient.get<OverviewStats>('/stats/overview', { params });
@@ -43,5 +43,10 @@ export async function getUserAudits(params: UserAuditQuery): Promise<UserAuditIt
 
 export async function getHostAudits(params: HostAuditQuery): Promise<HostAuditItem[]> {
   const response = await apiClient.get<HostAuditItem[]>('/stats/hosts', { params });
+  return response.data;
+}
+
+export async function getHostUsers(params: HostAuditQuery): Promise<HostUserItem[]> {
+  const response = await apiClient.get<HostUserItem[]>('/stats/hosts/users', { params });
   return response.data;
 }

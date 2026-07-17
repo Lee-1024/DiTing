@@ -83,6 +83,11 @@ func (h *Handler) HostAudits(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, result, err)
 }
 
+func (h *Handler) HostUsers(w http.ResponseWriter, r *http.Request) {
+	result, err := h.repository.HostUsers(r.Context(), parseQuery(r))
+	writeJSON(w, result, err)
+}
+
 func parseQuery(r *http.Request) Query {
 	values := r.URL.Query()
 	now := time.Now().UTC()
@@ -108,6 +113,7 @@ func parseQuery(r *http.Request) Query {
 	}
 	query.Keyword = values.Get("keyword")
 	query.Username = values.Get("username")
+	query.HostName = values.Get("host_name")
 	return query
 }
 

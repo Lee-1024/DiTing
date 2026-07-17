@@ -52,12 +52,21 @@ type HostAuditItem struct {
 	LastSeen       string `json:"lastSeen"`
 }
 
+type HostUserItem struct {
+	Username       string `json:"username"`
+	CommandCount   uint64 `json:"commandCount"`
+	HighRiskEvents uint64 `json:"highRiskEvents"`
+	FirstSeen      string `json:"firstSeen"`
+	LastSeen       string `json:"lastSeen"`
+}
+
 type Query struct {
 	StartTime time.Time
 	EndTime   time.Time
 	Limit     int
 	Keyword   string
 	Username  string
+	HostName  string
 }
 
 type Repository interface {
@@ -69,4 +78,5 @@ type Repository interface {
 	CommandStats(ctx context.Context, query Query) ([]CommandItem, error)
 	UserAudits(ctx context.Context, query Query) ([]UserAuditItem, error)
 	HostAudits(ctx context.Context, query Query) ([]HostAuditItem, error)
+	HostUsers(ctx context.Context, query Query) ([]HostUserItem, error)
 }

@@ -65,9 +65,18 @@ export interface HostAuditItem {
   lastSeen: string;
 }
 
+export interface HostUserItem {
+  username: string;
+  commandCount: number;
+  highRiskEvents: number;
+  firstSeen: string;
+  lastSeen: string;
+}
+
 export interface HostAuditQuery {
   start_time?: string;
   end_time?: string;
   keyword?: string;
+  host_name?: string;
   limit?: number;
 }
