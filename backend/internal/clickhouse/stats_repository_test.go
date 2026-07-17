@@ -201,7 +201,7 @@ func TestStatsRepositoryCommandStatsIncludesEventsWithoutProcessName(t *testing.
 		data := make([]byte, r.ContentLength)
 		_, _ = r.Body.Read(data)
 		body = string(data)
-		_, _ = w.Write([]byte(`{"process_name":"","cmdline":"id","username":"ubuntu","login_username":"ubuntu","host_id":"host-001","host_name":"prod-web-01","node_name":"node-1","host_count":"1","count":"1","first_seen":"2026-07-15 09:10:00","last_seen":"2026-07-15 09:10:00"}` + "\n"))
+		_, _ = w.Write([]byte(`{"process_name":"","cmdline":"id","username":"ubuntu","login_username":"ubuntu","latest_host_id":"host-001","latest_host_name":"prod-web-01","latest_node_name":"node-1","host_count":"1","command_count":"1","first_seen":"2026-07-15 09:10:00","last_seen":"2026-07-15 09:10:00"}` + "\n"))
 	}))
 	defer server.Close()
 
@@ -225,9 +225,9 @@ func TestStatsRepositoryCommandStatsIncludesEventsWithoutProcessName(t *testing.
 		t.Fatalf("expected command stats to avoid count alias conflicts, got %s", body)
 	}
 	for _, expected := range []string{
-		"argMax(host_id, event_time) AS host_id",
-		"argMax(host_name, event_time) AS host_name",
-		"argMax(node_name, event_time) AS node_name",
+		"argMax(host_id, event_time) AS latest_host_id",
+		"argMax(host_name, event_time) AS latest_host_name",
+		"argMax(node_name, event_time) AS latest_node_name",
 	} {
 		if !strings.Contains(body, expected) {
 			t.Fatalf("expected latest host field %q, got %s", expected, body)

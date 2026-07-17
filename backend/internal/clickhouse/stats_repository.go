@@ -208,9 +208,9 @@ func (r *StatsRepository) CommandStats(ctx context.Context, query stats.Query) (
 	cmdline,
 	username,
 	login_username,
-	argMax(host_id, event_time) AS host_id,
-	argMax(host_name, event_time) AS host_name,
-	argMax(node_name, event_time) AS node_name,
+	argMax(host_id, event_time) AS latest_host_id,
+	argMax(host_name, event_time) AS latest_host_name,
+	argMax(node_name, event_time) AS latest_node_name,
 	uniqExact(if(host_id != '', host_id, if(node_name != '', node_name, host_name))) AS host_count,
 	count() AS command_count,
 	min(event_time) AS first_seen,
@@ -502,9 +502,9 @@ type commandItemRow struct {
 	Cmdline       string         `json:"cmdline"`
 	Username      string         `json:"username"`
 	LoginUsername string         `json:"login_username"`
-	HostID        string         `json:"host_id"`
-	HostName      string         `json:"host_name"`
-	NodeName      string         `json:"node_name"`
+	HostID        string         `json:"latest_host_id"`
+	HostName      string         `json:"latest_host_name"`
+	NodeName      string         `json:"latest_node_name"`
 	HostCount     flexibleUint64 `json:"host_count"`
 	CommandCount  flexibleUint64 `json:"command_count"`
 	Count         flexibleUint64 `json:"count"`
