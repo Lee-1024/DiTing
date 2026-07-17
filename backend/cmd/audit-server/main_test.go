@@ -57,6 +57,15 @@ func TestParseArgsSupportsClearTestDataMode(t *testing.T) {
 	}
 }
 
+func TestCollectorInputModeDefaultsAndNormalizes(t *testing.T) {
+	if collectorInputMode("") != "file" {
+		t.Fatal("expected empty collector input mode to default to file")
+	}
+	if collectorInputMode(" GRPC ") != "grpc" {
+		t.Fatal("expected collector input mode to normalize grpc")
+	}
+}
+
 func TestParseArgsDefaultsToAPIAndExampleConfig(t *testing.T) {
 	mode, configPath := parseArgs([]string{"audit-server"})
 

@@ -47,6 +47,7 @@ export default function CollectorHealthPage() {
           columns={[
             { title: '主机 ID', dataIndex: 'hostId', width: 180 },
             { title: '主机名', dataIndex: 'hostName', width: 180, render: (value) => value || '-' },
+            { title: '采集模式', dataIndex: 'inputMode', width: 110, render: (value) => inputModeLabel(value) },
             {
               title: '状态',
               dataIndex: 'status',
@@ -60,6 +61,7 @@ export default function CollectorHealthPage() {
               render: (value) => <Tag color={healthColor(value)}>{healthLabel(value)}</Tag>,
             },
             { title: '提示', dataIndex: 'message', width: 180, render: (value) => value || '-' },
+            { title: '最近错误', dataIndex: 'lastError', width: 220, render: (value) => value || '-' },
             { title: '最近心跳', dataIndex: 'lastSeenAt', width: 190, render: (value) => formatLocalDateTime(value) },
             { title: '心跳延迟', dataIndex: 'heartbeatLagSeconds', width: 110, render: (value) => formatLag(value) },
             { title: '最近事件', dataIndex: 'lastEventTime', width: 190, render: (value) => formatLocalDateTime(value) },
@@ -99,6 +101,13 @@ function healthColor(value?: string) {
     return 'red';
   }
   return 'default';
+}
+
+function inputModeLabel(value?: string) {
+  if (value === 'grpc') {
+    return <Tag color="blue">gRPC</Tag>;
+  }
+  return <Tag>文件</Tag>;
 }
 
 function formatLag(value?: number) {

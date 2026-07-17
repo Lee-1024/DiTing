@@ -61,3 +61,11 @@ func TestBootstrapAddsHostAssetColumnsBeforeIndexes(t *testing.T) {
 		t.Fatal("expected host_id column to be added before host_id index is created")
 	}
 }
+
+func TestBootstrapAddsCollectorHeartbeatModeColumns(t *testing.T) {
+	for _, column := range []string{"ADD COLUMN IF NOT EXISTS input_mode", "ADD COLUMN IF NOT EXISTS last_error"} {
+		if !strings.Contains(bootstrapSQL, column) {
+			t.Fatalf("expected bootstrap SQL to include %q", column)
+		}
+	}
+}

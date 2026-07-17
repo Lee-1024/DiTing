@@ -8,24 +8,28 @@ import (
 )
 
 type Heartbeat struct {
-	HostID        string     `json:"hostId"`
-	HostName      string     `json:"hostName"`
-	Status        string     `json:"status"`
-	HealthLevel   string     `json:"healthLevel"`
-	Message       string     `json:"message"`
-	LastSeenAt    time.Time  `json:"lastSeenAt"`
-	LastEventTime *time.Time `json:"lastEventTime,omitempty"`
-	LastWriteAt   *time.Time `json:"lastWriteAt,omitempty"`
-	HeartbeatLagSeconds int64 `json:"heartbeatLagSeconds"`
-	EventLagSeconds     int64 `json:"eventLagSeconds,omitempty"`
-	WriteLagSeconds     int64 `json:"writeLagSeconds,omitempty"`
-	EventsWritten uint64     `json:"eventsWritten"`
-	UpdatedAt     time.Time  `json:"updatedAt"`
+	HostID              string     `json:"hostId"`
+	HostName            string     `json:"hostName"`
+	InputMode           string     `json:"inputMode"`
+	Status              string     `json:"status"`
+	HealthLevel         string     `json:"healthLevel"`
+	Message             string     `json:"message"`
+	LastError           string     `json:"lastError"`
+	LastSeenAt          time.Time  `json:"lastSeenAt"`
+	LastEventTime       *time.Time `json:"lastEventTime,omitempty"`
+	LastWriteAt         *time.Time `json:"lastWriteAt,omitempty"`
+	HeartbeatLagSeconds int64      `json:"heartbeatLagSeconds"`
+	EventLagSeconds     int64      `json:"eventLagSeconds,omitempty"`
+	WriteLagSeconds     int64      `json:"writeLagSeconds,omitempty"`
+	EventsWritten       uint64     `json:"eventsWritten"`
+	UpdatedAt           time.Time  `json:"updatedAt"`
 }
 
 type HeartbeatUpdate struct {
 	HostID        string
 	HostName      string
+	InputMode     string
+	LastError     string
 	LastSeenAt    time.Time
 	LastEventTime *time.Time
 	LastWriteAt   *time.Time
@@ -64,6 +68,9 @@ func Status(lastSeenAt time.Time, now time.Time) string {
 
 func Enrich(item Heartbeat, now time.Time) Heartbeat {
 	item.Status = Status(item.LastSeenAt, now)
+	if item.InputMode == "" {
+		item.InputMode = "file"
+	}
 	item.HealthLevel = "healthy"
 	item.Message = "采集正常"
 	item.HeartbeatLagSeconds = lagSeconds(item.LastSeenAt, now)
@@ -77,6 +84,11 @@ func Enrich(item Heartbeat, now time.Time) Heartbeat {
 	if item.Status == "offline" {
 		item.HealthLevel = "critical"
 		item.Message = "Collector 心跳超时"
+		return item
+	}
+	if item.LastError != "" {
+		item.HealthLevel = "warning"
+		item.Message = item.LastError
 		return item
 	}
 	if item.LastEventTime == nil {

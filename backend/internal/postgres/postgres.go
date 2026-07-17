@@ -207,12 +207,20 @@ CREATE INDEX IF NOT EXISTS idx_diting_risk_dispositions_updated_at ON diting_ris
 CREATE TABLE IF NOT EXISTS diting_collector_heartbeats (
     host_id VARCHAR(128) PRIMARY KEY,
     host_name VARCHAR(128) NOT NULL DEFAULT '',
+    input_mode VARCHAR(32) NOT NULL DEFAULT 'file',
+    last_error TEXT NOT NULL DEFAULT '',
     last_seen_at TIMESTAMPTZ NOT NULL,
     last_event_time TIMESTAMPTZ,
     last_write_at TIMESTAMPTZ,
     events_written BIGINT NOT NULL DEFAULT 0,
     updated_at TIMESTAMPTZ NOT NULL
 );
+
+ALTER TABLE diting_collector_heartbeats
+    ADD COLUMN IF NOT EXISTS input_mode VARCHAR(32) NOT NULL DEFAULT 'file';
+
+ALTER TABLE diting_collector_heartbeats
+    ADD COLUMN IF NOT EXISTS last_error TEXT NOT NULL DEFAULT '';
 
 CREATE INDEX IF NOT EXISTS idx_diting_collector_heartbeats_last_seen_at ON diting_collector_heartbeats(last_seen_at);
 

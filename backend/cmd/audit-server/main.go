@@ -98,16 +98,34 @@ func main() {
 		}
 		hostMetadata := collector.ResolveHostMetadata(cfg.Collector.HostID, cfg.Collector.HostName)
 		slog.Info("collector host metadata resolved", "host_id", hostMetadata.ID, "host_name", hostMetadata.Name)
-		writer.SetHeartbeatRecorder(collectorHealthRepository)
-		go collectorHeartbeatLoop(context.Background(), collectorHealthRepository, hostMetadata, 30*time.Second)
+		inputMode := collectorInputMode(cfg.Collector.InputMode)
+		writer.SetHeartbeatRecorder(collectorHealthRepository, inputMode)
+		go collectorHeartbeatLoop(context.Background(), collectorHealthRepository, hostMetadata, inputMode, 30*time.Second)
 		eventWriter = collector.NewHostMetadataWriter(hostMetadata, eventWriter)
 
-		fileCollector := collector.NewFileCollector(cfg.Collector.TetragonLogFile, cfg.Collector.BatchSize, eventWriter)
-		slog.Info("collector starting", "mode", mode, "tetragon_log_file", cfg.Collector.TetragonLogFile, "passwd_file", cfg.Collector.PasswdFile, "batch_size", cfg.Collector.BatchSize, "flush_interval_seconds", cfg.Collector.FlushIntervalSeconds)
-		if mode == "collector-once" {
-			err = fileCollector.RunOnce(context.Background())
-		} else {
-			err = fileCollector.Tail(context.Background(), time.Duration(cfg.Collector.FlushIntervalSeconds)*time.Second)
+		slog.Info("collector starting", "mode", mode, "input_mode", inputMode, "tetragon_log_file", cfg.Collector.TetragonLogFile, "tetragon_grpc_addr", cfg.Collector.TetragonGRPCAddr, "passwd_file", cfg.Collector.PasswdFile, "batch_size", cfg.Collector.BatchSize, "flush_interval_seconds", cfg.Collector.FlushIntervalSeconds)
+		switch inputMode {
+		case "file":
+			fileCollector := collector.NewFileCollector(cfg.Collector.TetragonLogFile, cfg.Collector.BatchSize, eventWriter)
+			if mode == "collector-once" {
+				err = fileCollector.RunOnce(context.Background())
+			} else {
+				err = fileCollector.Tail(context.Background(), time.Duration(cfg.Collector.FlushIntervalSeconds)*time.Second)
+			}
+		case "grpc":
+			grpcCollector := collector.NewGRPCCollector(cfg.Collector.TetragonGRPCAddr, cfg.Collector.BatchSize, eventWriter)
+			grpcCollector.SetReconnectInterval(time.Duration(cfg.Collector.ReconnectIntervalSeconds) * time.Second)
+			if mode == "collector-once" {
+				err = grpcCollector.RunOnce(context.Background())
+			} else {
+				err = grpcCollector.Run(context.Background())
+			}
+			if err != nil {
+				recordCollectorError(context.Background(), collectorHealthRepository, hostMetadata, inputMode, err)
+			}
+		default:
+			err = fmt.Errorf("unsupported collector input_mode %q", inputMode)
+			recordCollectorError(context.Background(), collectorHealthRepository, hostMetadata, inputMode, err)
 		}
 		if err != nil {
 			slog.Error("collector stopped with error", "error", err)
@@ -399,13 +417,14 @@ func (p repositoryRuleProvider) Rules(ctx context.Context) ([]rule.Rule, error) 
 }
 
 type refreshingRuleWriter struct {
-	sink           eventSink
-	provider       ruleProvider
-	filterProvider collectorFilterProvider
-	heartbeat      collectorHeartbeatRecorder
-	mu             sync.RWMutex
-	rules          []rule.Rule
-	filter         collectorNoiseFilter
+	sink               eventSink
+	provider           ruleProvider
+	filterProvider     collectorFilterProvider
+	heartbeat          collectorHeartbeatRecorder
+	heartbeatInputMode string
+	mu                 sync.RWMutex
+	rules              []rule.Rule
+	filter             collectorNoiseFilter
 }
 
 func newRefreshingRuleWriter(sink eventSink, provider ruleProvider) *refreshingRuleWriter {
@@ -432,10 +451,11 @@ func (w *refreshingRuleWriter) SetCollectorFilterProvider(provider collectorFilt
 	w.filterProvider = provider
 }
 
-func (w *refreshingRuleWriter) SetHeartbeatRecorder(recorder collectorHeartbeatRecorder) {
+func (w *refreshingRuleWriter) SetHeartbeatRecorder(recorder collectorHeartbeatRecorder, inputMode string) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.heartbeat = recorder
+	w.heartbeatInputMode = collectorInputMode(inputMode)
 }
 
 func collectorNoiseFilterFromSystemConfig(cfg systemconfig.CollectorFilterConfig) collectorNoiseFilter {
@@ -448,14 +468,14 @@ func collectorNoiseFilterFromSystemConfig(cfg systemconfig.CollectorFilterConfig
 	}
 }
 
-func collectorHeartbeatLoop(ctx context.Context, recorder collectorHeartbeatRecorder, metadata collector.HostMetadata, interval time.Duration) {
+func collectorHeartbeatLoop(ctx context.Context, recorder collectorHeartbeatRecorder, metadata collector.HostMetadata, inputMode string, interval time.Duration) {
 	if recorder == nil || metadata.ID == "" {
 		return
 	}
 	if interval <= 0 {
 		interval = 30 * time.Second
 	}
-	recordCollectorSeen(ctx, recorder, metadata)
+	recordCollectorSeen(ctx, recorder, metadata, inputMode)
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
@@ -463,19 +483,43 @@ func collectorHeartbeatLoop(ctx context.Context, recorder collectorHeartbeatReco
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			recordCollectorSeen(ctx, recorder, metadata)
+			recordCollectorSeen(ctx, recorder, metadata, inputMode)
 		}
 	}
 }
 
-func recordCollectorSeen(ctx context.Context, recorder collectorHeartbeatRecorder, metadata collector.HostMetadata) {
+func recordCollectorSeen(ctx context.Context, recorder collectorHeartbeatRecorder, metadata collector.HostMetadata, inputMode string) {
 	if err := recorder.Upsert(ctx, collectorhealth.HeartbeatUpdate{
 		HostID:     metadata.ID,
 		HostName:   metadata.Name,
+		InputMode:  collectorInputMode(inputMode),
 		LastSeenAt: time.Now().UTC(),
 	}); err != nil {
 		slog.Error("record collector heartbeat failed", "host_id", metadata.ID, "error", err)
 	}
+}
+
+func recordCollectorError(ctx context.Context, recorder collectorHeartbeatRecorder, metadata collector.HostMetadata, inputMode string, err error) {
+	if recorder == nil || metadata.ID == "" || err == nil {
+		return
+	}
+	if upsertErr := recorder.Upsert(ctx, collectorhealth.HeartbeatUpdate{
+		HostID:     metadata.ID,
+		HostName:   metadata.Name,
+		InputMode:  collectorInputMode(inputMode),
+		LastError:  err.Error(),
+		LastSeenAt: time.Now().UTC(),
+	}); upsertErr != nil {
+		slog.Error("record collector heartbeat failed", "host_id", metadata.ID, "error", upsertErr)
+	}
+}
+
+func collectorInputMode(value string) string {
+	mode := strings.ToLower(strings.TrimSpace(value))
+	if mode == "" {
+		return "file"
+	}
+	return mode
 }
 
 func (w *refreshingRuleWriter) Refresh(ctx context.Context) error {
@@ -527,6 +571,7 @@ func (w *refreshingRuleWriter) Write(ctx context.Context, events []audit.Event) 
 	copy(rules, w.rules)
 	filter := w.filter
 	heartbeat := w.heartbeat
+	heartbeatInputMode := w.heartbeatInputMode
 	w.mu.RUnlock()
 
 	enriched := make([]audit.Event, 0, len(events))
@@ -551,6 +596,7 @@ func (w *refreshingRuleWriter) Write(ctx context.Context, events []audit.Event) 
 		if err := heartbeat.Upsert(ctx, collectorhealth.HeartbeatUpdate{
 			HostID:        firstHostID(enriched),
 			HostName:      firstHostName(enriched),
+			InputMode:     heartbeatInputMode,
 			LastSeenAt:    writeAt,
 			LastEventTime: &lastEventTime,
 			LastWriteAt:   &writeAt,

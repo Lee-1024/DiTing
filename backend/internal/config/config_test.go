@@ -23,4 +23,10 @@ func TestLoadReadsServerAndDatabaseConfig(t *testing.T) {
 	if cfg.Collector.HostName != "diting-test-host" {
 		t.Fatalf("expected collector host name diting-test-host, got %q", cfg.Collector.HostName)
 	}
+	if cfg.Collector.TetragonGRPCAddr != "127.0.0.1:54321" {
+		t.Fatalf("expected collector grpc address 127.0.0.1:54321, got %q", cfg.Collector.TetragonGRPCAddr)
+	}
+	if cfg.Collector.ReconnectIntervalSeconds != 5 {
+		t.Fatalf("expected reconnect interval 5, got %d", cfg.Collector.ReconnectIntervalSeconds)
+	}
 }
