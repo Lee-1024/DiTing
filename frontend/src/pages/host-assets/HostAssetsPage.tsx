@@ -29,11 +29,12 @@ export default function HostAssetsPage() {
   function openCreate() {
     setEditing(undefined);
     form.setFieldsValue({
-      nodeName: '',
-      displayName: '',
+      hostId: '',
+      hostName: '',
       hostIp: '',
       environment: '',
       owner: '',
+      department: '',
       description: '',
     });
     setOpen(true);
@@ -47,11 +48,14 @@ export default function HostAssetsPage() {
 
   function toPayload(values: Record<string, unknown>): HostAssetPayload {
     return {
-      nodeName: String(values.nodeName ?? ''),
-      displayName: String(values.displayName ?? ''),
+      hostId: String(values.hostId ?? ''),
+      hostName: String(values.hostName ?? ''),
+      nodeName: String(values.hostId ?? ''),
+      displayName: String(values.hostName ?? ''),
       hostIp: String(values.hostIp ?? ''),
       environment: String(values.environment ?? ''),
       owner: String(values.owner ?? ''),
+      department: String(values.department ?? ''),
       description: String(values.description ?? ''),
     };
   }
@@ -102,11 +106,12 @@ export default function HostAssetsPage() {
             onShowSizeChange: (_, size) => setTablePageSize(size),
           }}
           columns={[
-            { title: '原始节点名', dataIndex: 'nodeName' },
-            { title: '显示名称', dataIndex: 'displayName' },
+            { title: 'Host ID', dataIndex: 'hostId' },
+            { title: '主机名', dataIndex: 'hostName' },
             { title: 'IP', dataIndex: 'hostIp', width: 150 },
             { title: '环境', dataIndex: 'environment', width: 110, render: (value) => value ? <Tag>{value}</Tag> : null },
             { title: '负责人', dataIndex: 'owner', width: 130 },
+            { title: '部门', dataIndex: 'department', width: 130 },
             { title: '备注', dataIndex: 'description' },
             {
               title: '操作',
@@ -125,10 +130,10 @@ export default function HostAssetsPage() {
       </Card>
       <Modal title={editing ? '编辑主机资产' : '新增主机资产'} open={open} onOk={submit} confirmLoading={saving} onCancel={() => setOpen(false)} width={640}>
         <Form form={form} layout="vertical">
-          <Form.Item name="nodeName" label="原始节点名" rules={[{ required: true }]}>
-            <Input placeholder="dd9f5f94c8e2" />
+          <Form.Item name="hostId" label="Host ID" rules={[{ required: true }]}>
+            <Input placeholder="server-001 / machine-id" />
           </Form.Item>
-          <Form.Item name="displayName" label="显示名称" rules={[{ required: true }]}>
+          <Form.Item name="hostName" label="主机名" rules={[{ required: true }]}>
             <Input placeholder="prod-web-01" />
           </Form.Item>
           <Form.Item name="hostIp" label="IP">
@@ -139,6 +144,9 @@ export default function HostAssetsPage() {
           </Form.Item>
           <Form.Item name="owner" label="负责人">
             <Input placeholder="运维组" />
+          </Form.Item>
+          <Form.Item name="department" label="部门">
+            <Input placeholder="平台部" />
           </Form.Item>
           <Form.Item name="description" label="备注">
             <Input.TextArea rows={3} />

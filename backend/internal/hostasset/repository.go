@@ -10,11 +10,14 @@ import (
 
 type HostAsset struct {
 	ID          string    `json:"id"`
+	HostID      string    `json:"hostId"`
+	HostName    string    `json:"hostName"`
 	NodeName    string    `json:"nodeName"`
 	DisplayName string    `json:"displayName"`
 	HostIP      string    `json:"hostIp"`
 	Environment string    `json:"environment"`
 	Owner       string    `json:"owner"`
+	Department  string    `json:"department"`
 	Description string    `json:"description"`
 	CreatedAt   time.Time `json:"createdAt"`
 	UpdatedAt   time.Time `json:"updatedAt"`
@@ -44,6 +47,7 @@ func (r *MemoryRepository) Create(_ context.Context, asset HostAsset) (HostAsset
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	now := time.Now().UTC()
+	asset = normalizeAsset(asset)
 	asset.ID = fmt.Sprintf("host-%d", r.next)
 	asset.CreatedAt = now
 	asset.UpdatedAt = now
@@ -78,6 +82,7 @@ func (r *MemoryRepository) Update(_ context.Context, id string, next HostAsset) 
 		if asset.ID != id {
 			continue
 		}
+		next = normalizeAsset(next)
 		next.ID = id
 		next.CreatedAt = asset.CreatedAt
 		next.UpdatedAt = time.Now().UTC()
@@ -85,6 +90,22 @@ func (r *MemoryRepository) Update(_ context.Context, id string, next HostAsset) 
 		return next, nil
 	}
 	return HostAsset{}, ErrNotFound
+}
+
+func normalizeAsset(asset HostAsset) HostAsset {
+	if asset.HostID == "" {
+		asset.HostID = asset.NodeName
+	}
+	if asset.HostName == "" {
+		asset.HostName = asset.DisplayName
+	}
+	if asset.NodeName == "" {
+		asset.NodeName = asset.HostID
+	}
+	if asset.DisplayName == "" {
+		asset.DisplayName = asset.HostName
+	}
+	return asset
 }
 
 func (r *MemoryRepository) Delete(_ context.Context, id string) error {

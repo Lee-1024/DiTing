@@ -32,3 +32,21 @@ func TestHostAssetHandlerCreatesAndListsAssets(t *testing.T) {
 		t.Fatalf("unexpected body %s", listRec.Body.String())
 	}
 }
+
+func TestHostAssetHandlerUsesHostIDModel(t *testing.T) {
+	repository := NewMemoryRepository()
+	handler := NewHandler(repository)
+
+	body := bytes.NewBufferString(`{"hostId":"host-001","hostName":"prod-web-01","hostIp":"10.0.0.1","environment":"prod","owner":"ops","department":"platform"}`)
+	createReq := httptest.NewRequest(http.MethodPost, "/api/v1/host-assets", body)
+	createRec := httptest.NewRecorder()
+	handler.Create(createRec, createReq)
+
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", createRec.Code, createRec.Body.String())
+	}
+	response := createRec.Body.String()
+	if !strings.Contains(response, `"hostId":"host-001"`) || !strings.Contains(response, `"hostName":"prod-web-01"`) || !strings.Contains(response, `"department":"platform"`) {
+		t.Fatalf("unexpected body %s", response)
+	}
+}

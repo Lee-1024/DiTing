@@ -20,8 +20,12 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid json", http.StatusBadRequest)
 		return
 	}
-	if request.NodeName == "" || request.DisplayName == "" {
-		http.Error(w, "nodeName and displayName are required", http.StatusBadRequest)
+	if request.HostID == "" && request.NodeName == "" {
+		http.Error(w, "hostId is required", http.StatusBadRequest)
+		return
+	}
+	if request.HostName == "" && request.DisplayName == "" {
+		http.Error(w, "hostName is required", http.StatusBadRequest)
 		return
 	}
 	created, err := h.repository.Create(r.Context(), request)
@@ -60,8 +64,12 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid json", http.StatusBadRequest)
 		return
 	}
-	if request.NodeName == "" || request.DisplayName == "" {
-		http.Error(w, "nodeName and displayName are required", http.StatusBadRequest)
+	if request.HostID == "" && request.NodeName == "" {
+		http.Error(w, "hostId is required", http.StatusBadRequest)
+		return
+	}
+	if request.HostName == "" && request.DisplayName == "" {
+		http.Error(w, "hostName is required", http.StatusBadRequest)
 		return
 	}
 	updated, err := h.repository.Update(r.Context(), r.PathValue("id"), request)

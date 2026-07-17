@@ -157,17 +157,22 @@ CREATE INDEX IF NOT EXISTS idx_diting_operation_logs_username ON diting_operatio
 
 CREATE TABLE IF NOT EXISTS diting_host_assets (
     id UUID PRIMARY KEY,
+    host_id VARCHAR(255) NOT NULL DEFAULT '',
+    host_name VARCHAR(255) NOT NULL DEFAULT '',
     node_name VARCHAR(255) NOT NULL UNIQUE,
     display_name VARCHAR(255) NOT NULL,
     host_ip VARCHAR(128) NOT NULL DEFAULT '',
     environment VARCHAR(64) NOT NULL DEFAULT '',
     owner VARCHAR(128) NOT NULL DEFAULT '',
+    department VARCHAR(128) NOT NULL DEFAULT '',
     description TEXT NOT NULL DEFAULT '',
     created_at TIMESTAMPTZ NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_diting_host_assets_display_name ON diting_host_assets(display_name);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_diting_host_assets_host_id_unique ON diting_host_assets(host_id);
+CREATE INDEX IF NOT EXISTS idx_diting_host_assets_host_name ON diting_host_assets(host_name);
 
 CREATE TABLE IF NOT EXISTS diting_risk_dispositions (
     event_id VARCHAR(128) PRIMARY KEY,
