@@ -47,3 +47,17 @@ func TestMigrationFilesReturnsSortedSQLFiles(t *testing.T) {
 		t.Fatalf("expected sorted SQL files %#v, got %#v", expected, files)
 	}
 }
+
+func TestBootstrapAddsHostAssetColumnsBeforeIndexes(t *testing.T) {
+	alterIndex := strings.Index(bootstrapSQL, "ADD COLUMN IF NOT EXISTS host_id")
+	indexIndex := strings.Index(bootstrapSQL, "idx_diting_host_assets_host_id_unique")
+	if alterIndex == -1 {
+		t.Fatal("expected bootstrap SQL to add host_id column for existing host asset tables")
+	}
+	if indexIndex == -1 {
+		t.Fatal("expected bootstrap SQL to create host_id index")
+	}
+	if alterIndex > indexIndex {
+		t.Fatal("expected host_id column to be added before host_id index is created")
+	}
+}
