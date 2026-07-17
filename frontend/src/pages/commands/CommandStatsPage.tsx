@@ -1,7 +1,7 @@
-import { Card, DatePicker, Drawer, Empty, Form, Input, Table, Typography } from 'antd';
+import { Card, DatePicker, Descriptions, Drawer, Empty, Form, Input, Space, Table, Typography } from 'antd';
 import dayjs from 'dayjs';
 import { useEffect, useState } from 'react';
-import { queryAuditEvents } from '../../api/audit';
+import { exportAuditEvents, queryAuditEvents } from '../../api/audit';
 import { exportCommandStats, getCommandStats } from '../../api/stats';
 import CommandText from '../../components/CommandText';
 import FilterToolbar from '../../components/FilterToolbar';
@@ -23,6 +23,10 @@ export default function CommandStatsPage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [selected, setSelected] = useState<CommandItem>();
   const [executions, setExecutions] = useState<AuditEvent[]>([]);
+  const [riskExecutions, setRiskExecutions] = useState<AuditEvent[]>([]);
+  const [detailPage, setDetailPage] = useState(1);
+  const [detailPageSize, setDetailPageSize] = useState(10);
+  const [detailTotal, setDetailTotal] = useState(0);
   const [tablePageSize, setTablePageSize] = useState(10);
   const [form] = Form.useForm();
 
@@ -65,20 +69,92 @@ export default function CommandStatsPage() {
     setSelected(item);
     setDetailLoading(true);
     try {
+      const baseQuery = {
+        start_time: range?.[0]?.startOf('day').toISOString(),
+        end_time: range?.[1]?.endOf('day').toISOString(),
+        event_type: 'process_exec',
+        username: item.loginUsername || item.username,
+        cmdline: item.cmdline,
+      };
+      const [data, riskData] = await Promise.all([
+        queryAuditEvents({
+          ...baseQuery,
+          page: 1,
+          page_size: detailPageSize,
+        }),
+        queryAuditEvents({
+          ...baseQuery,
+          severity_in: 'high,critical',
+          page: 1,
+          page_size: 10,
+        }),
+      ]);
+      setExecutions(data.items ?? []);
+      setDetailPage(data.page);
+      setDetailTotal(data.total);
+      setRiskExecutions(riskData.items ?? []);
+    } finally {
+      setDetailLoading(false);
+    }
+  }
+
+  async function loadDetailEvents(item: CommandItem, nextPage = detailPage, nextPageSize = detailPageSize) {
+    const values = form.getFieldsValue();
+    const range = values.timeRange ?? defaultRange;
+    setDetailLoading(true);
+    try {
       const data = await queryAuditEvents({
         start_time: range?.[0]?.startOf('day').toISOString(),
         end_time: range?.[1]?.endOf('day').toISOString(),
         event_type: 'process_exec',
         username: item.loginUsername || item.username,
-        host_name: item.hostId || item.nodeName || item.hostName,
         cmdline: item.cmdline,
-        page: 1,
-        page_size: 100,
+        page: nextPage,
+        page_size: nextPageSize,
       });
       setExecutions(data.items ?? []);
+      setDetailPage(data.page);
+      setDetailPageSize(nextPageSize);
+      setDetailTotal(data.total);
     } finally {
       setDetailLoading(false);
     }
+  }
+
+  async function exportDetails() {
+    if (!selected) {
+      return;
+    }
+    const values = form.getFieldsValue();
+    const range = values.timeRange ?? defaultRange;
+    const blob = await exportAuditEvents({
+      start_time: range?.[0]?.startOf('day').toISOString(),
+      end_time: range?.[1]?.endOf('day').toISOString(),
+      event_type: 'process_exec',
+      username: selected.loginUsername || selected.username,
+      cmdline: selected.cmdline,
+    });
+    downloadBlob(blob, `${selected.processName || 'command'}-details.csv`);
+  }
+
+  function closeDetails() {
+    setSelected(undefined);
+    setExecutions([]);
+    setRiskExecutions([]);
+    setDetailPage(1);
+    setDetailTotal(0);
+  }
+
+  function detailColumns() {
+    return [
+      { title: '时间', dataIndex: 'eventTime', width: 190, render: (value: string) => formatLocalDateTime(value) },
+      { title: '登录用户', dataIndex: 'loginUsername', width: 110, render: (_: string, record: AuditEvent) => record.loginUsername || record.username },
+      { title: '执行用户', dataIndex: 'username', width: 110 },
+      { title: '主机', dataIndex: 'hostName', width: 170, render: (_: string, record: AuditEvent) => record.hostName || record.nodeName || record.hostId || '-' },
+      { title: '进程', dataIndex: 'processName', width: 120 },
+      { title: '命令', dataIndex: 'cmdline', render: (value: string) => <CommandText value={value} /> },
+      { title: '等级', dataIndex: 'severity', width: 90, render: (value: string) => <SeverityTag value={value} /> },
+    ];
   }
 
   useEffect(() => {
@@ -134,26 +210,58 @@ export default function CommandStatsPage() {
       </Card>
       <Drawer
         title={selected?.processName ? `${selected.processName} 执行明细` : '执行明细'}
-        width={960}
+        width={1120}
         open={Boolean(selected)}
-        onClose={() => { setSelected(undefined); setExecutions([]); }}
+        onClose={closeDetails}
       >
+        {selected && (
+          <Space direction="vertical" size={16} style={{ width: '100%' }}>
+            <Descriptions column={2} bordered size="small">
+              <Descriptions.Item label="命令">{commandName(selected)}</Descriptions.Item>
+              <Descriptions.Item label="涉及主机">{selected.hostCount}</Descriptions.Item>
+              <Descriptions.Item label="登录用户">{selected.loginUsername || selected.username}</Descriptions.Item>
+              <Descriptions.Item label="执行用户">{selected.username}</Descriptions.Item>
+              <Descriptions.Item label="执行次数">{selected.count}</Descriptions.Item>
+              <Descriptions.Item label="最近主机">{selected.hostName || selected.nodeName || selected.hostId || '-'}</Descriptions.Item>
+              <Descriptions.Item label="首次执行">{formatLocalDateTime(selected.firstSeen)}</Descriptions.Item>
+              <Descriptions.Item label="最近执行">{formatLocalDateTime(selected.lastSeen)}</Descriptions.Item>
+            </Descriptions>
+            <Typography.Title level={5}>高危命中</Typography.Title>
+            <Table
+              rowKey="eventId"
+              size="small"
+              loading={detailLoading}
+              dataSource={riskExecutions}
+              locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无高危命中" /> }}
+              pagination={false}
+              columns={detailColumns()}
+            />
+            <Space>
+              <Typography.Title level={5} style={{ margin: 0 }}>执行明细</Typography.Title>
+              <Typography.Link onClick={() => void exportDetails()}>导出明细</Typography.Link>
+            </Space>
+          </Space>
+        )}
         <Table
           rowKey="eventId"
           size="small"
           loading={detailLoading}
           dataSource={executions}
           locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无执行明细" /> }}
-          pagination={{ pageSize: 10 }}
-          columns={[
-            { title: '时间', dataIndex: 'eventTime', width: 190, render: (value) => formatLocalDateTime(value) },
-            { title: '登录用户', dataIndex: 'loginUsername', width: 110, render: (_, record) => record.loginUsername || record.username },
-            { title: '执行用户', dataIndex: 'username', width: 110 },
-            { title: '节点', dataIndex: 'nodeName', width: 150, render: (_, record) => record.nodeName || record.hostName },
-            { title: '进程', dataIndex: 'processName', width: 120 },
-            { title: '命令', dataIndex: 'cmdline', render: (value) => <CommandText value={value} /> },
-            { title: '等级', dataIndex: 'severity', width: 90, render: (value) => <SeverityTag value={value} /> },
-          ]}
+          pagination={{
+            current: detailPage,
+            pageSize: detailPageSize,
+            total: detailTotal,
+            showSizeChanger: true,
+            pageSizeOptions: [10, 20, 50, 100],
+            showTotal: (value) => `共 ${value} 条`,
+            onChange: (nextPage, nextPageSize) => {
+              if (selected) {
+                void loadDetailEvents(selected, nextPage, nextPageSize);
+              }
+            },
+          }}
+          columns={detailColumns()}
         />
       </Drawer>
     </>
