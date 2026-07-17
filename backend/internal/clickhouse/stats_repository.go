@@ -212,14 +212,14 @@ func (r *StatsRepository) CommandStats(ctx context.Context, query stats.Query) (
 	anyLast(host_name) AS host_name,
 	anyLast(node_name) AS node_name,
 	uniqExact(if(host_id != '', host_id, if(node_name != '', node_name, host_name))) AS host_count,
-	count() AS count,
+	count() AS command_count,
 	min(event_time) AS first_seen,
 	max(event_time) AS last_seen,
 	max(event_time) AS last_seen_sort
 FROM %s
 WHERE %s
 GROUP BY process_name, cmdline, username, login_username
-ORDER BY last_seen_sort DESC, count DESC
+ORDER BY last_seen_sort DESC, command_count DESC
 LIMIT %d
 FORMAT JSONEachRow`, r.table(), strings.Join(conditions, " AND "), limit)
 	data, err := r.client.Query(ctx, sql)
@@ -241,7 +241,7 @@ FORMAT JSONEachRow`, r.table(), strings.Join(conditions, " AND "), limit)
 			HostName:      row.HostName,
 			NodeName:      row.NodeName,
 			HostCount:     uint64(row.HostCount),
-			Count:         uint64(row.Count),
+			Count:         row.commandCount(),
 			FirstSeen:     row.FirstSeen,
 			LastSeen:      row.LastSeen,
 		})
@@ -506,9 +506,17 @@ type commandItemRow struct {
 	HostName      string         `json:"host_name"`
 	NodeName      string         `json:"node_name"`
 	HostCount     flexibleUint64 `json:"host_count"`
+	CommandCount  flexibleUint64 `json:"command_count"`
 	Count         flexibleUint64 `json:"count"`
 	FirstSeen     string         `json:"first_seen"`
 	LastSeen      string         `json:"last_seen"`
+}
+
+func (r commandItemRow) commandCount() uint64 {
+	if r.CommandCount != 0 {
+		return uint64(r.CommandCount)
+	}
+	return uint64(r.Count)
 }
 
 type userAuditRow struct {

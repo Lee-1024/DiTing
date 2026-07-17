@@ -221,7 +221,10 @@ func TestStatsRepositoryCommandStatsIncludesEventsWithoutProcessName(t *testing.
 	if !strings.Contains(body, "cmdline != ''") {
 		t.Fatalf("expected command stats to require cmdline, got %s", body)
 	}
-	if !strings.Contains(body, "max(event_time) AS last_seen_sort") || !strings.Contains(body, "ORDER BY last_seen_sort DESC, count DESC") {
+	if !strings.Contains(body, "count() AS command_count") {
+		t.Fatalf("expected command stats to avoid count alias conflicts, got %s", body)
+	}
+	if !strings.Contains(body, "max(event_time) AS last_seen_sort") || !strings.Contains(body, "ORDER BY last_seen_sort DESC, command_count DESC") {
 		t.Fatalf("expected command stats to order by newest execution first, got %s", body)
 	}
 	if len(items) != 1 || items[0].Cmdline != "id" || items[0].Username != "ubuntu" || items[0].HostID != "host-001" || items[0].HostCount != 1 {
