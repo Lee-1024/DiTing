@@ -115,6 +115,9 @@ func main() {
 		case "grpc":
 			grpcCollector := collector.NewGRPCCollector(cfg.Collector.TetragonGRPCAddr, cfg.Collector.BatchSize, eventWriter)
 			grpcCollector.SetReconnectInterval(time.Duration(cfg.Collector.ReconnectIntervalSeconds) * time.Second)
+			grpcCollector.SetConnectHandler(func() {
+				recordCollectorConnected(context.Background(), collectorHealthRepository, hostMetadata, inputMode)
+			})
 			grpcCollector.SetErrorHandler(func(err error) {
 				recordCollectorError(context.Background(), collectorHealthRepository, hostMetadata, inputMode, err)
 			})
@@ -514,6 +517,21 @@ func recordCollectorError(ctx context.Context, recorder collectorHeartbeatRecord
 		LastSeenAt: time.Now().UTC(),
 	}); upsertErr != nil {
 		slog.Error("record collector heartbeat failed", "host_id", metadata.ID, "error", upsertErr)
+	}
+}
+
+func recordCollectorConnected(ctx context.Context, recorder collectorHeartbeatRecorder, metadata collector.HostMetadata, inputMode string) {
+	if recorder == nil || metadata.ID == "" {
+		return
+	}
+	if err := recorder.Upsert(ctx, collectorhealth.HeartbeatUpdate{
+		HostID:     metadata.ID,
+		HostName:   metadata.Name,
+		InputMode:  collectorInputMode(inputMode),
+		ClearError: true,
+		LastSeenAt: time.Now().UTC(),
+	}); err != nil {
+		slog.Error("record collector heartbeat failed", "host_id", metadata.ID, "error", err)
 	}
 }
 

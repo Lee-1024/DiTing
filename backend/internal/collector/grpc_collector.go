@@ -24,6 +24,7 @@ type GRPCCollector struct {
 	reconnectInterval time.Duration
 	dial              func(context.Context, string) (eventStream, func() error, error)
 	afterWrite        func()
+	onConnect         func()
 	onError           func(error)
 	afterErrorForTest func()
 }
@@ -50,6 +51,10 @@ func (c *GRPCCollector) SetReconnectInterval(interval time.Duration) {
 
 func (c *GRPCCollector) SetErrorHandler(handler func(error)) {
 	c.onError = handler
+}
+
+func (c *GRPCCollector) SetConnectHandler(handler func()) {
+	c.onConnect = handler
 }
 
 func (c *GRPCCollector) RunOnce(ctx context.Context) error {
@@ -79,6 +84,8 @@ func (c *GRPCCollector) Run(ctx context.Context) error {
 			}
 			continue
 		}
+		slog.Info("collector grpc stream opened", "addr", c.addr)
+		c.reportConnect()
 		err = c.consume(ctx, stream)
 		_ = closeConn()
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
@@ -98,10 +105,12 @@ func (c *GRPCCollector) Run(ctx context.Context) error {
 
 func (c *GRPCCollector) consume(ctx context.Context, stream eventStream) error {
 	var batch []audit.Event
+	var received uint64
 	flush := func() error {
 		if len(batch) == 0 {
 			return nil
 		}
+		slog.Info("collector grpc writing batch", "addr", c.addr, "events", len(batch))
 		if err := c.writer.Write(ctx, batch); err != nil {
 			return err
 		}
@@ -131,10 +140,15 @@ func (c *GRPCCollector) consume(ctx context.Context, stream eventStream) error {
 		event, err := ParseTetragonGRPCEvent(response)
 		if err != nil {
 			if errors.Is(err, ErrUnsupportedEvent) {
+				slog.Debug("collector grpc skipped unsupported event", "addr", c.addr)
 				continue
 			}
 			c.reportError(err)
 			return err
+		}
+		received++
+		if received == 1 {
+			slog.Info("collector grpc received first supported event", "addr", c.addr, "event_type", event.EventType, "node_name", event.NodeName)
 		}
 		batch = append(batch, event)
 		if len(batch) >= c.batchSize {
@@ -155,7 +169,14 @@ func (c *GRPCCollector) reportError(err error) {
 	}
 }
 
+func (c *GRPCCollector) reportConnect() {
+	if c.onConnect != nil {
+		c.onConnect()
+	}
+}
+
 func (c *GRPCCollector) dialTetragon(ctx context.Context, addr string) (eventStream, func() error, error) {
+	slog.Info("collector grpc connecting", "addr", addr)
 	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		return nil, nil, err

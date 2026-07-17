@@ -13,11 +13,15 @@ import (
 
 func TestGRPCCollectorWritesBatchesFromStream(t *testing.T) {
 	writer := &recordingWriter{}
+	connected := false
 	stream := &fakeEventStream{events: []*tetragon.GetEventsResponse{
 		grpcExecResponse("node-1", "/usr/bin/id", ""),
 		grpcExecResponse("node-1", "/usr/bin/whoami", ""),
 	}}
 	collector := NewGRPCCollector("127.0.0.1:54321", 2, writer)
+	collector.SetConnectHandler(func() {
+		connected = true
+	})
 	collector.dial = func(context.Context, string) (eventStream, func() error, error) {
 		return stream, func() error { return nil }, nil
 	}
@@ -27,6 +31,9 @@ func TestGRPCCollectorWritesBatchesFromStream(t *testing.T) {
 	}
 	if len(writer.batches) != 1 || len(writer.batches[0]) != 2 {
 		t.Fatalf("expected one batch with two events, got %#v", writer.batches)
+	}
+	if connected {
+		t.Fatal("RunOnce should not report long-running stream connection state")
 	}
 }
 
