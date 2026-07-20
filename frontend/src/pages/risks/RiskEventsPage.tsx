@@ -9,7 +9,7 @@ import SeverityTag from '../../components/SeverityTag';
 import type { AuditEvent, AuditEventQuery } from '../../types/audit';
 import type { RiskDisposition, RiskDispositionMap, RiskDispositionStatus } from '../../types/riskDisposition';
 import { downloadBlob } from '../../utils/download';
-import { severityLabel } from '../../utils/labels';
+import { eventTypeOptions, severityLabel } from '../../utils/labels';
 import { formatLocalDateTime } from '../../utils/time';
 import EventDetailDrawer from '../audit-events/EventDetailDrawer';
 
@@ -33,11 +33,11 @@ export default function RiskEventsPage() {
   function buildQuery(nextPage = page, nextPageSize = pageSize, formValues = form.getFieldsValue()): AuditEventQuery {
     const values = formValues;
     const range = values.timeRange ?? defaultRange;
-    const severity = values.severity ?? 'high,critical';
+    const severity = values.severity ?? 'medium,high,critical';
     return {
       start_time: range?.[0]?.startOf('day').toISOString(),
       end_time: range?.[1]?.endOf('day').toISOString(),
-      event_type: 'process_exec',
+      event_type: values.eventType,
       severity_in: severity,
       username: values.username,
       keyword: values.keyword,
@@ -132,15 +132,25 @@ export default function RiskEventsPage() {
       <div className="page-heading">
         <Typography.Title level={3} className="page-title">风险事件</Typography.Title>
       </div>
-      <FilterToolbar form={form} initialValues={{ timeRange: defaultRange, severity: 'high,critical' }} onSearch={submit} onReset={() => void resetAndLoad()} onExport={() => void exportCSV()}>
+      <FilterToolbar form={form} initialValues={{ timeRange: defaultRange, severity: 'medium,high,critical' }} onSearch={submit} onReset={() => void resetAndLoad()} onExport={() => void exportCSV()}>
         <Form.Item name="timeRange" label="时间" className="filter-field-time">
           <DatePicker.RangePicker />
+        </Form.Item>
+        <Form.Item name="eventType" label="类型">
+          <Select
+            allowClear
+            className="filter-control-compact"
+            placeholder="全部风险类型"
+            options={eventTypeOptions}
+          />
         </Form.Item>
         <Form.Item name="severity" label="等级">
           <Select
             className="filter-control-compact"
             options={[
+              { value: 'medium,high,critical', label: `${severityLabel('medium')} + ${severityLabel('high')} + ${severityLabel('critical')}` },
               { value: 'high,critical', label: `${severityLabel('high')} + ${severityLabel('critical')}` },
+              { value: 'medium', label: severityLabel('medium') },
               { value: 'high', label: severityLabel('high') },
               { value: 'critical', label: severityLabel('critical') },
             ]}
