@@ -63,6 +63,8 @@ export interface AuditEventQuery {
   exec_username?: string;
   keyword?: string;
   cmdline?: string;
+  dst_ip?: string;
+  dst_port?: number;
   page?: number;
   page_size?: number;
 }

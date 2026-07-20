@@ -330,3 +330,40 @@ func TestAuditRepositoryFiltersNamespacePodAndSeparateUsers(t *testing.T) {
 		}
 	}
 }
+
+func TestAuditRepositoryFiltersNetworkTarget(t *testing.T) {
+	var body string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		data := make([]byte, r.ContentLength)
+		_, _ = r.Body.Read(data)
+		body = string(data)
+		_, _ = w.Write([]byte(""))
+	}))
+	defer server.Close()
+
+	repository := NewAuditRepository(NewHTTPClient(HTTPConfig{URL: server.URL, Database: "diting"}))
+	_, _, err := repository.ListEvents(context.Background(), audit.Query{
+		StartTime: time.Date(2026, 7, 20, 0, 0, 0, 0, time.UTC),
+		EndTime:   time.Date(2026, 7, 21, 0, 0, 0, 0, time.UTC),
+		EventType: "network_connect",
+		HostName:  "host-001",
+		DstIP:     "110.242.68.4",
+		DstPort:   443,
+		Page:      1,
+		PageSize:  20,
+	})
+	if err != nil {
+		t.Fatalf("ListEvents returned error: %v", err)
+	}
+
+	for _, expected := range []string{
+		"event_type = 'network_connect'",
+		"(host_id = 'host-001' OR node_name = 'host-001' OR host_name = 'host-001')",
+		"dst_ip = '110.242.68.4'",
+		"dst_port = 443",
+	} {
+		if !strings.Contains(body, expected) {
+			t.Fatalf("expected %q in query, got %s", expected, body)
+		}
+	}
+}

@@ -173,6 +173,12 @@ func buildAuditWhere(query audit.Query) string {
 	if query.Cmdline != "" {
 		conditions = append(conditions, "cmdline = '"+escapeSQL(query.Cmdline)+"'")
 	}
+	if query.DstIP != "" {
+		conditions = append(conditions, "dst_ip = '"+escapeSQL(query.DstIP)+"'")
+	}
+	if query.DstPort > 0 {
+		conditions = append(conditions, fmt.Sprintf("dst_port = %d", query.DstPort))
+	}
 	if query.Keyword != "" {
 		keyword := escapeSQL(query.Keyword)
 		conditions = append(conditions, "(positionCaseInsensitive(cmdline, '"+keyword+"') > 0 OR positionCaseInsensitive(process_name, '"+keyword+"') > 0 OR positionCaseInsensitive(username, '"+keyword+"') > 0 OR positionCaseInsensitive(login_username, '"+keyword+"') > 0 OR positionCaseInsensitive(file_path, '"+keyword+"') > 0 OR positionCaseInsensitive(file_operation, '"+keyword+"') > 0 OR positionCaseInsensitive(src_ip, '"+keyword+"') > 0 OR positionCaseInsensitive(dst_ip, '"+keyword+"') > 0 OR positionCaseInsensitive(protocol, '"+keyword+"') > 0 OR positionCaseInsensitive(domain, '"+keyword+"') > 0)")
@@ -218,6 +224,12 @@ func eventMatchesQuery(event audit.Event, query audit.Query) bool {
 		return false
 	}
 	if query.Cmdline != "" && event.Cmdline != query.Cmdline {
+		return false
+	}
+	if query.DstIP != "" && event.DstIP != query.DstIP {
+		return false
+	}
+	if query.DstPort > 0 && int(event.DstPort) != query.DstPort {
 		return false
 	}
 	if query.Keyword != "" {

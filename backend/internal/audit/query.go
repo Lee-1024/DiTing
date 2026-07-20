@@ -22,6 +22,8 @@ type Query struct {
 	ExecUsername  string
 	Keyword       string
 	Cmdline       string
+	DstIP         string
+	DstPort       int
 	Page          int
 	PageSize      int
 }
@@ -45,6 +47,8 @@ func ParseQuery(r *http.Request) (Query, error) {
 		ExecUsername:  strings.TrimSpace(values.Get("exec_username")),
 		Keyword:       strings.TrimSpace(values.Get("keyword")),
 		Cmdline:       strings.TrimSpace(values.Get("cmdline")),
+		DstIP:         strings.TrimSpace(values.Get("dst_ip")),
+		DstPort:       parsePositiveInt(values.Get("dst_port"), 0),
 	}
 	if query.PageSize > 500 {
 		query.PageSize = 500

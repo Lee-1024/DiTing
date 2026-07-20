@@ -30,6 +30,9 @@ export default function HostAuditPage() {
   const [riskEvents, setRiskEvents] = useState<AuditEvent[]>([]);
   const [hostUsers, setHostUsers] = useState<HostUserItem[]>([]);
   const [hostBehavior, setHostBehavior] = useState<HostBehavior>(emptyBehavior);
+  const [selectedNetworkTarget, setSelectedNetworkTarget] = useState<BehaviorItem>();
+  const [networkEvents, setNetworkEvents] = useState<AuditEvent[]>([]);
+  const [networkLoading, setNetworkLoading] = useState(false);
   const [detailFilters, setDetailFilters] = useState<DetailFilters>({});
   const [detailPage, setDetailPage] = useState(1);
   const [detailPageSize, setDetailPageSize] = useState(10);
@@ -139,6 +142,29 @@ export default function HostAuditPage() {
     }
   }
 
+  async function loadNetworkEvents(item: HostAuditItem, target: BehaviorItem) {
+    const values = form.getFieldsValue();
+    const range = values.timeRange ?? defaultRange;
+    const parsed = parseNetworkTarget(target.name);
+    setSelectedNetworkTarget(target);
+    setNetworkLoading(true);
+    try {
+      const data = await queryAuditEvents({
+        start_time: range?.[0]?.startOf('day').toISOString(),
+        end_time: range?.[1]?.endOf('day').toISOString(),
+        event_type: 'network_connect',
+        host_name: item.hostId || item.nodeName || item.hostName,
+        dst_ip: parsed.ip,
+        dst_port: parsed.port,
+        page: 1,
+        page_size: 20,
+      });
+      setNetworkEvents(data.items ?? []);
+    } finally {
+      setNetworkLoading(false);
+    }
+  }
+
   async function exportDetailEvents() {
     if (!selected) {
       return;
@@ -219,6 +245,8 @@ export default function HostAuditPage() {
           setRiskEvents([]);
           setHostUsers([]);
           setHostBehavior(emptyBehavior);
+          setSelectedNetworkTarget(undefined);
+          setNetworkEvents([]);
           setDetailFilters({});
           setDetailPage(1);
           setDetailTotal(0);
@@ -302,6 +330,13 @@ export default function HostAuditPage() {
                   dataSource={hostBehavior.network}
                   locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无网络外联" /> }}
                   pagination={false}
+                  onRow={(record) => ({
+                    onClick: () => {
+                      if (selected) {
+                        void loadNetworkEvents(selected, record);
+                      }
+                    },
+                  })}
                   columns={behaviorColumns('目标')}
                 />
               </Col>
@@ -318,6 +353,17 @@ export default function HostAuditPage() {
                 />
               </Col>
             </Row>
+            <Typography.Title level={5}>{selectedNetworkTarget ? `${selectedNetworkTarget.name} 连接明细` : '网络连接明细'}</Typography.Title>
+            <Table
+              rowKey="eventId"
+              size="small"
+              loading={networkLoading}
+              dataSource={networkEvents}
+              locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="点击网络目标查看连接明细" /> }}
+              pagination={false}
+              scroll={{ x: 980 }}
+              columns={networkColumns()}
+            />
             <Typography.Title level={5}>命令明细</Typography.Title>
             <Space wrap>
               <Select
@@ -380,6 +426,24 @@ export default function HostAuditPage() {
   );
 }
 
+function parseNetworkTarget(value: string) {
+  if (value.startsWith('[')) {
+    const end = value.indexOf(']');
+    const ip = end > 0 ? value.slice(1, end) : value;
+    const portText = end > 0 && value[end + 1] === ':' ? value.slice(end + 2) : '';
+    const port = Number(portText);
+    return { ip, port: Number.isFinite(port) && port > 0 ? port : undefined };
+  }
+  const separator = value.lastIndexOf(':');
+  if (separator > -1) {
+    const port = Number(value.slice(separator + 1));
+    if (Number.isFinite(port) && port > 0) {
+      return { ip: value.slice(0, separator), port };
+    }
+  }
+  return { ip: value };
+}
+
 function behaviorColumns(title: string, renderName?: (value: string) => string) {
   return [
     { title, dataIndex: 'name', ellipsis: true, render: (value: string) => renderName ? renderName(value) : value },
@@ -392,6 +456,27 @@ function behaviorColumns(title: string, renderName?: (value: string) => string) 
     ellipsis?: boolean;
     render?: (value: string) => string;
   }>;
+}
+
+function networkColumns() {
+  return [
+    { title: '时间', dataIndex: 'eventTime', width: 170, render: (value: string) => formatLocalDateTime(value) },
+    { title: '登录用户', dataIndex: 'loginUsername', width: 110, render: (_: string, record: AuditEvent) => record.loginUsername || record.username },
+    { title: '执行用户', dataIndex: 'username', width: 110 },
+    { title: '进程', dataIndex: 'processName', width: 120 },
+    { title: '命令', dataIndex: 'cmdline', render: (value: string) => <CommandText value={value} /> },
+    { title: '目标', dataIndex: 'dstIp', width: 190, render: (_: string, record: AuditEvent) => formatNetworkTarget(record) },
+    { title: '协议', dataIndex: 'protocol', width: 80, render: (value: string) => value || '-' },
+    { title: '等级', dataIndex: 'severity', width: 90, render: (value: string) => <SeverityTag value={value} /> },
+  ];
+}
+
+function formatNetworkTarget(record: AuditEvent) {
+  if (!record.dstIp) {
+    return '-';
+  }
+  const ip = record.dstIp.includes(':') ? `[${record.dstIp}]` : record.dstIp;
+  return record.dstPort ? `${ip}:${record.dstPort}` : ip;
 }
 
 function commandColumns() {
