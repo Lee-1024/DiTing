@@ -1,6 +1,7 @@
 package collector
 
 import (
+	"net"
 	"strings"
 	"time"
 
@@ -198,6 +199,9 @@ func kprobeNetworkContext(event *tetragon.ProcessKprobe) (string, uint16, string
 	for _, arg := range append(event.GetArgs(), event.GetData()...) {
 		sockaddr := arg.GetSockaddrArg()
 		if sockaddr == nil || sockaddr.GetAddr() == "" {
+			continue
+		}
+		if net.ParseIP(sockaddr.GetAddr()) == nil {
 			continue
 		}
 		protocol := "tcp"

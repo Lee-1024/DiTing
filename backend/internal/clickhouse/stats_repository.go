@@ -443,17 +443,18 @@ func (r *StatsRepository) HostBehavior(ctx context.Context, query stats.Query) (
 		hostName := escapeSQL(query.HostName)
 		hostFilter = " AND (host_id = '" + hostName + "' OR node_name = '" + hostName + "' OR host_name = '" + hostName + "')"
 	}
+	sensitiveFilePath := `(file_path IN ('/etc/passwd', '/etc/shadow', '/etc/sudoers', '/etc/group', '/etc/gshadow', '/etc/ssh/sshd_config') OR file_path LIKE '/etc/sudoers.d/%' OR file_path LIKE '/etc/ssh/%' OR file_path LIKE '/root/%' OR file_path LIKE '/home/%/.ssh/%' OR file_path LIKE '/var/log/auth.log%' OR file_path LIKE '/var/log/secure%')`
 	fileSQL := fmt.Sprintf(`SELECT
 	file_path AS name,
 	count() AS count,
 	min(event_time) AS first_seen,
 	max(event_time) AS last_seen
 FROM %s
-WHERE %s%s AND event_type = 'file_access' AND file_path != ''
+WHERE %s%s AND event_type = 'file_access' AND file_path != '' AND file_path NOT IN ('/etc', '/proc', '/sys', '/dev') AND file_path NOT LIKE '/proc/%%' AND file_path NOT LIKE '/sys/%%' AND file_path NOT LIKE '/dev/%%' AND %s
 GROUP BY file_path
 ORDER BY count DESC, last_seen DESC
 LIMIT %d
-FORMAT JSONEachRow`, r.table(), statsWhere(query), hostFilter, limit)
+FORMAT JSONEachRow`, r.table(), statsWhere(query), hostFilter, sensitiveFilePath, limit)
 	filePaths, err := r.behaviorItems(ctx, fileSQL)
 	if err != nil {
 		return stats.HostBehavior{}, err
@@ -465,7 +466,7 @@ FORMAT JSONEachRow`, r.table(), statsWhere(query), hostFilter, limit)
 	min(event_time) AS first_seen,
 	max(event_time) AS last_seen
 FROM %s
-WHERE %s%s AND event_type = 'network_connect' AND dst_ip != ''
+WHERE %s%s AND event_type = 'network_connect' AND dst_ip != '' AND dst_ip != 'invalid IP' AND IPv4StringToNumOrNull(dst_ip) IS NOT NULL
 GROUP BY name
 ORDER BY count DESC, last_seen DESC
 LIMIT %d

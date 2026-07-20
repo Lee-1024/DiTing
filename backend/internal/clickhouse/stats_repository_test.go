@@ -388,7 +388,13 @@ func TestStatsRepositoryHostBehaviorAggregatesFileNetworkAndEventTypes(t *testin
 	for _, expected := range []string{
 		"(host_id = 'host-001' OR node_name = 'host-001' OR host_name = 'host-001')",
 		"event_type = 'file_access'",
+		"file_path IN ('/etc/passwd', '/etc/shadow', '/etc/sudoers'",
+		"file_path LIKE '/root/%'",
+		"file_path NOT LIKE '/proc/%'",
+		"file_path NOT IN ('/etc', '/proc', '/sys', '/dev')",
 		"event_type = 'network_connect'",
+		"IPv4StringToNumOrNull(dst_ip) IS NOT NULL",
+		"dst_ip != 'invalid IP'",
 		"event_type != 'process_exec'",
 	} {
 		if !strings.Contains(joined, expected) {

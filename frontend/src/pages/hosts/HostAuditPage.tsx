@@ -282,7 +282,7 @@ export default function HostAuditPage() {
             <Typography.Title level={5}>主机行为画像</Typography.Title>
             <Row gutter={[12, 12]}>
               <Col xs={24} lg={8}>
-                <Typography.Text strong>文件访问 Top</Typography.Text>
+                <Typography.Text strong>敏感文件访问 Top</Typography.Text>
                 <Table
                   rowKey={(record) => record.name}
                   size="small"
@@ -294,7 +294,7 @@ export default function HostAuditPage() {
                 />
               </Col>
               <Col xs={24} lg={8}>
-                <Typography.Text strong>网络外联 Top</Typography.Text>
+                <Typography.Text strong>有效网络外联 Top</Typography.Text>
                 <Table
                   rowKey={(record) => record.name}
                   size="small"

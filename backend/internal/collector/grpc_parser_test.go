@@ -151,3 +151,29 @@ func TestParseTetragonGRPCProcessKprobeNetworkEvent(t *testing.T) {
 		t.Fatalf("unexpected network context dst=%s:%d protocol=%s", event.DstIP, event.DstPort, event.Protocol)
 	}
 }
+
+func TestParseTetragonGRPCProcessKprobeIgnoresInvalidNetworkAddress(t *testing.T) {
+	event, err := ParseTetragonGRPCEvent(&tetragon.GetEventsResponse{
+		NodeName: "node-1",
+		Time:     timestamppb.New(time.Date(2026, 7, 20, 6, 30, 0, 0, time.UTC)),
+		Event: &tetragon.GetEventsResponse_ProcessKprobe{ProcessKprobe: &tetragon.ProcessKprobe{
+			FunctionName: "tcp_connect",
+			Process:      &tetragon.Process{Binary: "/usr/bin/curl"},
+			Args: []*tetragon.KprobeArgument{{
+				Label: "addr",
+				Arg: &tetragon.KprobeArgument_SockaddrArg{SockaddrArg: &tetragon.KprobeSockaddr{
+					Family: "AF_INET",
+					Addr:   "invalid IP",
+					Port:   443,
+				}},
+			}},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("ParseTetragonGRPCEvent returned error: %v", err)
+	}
+
+	if event.EventType == "network_connect" || event.DstIP != "" || event.DstPort != 0 {
+		t.Fatalf("expected invalid network address to be ignored, got type=%s dst=%s:%d", event.EventType, event.DstIP, event.DstPort)
+	}
+}
