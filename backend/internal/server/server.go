@@ -201,6 +201,7 @@ func NewRouter(repository audit.Repository, ruleRepository rule.Repository, stat
 		mux.Handle("/api/v1/stats/users", protect(http.HandlerFunc(statsHandler.UserAudits)))
 		mux.Handle("/api/v1/stats/hosts", protect(http.HandlerFunc(statsHandler.HostAudits)))
 		mux.Handle("/api/v1/stats/hosts/export", protect(http.HandlerFunc(statsHandler.ExportHostAudits)))
+		mux.Handle("/api/v1/stats/hosts/behavior", protect(http.HandlerFunc(statsHandler.HostBehavior)))
 		mux.Handle("/api/v1/stats/hosts/users", protect(http.HandlerFunc(statsHandler.HostUsers)))
 		mux.Handle("/api/v1/stats/rules", protect(http.HandlerFunc(statsHandler.RuleHits)))
 	}

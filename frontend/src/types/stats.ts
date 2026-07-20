@@ -79,6 +79,19 @@ export interface HostUserItem {
   lastSeen: string;
 }
 
+export interface BehaviorItem {
+  name: string;
+  count: number;
+  firstSeen: string;
+  lastSeen: string;
+}
+
+export interface HostBehavior {
+  filePaths: BehaviorItem[];
+  network: BehaviorItem[];
+  eventTypes: BehaviorItem[];
+}
+
 export interface RuleHitItem {
   ruleName: string;
   hitCount: number;

@@ -2,17 +2,18 @@ import { Button, Card, DatePicker, Descriptions, Drawer, Empty, Form, Input, Row
 import dayjs from 'dayjs';
 import { useEffect, useState } from 'react';
 import { exportAuditEvents, queryAuditEvents } from '../../api/audit';
-import { exportHostAudits, getHostAudits, getHostUsers } from '../../api/stats';
+import { exportHostAudits, getHostAudits, getHostBehavior, getHostUsers } from '../../api/stats';
 import CommandText from '../../components/CommandText';
 import FilterToolbar from '../../components/FilterToolbar';
 import SeverityTag from '../../components/SeverityTag';
 import type { AuditEvent } from '../../types/audit';
-import type { HostAuditItem, HostAuditQuery, HostUserItem } from '../../types/stats';
+import type { BehaviorItem, HostAuditItem, HostAuditQuery, HostBehavior, HostUserItem } from '../../types/stats';
 import { downloadBlob } from '../../utils/download';
-import { severityOptions } from '../../utils/labels';
+import { eventTypeLabel, severityOptions } from '../../utils/labels';
 import { formatLocalDateTime } from '../../utils/time';
 
 const defaultRange = [dayjs().subtract(7, 'day'), dayjs()] as const;
+const emptyBehavior: HostBehavior = { filePaths: [], network: [], eventTypes: [] };
 
 interface DetailFilters {
   username?: string;
@@ -28,6 +29,7 @@ export default function HostAuditPage() {
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [riskEvents, setRiskEvents] = useState<AuditEvent[]>([]);
   const [hostUsers, setHostUsers] = useState<HostUserItem[]>([]);
+  const [hostBehavior, setHostBehavior] = useState<HostBehavior>(emptyBehavior);
   const [detailFilters, setDetailFilters] = useState<DetailFilters>({});
   const [detailPage, setDetailPage] = useState(1);
   const [detailPageSize, setDetailPageSize] = useState(10);
@@ -87,7 +89,7 @@ export default function HostAuditPage() {
         host_name: hostName,
         limit: 20,
       };
-      const [data, riskData, usersData] = await Promise.all([
+      const [data, riskData, usersData, behaviorData] = await Promise.all([
         queryAuditEvents({
           ...baseQuery,
           page_size: detailPageSize,
@@ -98,12 +100,14 @@ export default function HostAuditPage() {
           page_size: 10,
         }),
         getHostUsers(hostUserQuery),
+        getHostBehavior(hostUserQuery),
       ]);
       setEvents(data.items ?? []);
       setDetailPage(data.page);
       setDetailTotal(data.total);
       setRiskEvents(riskData.items ?? []);
       setHostUsers(usersData ?? []);
+      setHostBehavior(behaviorData ?? emptyBehavior);
       setDetailFilters({});
     } finally {
       setDetailLoading(false);
@@ -214,6 +218,7 @@ export default function HostAuditPage() {
           setEvents([]);
           setRiskEvents([]);
           setHostUsers([]);
+          setHostBehavior(emptyBehavior);
           setDetailFilters({});
           setDetailPage(1);
           setDetailTotal(0);
@@ -274,6 +279,45 @@ export default function HostAuditPage() {
                 { title: '最近活动', dataIndex: 'lastSeen', width: 180, render: (value) => formatLocalDateTime(value) },
               ]}
             />
+            <Typography.Title level={5}>主机行为画像</Typography.Title>
+            <Row gutter={[12, 12]}>
+              <Col xs={24} lg={8}>
+                <Typography.Text strong>文件访问 Top</Typography.Text>
+                <Table
+                  rowKey={(record) => record.name}
+                  size="small"
+                  loading={detailLoading}
+                  dataSource={hostBehavior.filePaths}
+                  locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无文件访问" /> }}
+                  pagination={false}
+                  columns={behaviorColumns('文件路径')}
+                />
+              </Col>
+              <Col xs={24} lg={8}>
+                <Typography.Text strong>网络外联 Top</Typography.Text>
+                <Table
+                  rowKey={(record) => record.name}
+                  size="small"
+                  loading={detailLoading}
+                  dataSource={hostBehavior.network}
+                  locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无网络外联" /> }}
+                  pagination={false}
+                  columns={behaviorColumns('目标')}
+                />
+              </Col>
+              <Col xs={24} lg={8}>
+                <Typography.Text strong>事件类型</Typography.Text>
+                <Table
+                  rowKey={(record) => record.name}
+                  size="small"
+                  loading={detailLoading}
+                  dataSource={hostBehavior.eventTypes}
+                  locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无事件类型" /> }}
+                  pagination={false}
+                  columns={behaviorColumns('类型', (value) => eventTypeLabel(value))}
+                />
+              </Col>
+            </Row>
             <Typography.Title level={5}>命令明细</Typography.Title>
             <Space wrap>
               <Select
@@ -334,6 +378,20 @@ export default function HostAuditPage() {
       </Drawer>
     </>
   );
+}
+
+function behaviorColumns(title: string, renderName?: (value: string) => string) {
+  return [
+    { title, dataIndex: 'name', ellipsis: true, render: (value: string) => renderName ? renderName(value) : value },
+    { title: '次数', dataIndex: 'count', width: 76 },
+    { title: '最近', dataIndex: 'lastSeen', width: 150, render: (value: string) => formatLocalDateTime(value) },
+  ] as Array<{
+    title: string;
+    dataIndex: keyof BehaviorItem;
+    width?: number;
+    ellipsis?: boolean;
+    render?: (value: string) => string;
+  }>;
 }
 
 function commandColumns() {

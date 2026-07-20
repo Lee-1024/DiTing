@@ -64,6 +64,19 @@ type HostUserItem struct {
 	LastSeen       string `json:"lastSeen"`
 }
 
+type HostBehavior struct {
+	FilePaths  []BehaviorItem `json:"filePaths"`
+	Network   []BehaviorItem `json:"network"`
+	EventTypes []BehaviorItem `json:"eventTypes"`
+}
+
+type BehaviorItem struct {
+	Name      string `json:"name"`
+	Count     uint64 `json:"count"`
+	FirstSeen string `json:"firstSeen"`
+	LastSeen  string `json:"lastSeen"`
+}
+
 type RuleHitItem struct {
 	RuleName    string `json:"ruleName"`
 	HitCount    uint64 `json:"hitCount"`
@@ -92,5 +105,6 @@ type Repository interface {
 	UserAudits(ctx context.Context, query Query) ([]UserAuditItem, error)
 	HostAudits(ctx context.Context, query Query) ([]HostAuditItem, error)
 	HostUsers(ctx context.Context, query Query) ([]HostUserItem, error)
+	HostBehavior(ctx context.Context, query Query) (HostBehavior, error)
 	RuleHits(ctx context.Context, query Query) ([]RuleHitItem, error)
 }

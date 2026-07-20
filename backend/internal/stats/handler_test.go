@@ -46,6 +46,14 @@ func (fakeRepository) HostUsers(_ context.Context, query Query) ([]HostUserItem,
 	return []HostUserItem{{Username: query.HostName + ":root", CommandCount: 6, HighRiskEvents: 1}}, nil
 }
 
+func (fakeRepository) HostBehavior(_ context.Context, query Query) (HostBehavior, error) {
+	return HostBehavior{
+		FilePaths:  []BehaviorItem{{Name: query.HostName + ":/etc/passwd", Count: 2}},
+		Network:   []BehaviorItem{{Name: "93.184.216.34:443", Count: 1}},
+		EventTypes: []BehaviorItem{{Name: "file_access", Count: 2}},
+	}, nil
+}
+
 func (fakeRepository) RuleHits(_ context.Context, query Query) ([]RuleHitItem, error) {
 	return []RuleHitItem{{RuleName: query.Keyword, HitCount: 5, ActiveHosts: 2, ActiveUsers: 1}}, nil
 }
@@ -208,6 +216,22 @@ func TestHostUsersHandlerPassesHostFilter(t *testing.T) {
 	}
 	body := rec.Body.String()
 	if !strings.Contains(body, `"username":"host-001:root"`) || !strings.Contains(body, `"commandCount":6`) {
+		t.Fatalf("unexpected body %s", body)
+	}
+}
+
+func TestHostBehaviorHandlerPassesHostFilter(t *testing.T) {
+	handler := NewHandler(fakeRepository{})
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/stats/hosts/behavior?host_name=host-001&limit=10", nil)
+
+	handler.HostBehavior(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `"filePaths"`) || !strings.Contains(body, `"host-001:/etc/passwd"`) || !strings.Contains(body, `"network"`) {
 		t.Fatalf("unexpected body %s", body)
 	}
 }

@@ -433,6 +433,88 @@ FORMAT JSONEachRow`, r.table(), statsWhere(query), strings.Join(conditions, " AN
 	return items, nil
 }
 
+func (r *StatsRepository) HostBehavior(ctx context.Context, query stats.Query) (stats.HostBehavior, error) {
+	limit := query.Limit
+	if limit <= 0 {
+		limit = 10
+	}
+	hostFilter := ""
+	if query.HostName != "" {
+		hostName := escapeSQL(query.HostName)
+		hostFilter = " AND (host_id = '" + hostName + "' OR node_name = '" + hostName + "' OR host_name = '" + hostName + "')"
+	}
+	fileSQL := fmt.Sprintf(`SELECT
+	file_path AS name,
+	count() AS count,
+	min(event_time) AS first_seen,
+	max(event_time) AS last_seen
+FROM %s
+WHERE %s%s AND event_type = 'file_access' AND file_path != ''
+GROUP BY file_path
+ORDER BY count DESC, last_seen DESC
+LIMIT %d
+FORMAT JSONEachRow`, r.table(), statsWhere(query), hostFilter, limit)
+	filePaths, err := r.behaviorItems(ctx, fileSQL)
+	if err != nil {
+		return stats.HostBehavior{}, err
+	}
+
+	networkSQL := fmt.Sprintf(`SELECT
+	concat(dst_ip, if(dst_port = 0, '', concat(':', toString(dst_port)))) AS name,
+	count() AS count,
+	min(event_time) AS first_seen,
+	max(event_time) AS last_seen
+FROM %s
+WHERE %s%s AND event_type = 'network_connect' AND dst_ip != ''
+GROUP BY name
+ORDER BY count DESC, last_seen DESC
+LIMIT %d
+FORMAT JSONEachRow`, r.table(), statsWhere(query), hostFilter, limit)
+	network, err := r.behaviorItems(ctx, networkSQL)
+	if err != nil {
+		return stats.HostBehavior{}, err
+	}
+
+	eventTypeSQL := fmt.Sprintf(`SELECT
+	event_type AS name,
+	count() AS count,
+	min(event_time) AS first_seen,
+	max(event_time) AS last_seen
+FROM %s
+WHERE %s%s AND event_type != 'process_exec' AND event_type != ''
+GROUP BY event_type
+ORDER BY count DESC, last_seen DESC
+LIMIT %d
+FORMAT JSONEachRow`, r.table(), statsWhere(query), hostFilter, limit)
+	eventTypes, err := r.behaviorItems(ctx, eventTypeSQL)
+	if err != nil {
+		return stats.HostBehavior{}, err
+	}
+
+	return stats.HostBehavior{FilePaths: filePaths, Network: network, EventTypes: eventTypes}, nil
+}
+
+func (r *StatsRepository) behaviorItems(ctx context.Context, sql string) ([]stats.BehaviorItem, error) {
+	data, err := r.client.Query(ctx, sql)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := decodeJSONRows[behaviorItemRow](data)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]stats.BehaviorItem, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, stats.BehaviorItem{
+			Name:      row.Name,
+			Count:     uint64(row.Count),
+			FirstSeen: row.FirstSeen,
+			LastSeen:  row.LastSeen,
+		})
+	}
+	return items, nil
+}
+
 func (r *StatsRepository) RuleHits(ctx context.Context, query stats.Query) ([]stats.RuleHitItem, error) {
 	limit := query.Limit
 	if limit <= 0 {
@@ -545,6 +627,13 @@ type hostUserRow struct {
 	HighRiskEvents flexibleUint64 `json:"high_risk_events"`
 	FirstSeen      string         `json:"first_seen"`
 	LastSeen       string         `json:"last_seen"`
+}
+
+type behaviorItemRow struct {
+	Name      string         `json:"name"`
+	Count     flexibleUint64 `json:"count"`
+	FirstSeen string         `json:"first_seen"`
+	LastSeen  string         `json:"last_seen"`
 }
 
 type ruleHitRow struct {

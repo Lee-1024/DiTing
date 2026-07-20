@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import type { CommandItem, CommandStatsQuery, HostAuditItem, HostAuditQuery, HostUserItem, OverviewStats, RuleHitItem, RuleHitQuery, StatsQuery, TopItem, TrendPoint, UserAuditItem, UserAuditQuery } from '../types/stats';
+import type { CommandItem, CommandStatsQuery, HostAuditItem, HostAuditQuery, HostBehavior, HostUserItem, OverviewStats, RuleHitItem, RuleHitQuery, StatsQuery, TopItem, TrendPoint, UserAuditItem, UserAuditQuery } from '../types/stats';
 
 export async function getOverview(params?: StatsQuery): Promise<OverviewStats> {
   const response = await apiClient.get<OverviewStats>('/stats/overview', { params });
@@ -53,6 +53,11 @@ export async function exportHostAudits(params: HostAuditQuery): Promise<Blob> {
 
 export async function getHostUsers(params: HostAuditQuery): Promise<HostUserItem[]> {
   const response = await apiClient.get<HostUserItem[]>('/stats/hosts/users', { params });
+  return response.data;
+}
+
+export async function getHostBehavior(params: HostAuditQuery): Promise<HostBehavior> {
+  const response = await apiClient.get<HostBehavior>('/stats/hosts/behavior', { params });
   return response.data;
 }
 

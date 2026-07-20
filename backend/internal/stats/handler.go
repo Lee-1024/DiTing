@@ -121,6 +121,11 @@ func (h *Handler) HostUsers(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, result, err)
 }
 
+func (h *Handler) HostBehavior(w http.ResponseWriter, r *http.Request) {
+	result, err := h.repository.HostBehavior(r.Context(), parseQuery(r))
+	writeJSON(w, result, err)
+}
+
 func (h *Handler) RuleHits(w http.ResponseWriter, r *http.Request) {
 	result, err := h.repository.RuleHits(r.Context(), parseQuery(r))
 	writeJSON(w, result, err)

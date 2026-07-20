@@ -355,6 +355,57 @@ func TestStatsRepositoryHostUsersAggregatesUsersForHost(t *testing.T) {
 	}
 }
 
+func TestStatsRepositoryHostBehaviorAggregatesFileNetworkAndEventTypes(t *testing.T) {
+	var bodies []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		data := make([]byte, r.ContentLength)
+		_, _ = r.Body.Read(data)
+		body := string(data)
+		bodies = append(bodies, body)
+		switch {
+		case strings.Contains(body, "file_path AS name"):
+			_, _ = w.Write([]byte(`{"name":"/etc/passwd","count":"2","first_seen":"2026-07-15 01:59:58.000","last_seen":"2026-07-15 02:26:45.000"}` + "\n"))
+		case strings.Contains(body, "concat(dst_ip"):
+			_, _ = w.Write([]byte(`{"name":"93.184.216.34:443","count":"1","first_seen":"2026-07-15 02:10:00.000","last_seen":"2026-07-15 02:10:00.000"}` + "\n"))
+		default:
+			_, _ = w.Write([]byte(`{"name":"file_access","count":"2","first_seen":"2026-07-15 01:59:58.000","last_seen":"2026-07-15 02:26:45.000"}` + "\n"))
+		}
+	}))
+	defer server.Close()
+
+	repository := NewStatsRepository(NewHTTPClient(HTTPConfig{URL: server.URL, Database: "diting"}), nil)
+	behavior, err := repository.HostBehavior(context.Background(), stats.Query{
+		StartTime: time.Date(2026, 7, 15, 0, 0, 0, 0, time.UTC),
+		EndTime:   time.Date(2026, 7, 16, 0, 0, 0, 0, time.UTC),
+		HostName:  "host-001",
+		Limit:     10,
+	})
+	if err != nil {
+		t.Fatalf("HostBehavior returned error: %v", err)
+	}
+
+	joined := strings.Join(bodies, "\n---\n")
+	for _, expected := range []string{
+		"(host_id = 'host-001' OR node_name = 'host-001' OR host_name = 'host-001')",
+		"event_type = 'file_access'",
+		"event_type = 'network_connect'",
+		"event_type != 'process_exec'",
+	} {
+		if !strings.Contains(joined, expected) {
+			t.Fatalf("expected %q in host behavior queries, got %s", expected, joined)
+		}
+	}
+	if len(behavior.FilePaths) != 1 || behavior.FilePaths[0].Name != "/etc/passwd" || behavior.FilePaths[0].Count != 2 {
+		t.Fatalf("unexpected file behavior %#v", behavior.FilePaths)
+	}
+	if len(behavior.Network) != 1 || behavior.Network[0].Name != "93.184.216.34:443" {
+		t.Fatalf("unexpected network behavior %#v", behavior.Network)
+	}
+	if len(behavior.EventTypes) != 1 || behavior.EventTypes[0].Name != "file_access" {
+		t.Fatalf("unexpected event type behavior %#v", behavior.EventTypes)
+	}
+}
+
 func TestStatsRepositoryRuleHitsAggregatesRules(t *testing.T) {
 	var body string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
