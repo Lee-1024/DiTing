@@ -76,3 +76,78 @@ func TestParseTetragonGRPCUnsupportedEvent(t *testing.T) {
 		t.Fatalf("expected unsupported event error, got %v", err)
 	}
 }
+
+func TestParseTetragonGRPCProcessKprobeFileEvent(t *testing.T) {
+	eventTime := time.Date(2026, 7, 20, 6, 30, 0, 0, time.UTC)
+	event, err := ParseTetragonGRPCEvent(&tetragon.GetEventsResponse{
+		NodeName: "node-1",
+		Time:     timestamppb.New(eventTime),
+		Event: &tetragon.GetEventsResponse_ProcessKprobe{ProcessKprobe: &tetragon.ProcessKprobe{
+			FunctionName: "security_file_open",
+			PolicyName:   "sensitive-files",
+			Message:      "sensitive file read",
+			Tags:         []string{"file", "sensitive"},
+			Process: &tetragon.Process{
+				Pid:    wrapperspb.UInt32(2345),
+				Binary: "/usr/bin/cat",
+			},
+			Parent: &tetragon.Process{Binary: "/bin/bash"},
+			Args: []*tetragon.KprobeArgument{{
+				Label: "file",
+				Arg: &tetragon.KprobeArgument_PathArg{PathArg: &tetragon.KprobePath{
+					Path:       "/etc/shadow",
+					Permission: "read",
+				}},
+			}},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("ParseTetragonGRPCEvent returned error: %v", err)
+	}
+
+	if event.EventType != "file_access" || event.Action != "security_file_open" {
+		t.Fatalf("expected file_access security_file_open, got type=%s action=%s", event.EventType, event.Action)
+	}
+	if event.FilePath != "/etc/shadow" || event.FileOperation != "read" {
+		t.Fatalf("unexpected file context path=%s operation=%s", event.FilePath, event.FileOperation)
+	}
+	if event.ProcessName != "cat" || event.Tags[0] != "file" {
+		t.Fatalf("unexpected process/tags process=%s tags=%#v", event.ProcessName, event.Tags)
+	}
+}
+
+func TestParseTetragonGRPCProcessKprobeNetworkEvent(t *testing.T) {
+	eventTime := time.Date(2026, 7, 20, 6, 30, 0, 0, time.UTC)
+	event, err := ParseTetragonGRPCEvent(&tetragon.GetEventsResponse{
+		NodeName: "node-1",
+		Time:     timestamppb.New(eventTime),
+		Event: &tetragon.GetEventsResponse_ProcessKprobe{ProcessKprobe: &tetragon.ProcessKprobe{
+			FunctionName: "tcp_connect",
+			PolicyName:   "network-connect",
+			Process: &tetragon.Process{
+				Pid:       wrapperspb.UInt32(2345),
+				Binary:    "/usr/bin/curl",
+				Arguments: "https://example.com",
+			},
+			Parent: &tetragon.Process{Binary: "/bin/bash"},
+			Args: []*tetragon.KprobeArgument{{
+				Label: "addr",
+				Arg: &tetragon.KprobeArgument_SockaddrArg{SockaddrArg: &tetragon.KprobeSockaddr{
+					Family: "AF_INET",
+					Addr:   "93.184.216.34",
+					Port:   443,
+				}},
+			}},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("ParseTetragonGRPCEvent returned error: %v", err)
+	}
+
+	if event.EventType != "network_connect" || event.Action != "tcp_connect" {
+		t.Fatalf("expected network_connect tcp_connect, got type=%s action=%s", event.EventType, event.Action)
+	}
+	if event.DstIP != "93.184.216.34" || event.DstPort != 443 || event.Protocol != "tcp" {
+		t.Fatalf("unexpected network context dst=%s:%d protocol=%s", event.DstIP, event.DstPort, event.Protocol)
+	}
+}
