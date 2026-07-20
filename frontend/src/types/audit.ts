@@ -26,6 +26,14 @@ export interface AuditEvent {
   euid?: number;
   egid?: number;
   tags: string[];
+  filePath?: string;
+  fileOperation?: string;
+  srcIp?: string;
+  srcPort?: number;
+  dstIp?: string;
+  dstPort?: number;
+  protocol?: string;
+  domain?: string;
   ruleIds?: string[];
   ruleNames?: string[];
   ruleMatches?: RuleMatch[];

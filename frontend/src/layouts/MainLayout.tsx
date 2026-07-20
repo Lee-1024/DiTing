@@ -70,6 +70,7 @@ export default function MainLayout() {
                 { key: '/settings/users', icon: <TeamOutlined />, label: '用户管理' },
                 { key: '/settings/operation-logs', icon: <AuditOutlined />, label: '操作审计' },
                 { key: '/settings/collector-health', icon: <MonitorOutlined />, label: '采集状态' },
+                { key: '/settings/collector-debug', icon: <FileSearchOutlined />, label: '采集调试' },
                 { key: '/settings/collector', icon: <SettingOutlined />, label: '采集配置' },
               ],
             },

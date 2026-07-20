@@ -9,6 +9,9 @@ export const severityOptions = [
 export const eventTypeOptions = [
   { value: 'process_exec', label: '进程执行' },
   { value: 'process_exit', label: '进程退出' },
+  { value: 'process_kprobe', label: '内核探针' },
+  { value: 'file_access', label: '文件访问' },
+  { value: 'network_connect', label: '网络连接' },
 ];
 
 export const ruleFieldOptions = [

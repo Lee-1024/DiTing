@@ -81,6 +81,14 @@ export default function EventDetailDrawer({ event, eventId, open, onClose }: Pro
             <Descriptions.Item label="Namespace">{current.namespace}</Descriptions.Item>
             <Descriptions.Item label="Pod">{current.podName}</Descriptions.Item>
           </Descriptions>
+          <Descriptions title="文件与网络" column={1} bordered size="small">
+            <Descriptions.Item label="文件路径">{current.filePath || '-'}</Descriptions.Item>
+            <Descriptions.Item label="文件操作">{current.fileOperation || '-'}</Descriptions.Item>
+            <Descriptions.Item label="源地址">{current.srcIp ? `${current.srcIp}:${current.srcPort || ''}` : '-'}</Descriptions.Item>
+            <Descriptions.Item label="目标地址">{current.dstIp ? `${current.dstIp}:${current.dstPort || ''}` : '-'}</Descriptions.Item>
+            <Descriptions.Item label="协议">{current.protocol || '-'}</Descriptions.Item>
+            <Descriptions.Item label="域名">{current.domain || '-'}</Descriptions.Item>
+          </Descriptions>
           <Descriptions title="规则命中" column={1} bordered size="small">
             <Descriptions.Item label="标签">
               {current.tags?.map((tag) => <Tag key={tag}>{tag}</Tag>)}

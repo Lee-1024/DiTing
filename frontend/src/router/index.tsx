@@ -12,6 +12,7 @@ import RulesPage from '../pages/rules/RulesPage';
 import RuleHitsPage from '../pages/rules/RuleHitsPage';
 import OperationLogsPage from '../pages/settings/OperationLogsPage';
 import CollectorHealthPage from '../pages/settings/CollectorHealthPage';
+import CollectorDebugPage from '../pages/settings/CollectorDebugPage';
 import CollectorConfigPage from '../pages/settings/CollectorConfigPage';
 import LoginPage from '../pages/login/LoginPage';
 import { getToken } from '../stores/auth';
@@ -38,6 +39,7 @@ export const router = createBrowserRouter([
       { path: 'settings/users', element: <UserManagementPage /> },
       { path: 'settings/operation-logs', element: <OperationLogsPage /> },
       { path: 'settings/collector-health', element: <CollectorHealthPage /> },
+      { path: 'settings/collector-debug', element: <CollectorDebugPage /> },
       { path: 'settings/collector', element: <CollectorConfigPage /> },
       { path: '*', element: <Navigate to="/" replace /> },
     ],
