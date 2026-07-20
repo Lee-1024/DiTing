@@ -461,12 +461,12 @@ FORMAT JSONEachRow`, r.table(), statsWhere(query), hostFilter, sensitiveFilePath
 	}
 
 	networkSQL := fmt.Sprintf(`SELECT
-	concat(dst_ip, if(dst_port = 0, '', concat(':', toString(dst_port)))) AS name,
+	concat(if(position(dst_ip, ':') > 0, concat('[', dst_ip, ']'), dst_ip), if(dst_port = 0, '', concat(':', toString(dst_port)))) AS name,
 	count() AS count,
 	min(event_time) AS first_seen,
 	max(event_time) AS last_seen
 FROM %s
-WHERE %s%s AND event_type = 'network_connect' AND dst_ip != '' AND dst_ip != 'invalid IP' AND IPv4StringToNumOrNull(dst_ip) IS NOT NULL
+WHERE %s%s AND event_type = 'network_connect' AND dst_ip != '' AND dst_ip != 'invalid IP' AND (IPv4StringToNumOrNull(dst_ip) IS NOT NULL OR IPv6StringToNumOrNull(dst_ip) IS NOT NULL)
 GROUP BY name
 ORDER BY count DESC, last_seen DESC
 LIMIT %d

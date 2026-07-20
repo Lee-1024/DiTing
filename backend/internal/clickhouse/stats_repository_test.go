@@ -365,7 +365,7 @@ func TestStatsRepositoryHostBehaviorAggregatesFileNetworkAndEventTypes(t *testin
 		switch {
 		case strings.Contains(body, "file_path AS name"):
 			_, _ = w.Write([]byte(`{"name":"/etc/passwd","count":"2","first_seen":"2026-07-15 01:59:58.000","last_seen":"2026-07-15 02:26:45.000"}` + "\n"))
-		case strings.Contains(body, "concat(dst_ip"):
+		case strings.Contains(body, "event_type = 'network_connect'"):
 			_, _ = w.Write([]byte(`{"name":"93.184.216.34:443","count":"1","first_seen":"2026-07-15 02:10:00.000","last_seen":"2026-07-15 02:10:00.000"}` + "\n"))
 		default:
 			_, _ = w.Write([]byte(`{"name":"file_access","count":"2","first_seen":"2026-07-15 01:59:58.000","last_seen":"2026-07-15 02:26:45.000"}` + "\n"))
@@ -394,6 +394,7 @@ func TestStatsRepositoryHostBehaviorAggregatesFileNetworkAndEventTypes(t *testin
 		"file_path NOT IN ('/etc', '/proc', '/sys', '/dev')",
 		"event_type = 'network_connect'",
 		"IPv4StringToNumOrNull(dst_ip) IS NOT NULL",
+		"IPv6StringToNumOrNull(dst_ip) IS NOT NULL",
 		"dst_ip != 'invalid IP'",
 		"event_type != 'process_exec'",
 	} {
