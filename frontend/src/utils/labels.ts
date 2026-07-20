@@ -19,6 +19,7 @@ export const ruleFieldOptions = [
   { value: 'process_name', label: '进程名' },
   { value: 'username', label: '执行用户' },
   { value: 'login_username', label: '登录用户' },
+  { value: 'host_id', label: 'Host ID' },
   { value: 'host_name', label: '主机名' },
   { value: 'node_name', label: '节点名' },
   { value: 'namespace', label: 'Namespace' },
@@ -26,7 +27,10 @@ export const ruleFieldOptions = [
   { value: 'container_id', label: '容器 ID' },
   { value: 'binary_path', label: '二进制路径' },
   { value: 'file_path', label: '文件路径' },
+  { value: 'file_operation', label: '文件操作' },
   { value: 'dst_ip', label: '目标 IP' },
+  { value: 'dst_port', label: '目标端口' },
+  { value: 'protocol', label: '网络协议' },
   { value: 'domain', label: '域名' },
   { value: 'event_type', label: '事件类型' },
 ];

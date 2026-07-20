@@ -28,6 +28,7 @@ export type RulePayload = Omit<AuditRule, 'id' | 'updatedAt'>;
 export interface RuleTestEvent {
   eventType?: string;
   severity?: string;
+  hostId?: string;
   hostName?: string;
   nodeName?: string;
   namespace?: string;
@@ -39,7 +40,10 @@ export interface RuleTestEvent {
   username?: string;
   loginUsername?: string;
   filePath?: string;
+  fileOperation?: string;
   dstIp?: string;
+  dstPort?: number;
+  protocol?: string;
   domain?: string;
 }
 

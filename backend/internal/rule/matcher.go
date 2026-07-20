@@ -2,6 +2,7 @@ package rule
 
 import (
 	"regexp"
+	"strconv"
 	"strings"
 
 	"diting/backend/internal/audit"
@@ -105,8 +106,12 @@ func fieldValue(field string, event audit.Event) string {
 		return event.Action
 	case "severity":
 		return event.Severity
+	case "host_id":
+		return event.HostID
 	case "host_name":
 		return event.HostName
+	case "node_name":
+		return event.NodeName
 	case "namespace":
 		return event.Namespace
 	case "pod_name":
@@ -121,10 +126,18 @@ func fieldValue(field string, event audit.Event) string {
 		return event.Cmdline
 	case "username":
 		return event.Username
+	case "login_username":
+		return event.LoginUsername
 	case "file_path":
 		return event.FilePath
+	case "file_operation":
+		return event.FileOperation
 	case "dst_ip":
 		return event.DstIP
+	case "dst_port":
+		return strconv.Itoa(int(event.DstPort))
+	case "protocol":
+		return event.Protocol
 	case "domain":
 		return event.Domain
 	default:

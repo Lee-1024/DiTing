@@ -21,6 +21,7 @@ type TestEvent struct {
 	EventType     string `json:"eventType"`
 	Action        string `json:"action"`
 	Severity      string `json:"severity"`
+	HostID        string `json:"hostId"`
 	HostName      string `json:"hostName"`
 	NodeName      string `json:"nodeName"`
 	Namespace     string `json:"namespace"`
@@ -32,7 +33,10 @@ type TestEvent struct {
 	Username      string `json:"username"`
 	LoginUsername string `json:"loginUsername"`
 	FilePath      string `json:"filePath"`
+	FileOperation string `json:"fileOperation"`
 	DstIP         string `json:"dstIp"`
+	DstPort       uint16 `json:"dstPort"`
+	Protocol      string `json:"protocol"`
 	Domain        string `json:"domain"`
 }
 
@@ -159,6 +163,7 @@ func (e TestEvent) toAuditEvent() audit.Event {
 		EventType:     e.EventType,
 		Action:        e.Action,
 		Severity:      e.Severity,
+		HostID:        e.HostID,
 		HostName:      e.HostName,
 		NodeName:      e.NodeName,
 		Namespace:     e.Namespace,
@@ -170,7 +175,10 @@ func (e TestEvent) toAuditEvent() audit.Event {
 		Username:      e.Username,
 		LoginUsername: e.LoginUsername,
 		FilePath:      e.FilePath,
+		FileOperation: e.FileOperation,
 		DstIP:         e.DstIP,
+		DstPort:       e.DstPort,
+		Protocol:      e.Protocol,
 		Domain:        e.Domain,
 	}
 }

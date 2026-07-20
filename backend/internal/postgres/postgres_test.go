@@ -69,3 +69,11 @@ func TestBootstrapAddsCollectorHeartbeatModeColumns(t *testing.T) {
 		}
 	}
 }
+
+func TestBootstrapAddsDefaultNetworkRiskRules(t *testing.T) {
+	for _, expected := range []string{"高危端口网络连接", "命令解释器发起网络连接", `"field":"dst_port"`, `"field":"protocol"`} {
+		if !strings.Contains(bootstrapSQL, expected) {
+			t.Fatalf("expected bootstrap SQL to include %q", expected)
+		}
+	}
+}

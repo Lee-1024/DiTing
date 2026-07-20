@@ -63,3 +63,46 @@ func TestMatcherAndReturnsFalseWhenOneConditionFails(t *testing.T) {
 		t.Fatal("expected and expression to fail when one condition fails")
 	}
 }
+
+func TestMatcherNetworkFields(t *testing.T) {
+	event := audit.Event{
+		EventType: "network_connect",
+		DstIP:     "110.242.68.4",
+		DstPort:   443,
+		Protocol:  "tcp",
+	}
+	expr := Expression{
+		Operator: "and",
+		Conditions: []Condition{
+			{Field: "event_type", Op: "eq", Value: "network_connect"},
+			{Field: "dst_ip", Op: "eq", Value: "110.242.68.4"},
+			{Field: "dst_port", Op: "eq", Value: "443"},
+			{Field: "protocol", Op: "eq", Value: "tcp"},
+		},
+	}
+
+	if !Match(expr, event) {
+		t.Fatal("expected network fields rule to match")
+	}
+}
+
+func TestMatcherAuditIdentityFields(t *testing.T) {
+	event := audit.Event{
+		HostID:        "host-001",
+		NodeName:      "node-1",
+		LoginUsername: "ubuntu",
+		Username:      "root",
+	}
+	expr := Expression{
+		Operator: "and",
+		Conditions: []Condition{
+			{Field: "host_id", Op: "eq", Value: "host-001"},
+			{Field: "node_name", Op: "eq", Value: "node-1"},
+			{Field: "login_username", Op: "eq", Value: "ubuntu"},
+		},
+	}
+
+	if !Match(expr, event) {
+		t.Fatal("expected audit identity fields rule to match")
+	}
+}

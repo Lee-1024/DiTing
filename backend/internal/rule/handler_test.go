@@ -107,6 +107,26 @@ func TestTestRuleReturnsMatchedConditions(t *testing.T) {
 	}
 }
 
+func TestTestRuleMatchesNetworkFields(t *testing.T) {
+	handler := NewHandler(NewMemoryRepository())
+	body := bytes.NewBufferString(`{"rule":{"name":"网络外联","eventType":"network_connect","enabled":true,"severity":"high","riskScore":80,"matchExpr":{"operator":"and","conditions":[{"field":"event_type","op":"eq","value":"network_connect"},{"field":"dst_ip","op":"eq","value":"10.0.0.8"},{"field":"dst_port","op":"eq","value":"443"},{"field":"protocol","op":"eq","value":"tcp"}]}},"event":{"eventType":"network_connect","dstIp":"10.0.0.8","dstPort":443,"protocol":"tcp"}}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/rules/test", body)
+	rec := httptest.NewRecorder()
+
+	handler.Test(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var response TestResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if !response.Matched {
+		t.Fatalf("expected network rule to match, got %#v", response)
+	}
+}
+
 func TestTestRuleReturnsUnmatchedReason(t *testing.T) {
 	handler := NewHandler(NewMemoryRepository())
 	body := bytes.NewBufferString(`{"rule":{"name":"docker","eventType":"process_exec","enabled":true,"severity":"high","riskScore":70,"matchExpr":{"operator":"and","conditions":[{"field":"process_name","op":"eq","value":"docker"}]}},"event":{"eventType":"process_exec","processName":"bash","cmdline":"id"}}`)

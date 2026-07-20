@@ -132,10 +132,16 @@ export default function RulesPage() {
     testForm.setFieldsValue({
       eventType: values.eventType,
       severity: values.severity,
+      hostId: 'host-001',
+      hostName: 'server-001',
+      nodeName: 'node-1',
       username: 'ubuntu',
       loginUsername: 'ubuntu',
-      processName: 'bash',
-      cmdline: '/bin/bash -i',
+      processName: values.eventType === 'network_connect' ? 'curl' : 'bash',
+      cmdline: values.eventType === 'network_connect' ? '/usr/bin/curl https://10.0.0.8' : '/bin/bash -i',
+      dstIp: values.eventType === 'network_connect' ? '10.0.0.8' : undefined,
+      dstPort: values.eventType === 'network_connect' ? 443 : undefined,
+      protocol: values.eventType === 'network_connect' ? 'tcp' : undefined,
     });
     setTestResult(undefined);
     setTestOpen(true);
@@ -299,6 +305,9 @@ export default function RulesPage() {
             <Form.Item name="hostName" label="主机名">
               <Input style={{ width: 160 }} />
             </Form.Item>
+            <Form.Item name="hostId" label="Host ID">
+              <Input style={{ width: 160 }} />
+            </Form.Item>
             <Form.Item name="namespace" label="Namespace">
               <Input style={{ width: 160 }} />
             </Form.Item>
@@ -315,6 +324,20 @@ export default function RulesPage() {
             </Form.Item>
             <Form.Item name="filePath" label="文件路径">
               <Input style={{ width: 220 }} />
+            </Form.Item>
+            <Form.Item name="fileOperation" label="文件操作">
+              <Input style={{ width: 140 }} />
+            </Form.Item>
+          </Space>
+          <Space size={16} align="start" wrap>
+            <Form.Item name="dstIp" label="目标 IP">
+              <Input style={{ width: 180 }} />
+            </Form.Item>
+            <Form.Item name="dstPort" label="目标端口">
+              <InputNumber min={0} max={65535} style={{ width: 130 }} />
+            </Form.Item>
+            <Form.Item name="protocol" label="网络协议">
+              <Select style={{ width: 120 }} options={[{ value: 'tcp', label: 'TCP' }, { value: 'udp', label: 'UDP' }]} allowClear />
             </Form.Item>
           </Space>
           {testResult && (
