@@ -187,9 +187,53 @@ func TestAuditRepositoryFiltersKeywordInListAndCountQueries(t *testing.T) {
 		if !strings.Contains(body, "event_type = 'process_exec'") ||
 			!strings.Contains(body, "severity IN ('high', 'critical')") ||
 			!strings.Contains(body, "positionCaseInsensitive(cmdline, 'wget')") ||
-			!strings.Contains(body, "positionCaseInsensitive(process_name, 'wget')") {
+			!strings.Contains(body, "positionCaseInsensitive(process_name, 'wget')") ||
+			!strings.Contains(body, "positionCaseInsensitive(file_path, 'wget')") ||
+			!strings.Contains(body, "positionCaseInsensitive(dst_ip, 'wget')") {
 			t.Fatalf("expected keyword filters in query, got %s", body)
 		}
+	}
+}
+
+func TestAuditRepositoryReturnsFileAndNetworkFields(t *testing.T) {
+	var bodies []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		data := make([]byte, r.ContentLength)
+		_, _ = r.Body.Read(data)
+		body := string(data)
+		bodies = append(bodies, body)
+		if strings.Contains(body, "count() AS total") {
+			_, _ = w.Write([]byte(`{"total":"1"}` + "\n"))
+			return
+		}
+		_, _ = w.Write([]byte(`{"event_id":"evt-file","event_time":"2026-07-09 13:00:00.000","event_type":"file_access","severity":"info","process_name":"cat","cmdline":"cat /etc/passwd","file_path":"/etc/passwd","file_operation":"open","src_ip":"10.0.0.1","src_port":42000,"dst_ip":"93.184.216.34","dst_port":443,"protocol":"tcp","domain":"example.com","tags":[]}` + "\n"))
+	}))
+	defer server.Close()
+
+	repository := NewAuditRepository(NewHTTPClient(HTTPConfig{URL: server.URL, Database: "diting"}))
+	events, _, err := repository.ListEvents(context.Background(), audit.Query{
+		StartTime: time.Date(2026, 7, 9, 0, 0, 0, 0, time.UTC),
+		EndTime:   time.Date(2026, 7, 10, 0, 0, 0, 0, time.UTC),
+		Keyword:   "/etc/passwd",
+		Page:      1,
+		PageSize:  10,
+	})
+	if err != nil {
+		t.Fatalf("ListEvents returned error: %v", err)
+	}
+
+	joinedBodies := strings.Join(bodies, "\n---\n")
+	for _, expected := range []string{"file_path", "file_operation", "dst_ip", "dst_port", "protocol", "domain"} {
+		if !strings.Contains(joinedBodies, expected) {
+			t.Fatalf("expected %q to be selected, got %s", expected, joinedBodies)
+		}
+	}
+	if len(events) != 1 {
+		t.Fatalf("expected one event, got %#v", events)
+	}
+	event := events[0]
+	if event.FilePath != "/etc/passwd" || event.FileOperation != "open" || event.DstIP != "93.184.216.34" || event.DstPort != 443 || event.Protocol != "tcp" || event.Domain != "example.com" {
+		t.Fatalf("expected file and network fields to be decoded, got %#v", event)
 	}
 }
 

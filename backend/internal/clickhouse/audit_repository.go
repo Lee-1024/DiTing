@@ -122,7 +122,7 @@ FORMAT JSONEachRow`, auditEventSelectFields(), auditTable(database), escapeSQL(e
 }
 
 func auditEventSelectFields() string {
-	return "event_id, event_time, event_type, severity, risk_score, host_name, host_id, node_name, namespace, pod_name, username, uid, gid, auid, euid, egid, login_username, process_name, binary_path, cmdline, cwd, parent_process_name, parent_binary_path, parent_cmdline, tags, rule_ids, rule_names, rule_matches, raw_event"
+	return "event_id, event_time, event_type, severity, risk_score, host_name, host_id, node_name, namespace, pod_name, username, uid, gid, auid, euid, egid, login_username, process_name, binary_path, cmdline, cwd, parent_process_name, parent_binary_path, parent_cmdline, file_path, file_operation, src_ip, src_port, dst_ip, dst_port, protocol, domain, tags, rule_ids, rule_names, rule_matches, raw_event"
 }
 
 func buildCountEventsSQL(database string, query audit.Query) string {
@@ -175,7 +175,7 @@ func buildAuditWhere(query audit.Query) string {
 	}
 	if query.Keyword != "" {
 		keyword := escapeSQL(query.Keyword)
-		conditions = append(conditions, "(positionCaseInsensitive(cmdline, '"+keyword+"') > 0 OR positionCaseInsensitive(process_name, '"+keyword+"') > 0 OR positionCaseInsensitive(username, '"+keyword+"') > 0 OR positionCaseInsensitive(login_username, '"+keyword+"') > 0)")
+		conditions = append(conditions, "(positionCaseInsensitive(cmdline, '"+keyword+"') > 0 OR positionCaseInsensitive(process_name, '"+keyword+"') > 0 OR positionCaseInsensitive(username, '"+keyword+"') > 0 OR positionCaseInsensitive(login_username, '"+keyword+"') > 0 OR positionCaseInsensitive(file_path, '"+keyword+"') > 0 OR positionCaseInsensitive(file_operation, '"+keyword+"') > 0 OR positionCaseInsensitive(src_ip, '"+keyword+"') > 0 OR positionCaseInsensitive(dst_ip, '"+keyword+"') > 0 OR positionCaseInsensitive(protocol, '"+keyword+"') > 0 OR positionCaseInsensitive(domain, '"+keyword+"') > 0)")
 	}
 	return strings.Join(conditions, " AND ")
 }
@@ -225,7 +225,13 @@ func eventMatchesQuery(event audit.Event, query audit.Query) bool {
 		if !strings.Contains(strings.ToLower(event.Cmdline), keyword) &&
 			!strings.Contains(strings.ToLower(event.ProcessName), keyword) &&
 			!strings.Contains(strings.ToLower(event.Username), keyword) &&
-			!strings.Contains(strings.ToLower(event.LoginUsername), keyword) {
+			!strings.Contains(strings.ToLower(event.LoginUsername), keyword) &&
+			!strings.Contains(strings.ToLower(event.FilePath), keyword) &&
+			!strings.Contains(strings.ToLower(event.FileOperation), keyword) &&
+			!strings.Contains(strings.ToLower(event.SrcIP), keyword) &&
+			!strings.Contains(strings.ToLower(event.DstIP), keyword) &&
+			!strings.Contains(strings.ToLower(event.Protocol), keyword) &&
+			!strings.Contains(strings.ToLower(event.Domain), keyword) {
 			return false
 		}
 	}
@@ -261,6 +267,14 @@ type eventRow struct {
 	ParentProcessName string   `json:"parent_process_name"`
 	ParentBinaryPath  string   `json:"parent_binary_path"`
 	ParentCmdline     string   `json:"parent_cmdline"`
+	FilePath          string   `json:"file_path"`
+	FileOperation     string   `json:"file_operation"`
+	SrcIP             string   `json:"src_ip"`
+	SrcPort           uint16   `json:"src_port"`
+	DstIP             string   `json:"dst_ip"`
+	DstPort           uint16   `json:"dst_port"`
+	Protocol          string   `json:"protocol"`
+	Domain            string   `json:"domain"`
 	Tags              []string `json:"tags"`
 	RuleIDs           []string `json:"rule_ids"`
 	RuleNames         []string `json:"rule_names"`
@@ -284,6 +298,8 @@ func decodeEventRow(data []byte) (audit.Event, error) {
 		Username: row.Username, UID: row.UID, GID: row.GID, AUID: row.AUID, EUID: row.EUID, EGID: row.EGID, LoginUsername: row.LoginUsername,
 		ProcessName: row.ProcessName, BinaryPath: row.BinaryPath, Cmdline: row.Cmdline, CWD: row.CWD,
 		ParentProcessName: row.ParentProcessName, ParentBinaryPath: row.ParentBinaryPath, ParentCmdline: row.ParentCmdline,
+		FilePath: row.FilePath, FileOperation: row.FileOperation,
+		SrcIP: row.SrcIP, SrcPort: row.SrcPort, DstIP: row.DstIP, DstPort: row.DstPort, Protocol: row.Protocol, Domain: row.Domain,
 		Tags: row.Tags, RuleIDs: row.RuleIDs, RuleNames: row.RuleNames, RuleMatches: ruleMatches, RawEvent: row.RawEvent,
 	}, nil
 }
