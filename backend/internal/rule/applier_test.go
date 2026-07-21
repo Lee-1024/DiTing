@@ -78,3 +78,41 @@ func TestApplyRulesIgnoresDisabledRules(t *testing.T) {
 		t.Fatalf("expected no rule hits, got %#v", enriched.RuleIDs)
 	}
 }
+
+func TestApplyRulesEnrichesSensitiveFileAccessEvent(t *testing.T) {
+	event := audit.Event{
+		EventType:     "file_access",
+		FilePath:      "/etc/passwd",
+		FileOperation: "open",
+		Severity:      "info",
+		RiskScore:     0,
+	}
+	rules := []Rule{{
+		ID:        "rule-file",
+		Name:      "敏感文件探针访问",
+		EventType: "file_access",
+		Enabled:   true,
+		Severity:  "high",
+		RiskScore: 80,
+		MatchExpr: Expression{
+			Operator: "and",
+			Conditions: []Condition{
+				{Field: "event_type", Op: "eq", Value: "file_access"},
+				{Field: "file_path", Op: "in", Values: []string{"/etc/passwd", "/etc/shadow"}},
+			},
+		},
+		Tags: []string{"sensitive-file"},
+	}}
+
+	enriched := ApplyRules(event, rules)
+
+	if enriched.Severity != "high" || enriched.RiskScore != 80 {
+		t.Fatalf("expected high sensitive file risk, got severity=%q score=%d", enriched.Severity, enriched.RiskScore)
+	}
+	if len(enriched.RuleNames) != 1 || enriched.RuleNames[0] != "敏感文件探针访问" {
+		t.Fatalf("expected sensitive file rule hit, got %#v", enriched.RuleNames)
+	}
+	if len(enriched.RuleMatches) != 2 {
+		t.Fatalf("expected file rule match details, got %#v", enriched.RuleMatches)
+	}
+}
