@@ -79,7 +79,7 @@ func TestBootstrapAddsDefaultNetworkRiskRules(t *testing.T) {
 }
 
 func TestBootstrapAddsDefaultFileAccessRiskRule(t *testing.T) {
-	for _, expected := range []string{"敏感文件探针访问", "'file_access'", `"field":"file_path"`, "/etc/passwd"} {
+	for _, expected := range []string{"敏感文件探针访问", "敏感文件写入", "敏感文件权限变更", "敏感文件删除", "'file_access'", `"field":"file_path"`, `"field":"file_operation"`, "/etc/passwd"} {
 		if !strings.Contains(bootstrapSQL, expected) {
 			t.Fatalf("expected bootstrap SQL to include %q", expected)
 		}

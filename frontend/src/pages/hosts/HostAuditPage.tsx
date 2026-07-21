@@ -31,6 +31,9 @@ export default function HostAuditPage() {
   const [riskTimeline, setRiskTimeline] = useState<AuditEvent[]>([]);
   const [hostUsers, setHostUsers] = useState<HostUserItem[]>([]);
   const [hostBehavior, setHostBehavior] = useState<HostBehavior>(emptyBehavior);
+  const [selectedFileTarget, setSelectedFileTarget] = useState<BehaviorItem>();
+  const [fileEvents, setFileEvents] = useState<AuditEvent[]>([]);
+  const [fileLoading, setFileLoading] = useState(false);
   const [selectedNetworkTarget, setSelectedNetworkTarget] = useState<BehaviorItem>();
   const [networkEvents, setNetworkEvents] = useState<AuditEvent[]>([]);
   const [networkLoading, setNetworkLoading] = useState(false);
@@ -175,6 +178,27 @@ export default function HostAuditPage() {
     }
   }
 
+  async function loadFileEvents(item: HostAuditItem, target: BehaviorItem) {
+    const values = form.getFieldsValue();
+    const range = values.timeRange ?? defaultRange;
+    setSelectedFileTarget(target);
+    setFileLoading(true);
+    try {
+      const data = await queryAuditEvents({
+        start_time: range?.[0]?.startOf('day').toISOString(),
+        end_time: range?.[1]?.endOf('day').toISOString(),
+        event_type: 'file_access',
+        host_name: item.hostId || item.nodeName || item.hostName,
+        file_path: target.name,
+        page: 1,
+        page_size: 20,
+      });
+      setFileEvents(data.items ?? []);
+    } finally {
+      setFileLoading(false);
+    }
+  }
+
   async function exportDetailEvents() {
     if (!selected) {
       return;
@@ -256,6 +280,8 @@ export default function HostAuditPage() {
           setRiskTimeline([]);
           setHostUsers([]);
           setHostBehavior(emptyBehavior);
+          setSelectedFileTarget(undefined);
+          setFileEvents([]);
           setSelectedNetworkTarget(undefined);
           setNetworkEvents([]);
           setDetailFilters({});
@@ -340,6 +366,13 @@ export default function HostAuditPage() {
                   dataSource={hostBehavior.filePaths}
                   locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无文件访问" /> }}
                   pagination={false}
+                  onRow={(record) => ({
+                    onClick: () => {
+                      if (selected) {
+                        void loadFileEvents(selected, record);
+                      }
+                    },
+                  })}
                   columns={behaviorColumns('文件路径')}
                 />
               </Col>
@@ -375,6 +408,17 @@ export default function HostAuditPage() {
                 />
               </Col>
             </Row>
+            <Typography.Title level={5}>{selectedFileTarget ? `${selectedFileTarget.name} 文件访问明细` : '文件访问明细'}</Typography.Title>
+            <Table
+              rowKey="eventId"
+              size="small"
+              loading={fileLoading}
+              dataSource={fileEvents}
+              locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="点击敏感文件查看访问明细" /> }}
+              pagination={false}
+              scroll={{ x: 1040 }}
+              columns={fileColumns()}
+            />
             <Typography.Title level={5}>{selectedNetworkTarget ? `${selectedNetworkTarget.name} 连接明细` : '网络连接明细'}</Typography.Title>
             <Table
               rowKey="eventId"
@@ -499,6 +543,19 @@ function networkColumns() {
     { title: '命令', dataIndex: 'cmdline', render: (value: string) => <CommandText value={value} /> },
     { title: '目标', dataIndex: 'dstIp', width: 190, render: (_: string, record: AuditEvent) => formatNetworkTarget(record) },
     { title: '协议', dataIndex: 'protocol', width: 80, render: (value: string) => value || '-' },
+    { title: '等级', dataIndex: 'severity', width: 90, render: (value: string) => <SeverityTag value={value} /> },
+  ];
+}
+
+function fileColumns() {
+  return [
+    { title: '时间', dataIndex: 'eventTime', width: 170, render: (value: string) => formatLocalDateTime(value) },
+    { title: '登录用户', dataIndex: 'loginUsername', width: 110, render: (_: string, record: AuditEvent) => record.loginUsername || record.username },
+    { title: '执行用户', dataIndex: 'username', width: 110 },
+    { title: '进程', dataIndex: 'processName', width: 120 },
+    { title: '操作', dataIndex: 'fileOperation', width: 150, render: (value: string) => value || '-' },
+    { title: '文件路径', dataIndex: 'filePath', render: (value: string) => value || '-' },
+    { title: '命中规则', dataIndex: 'ruleNames', width: 220, render: (value: string[]) => value?.join('、') || '-' },
     { title: '等级', dataIndex: 'severity', width: 90, render: (value: string) => <SeverityTag value={value} /> },
   ];
 }

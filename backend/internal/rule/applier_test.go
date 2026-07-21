@@ -116,3 +116,81 @@ func TestApplyRulesEnrichesSensitiveFileAccessEvent(t *testing.T) {
 		t.Fatalf("expected file rule match details, got %#v", enriched.RuleMatches)
 	}
 }
+
+func TestApplyRulesEnrichesSensitiveFileWritePermissionAndDeleteEvents(t *testing.T) {
+	tests := []struct {
+		name          string
+		filePath      string
+		fileOperation string
+		ruleName      string
+		severity      string
+		riskScore     uint8
+		operationOps  []string
+	}{
+		{
+			name:          "write",
+			filePath:      "/etc/ssh/sshd_config",
+			fileOperation: "write",
+			ruleName:      "敏感文件写入",
+			severity:      "critical",
+			riskScore:     92,
+			operationOps:  []string{"write", "truncate", "create"},
+		},
+		{
+			name:          "permission",
+			filePath:      "/etc/sudoers",
+			fileOperation: "chmod",
+			ruleName:      "敏感文件权限变更",
+			severity:      "critical",
+			riskScore:     90,
+			operationOps:  []string{"chmod", "chown", "fchmod", "fchown", "setxattr"},
+		},
+		{
+			name:          "delete",
+			filePath:      "/root/.ssh/authorized_keys",
+			fileOperation: "unlink",
+			ruleName:      "敏感文件删除",
+			severity:      "critical",
+			riskScore:     94,
+			operationOps:  []string{"unlink", "unlinkat", "rmdir"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			event := audit.Event{
+				EventType:     "file_access",
+				FilePath:      tt.filePath,
+				FileOperation: tt.fileOperation,
+				Severity:      "info",
+				RiskScore:     0,
+			}
+			rules := []Rule{{
+				ID:        "rule-" + tt.name,
+				Name:      tt.ruleName,
+				EventType: "file_access",
+				Enabled:   true,
+				Severity:  tt.severity,
+				RiskScore: int(tt.riskScore),
+				MatchExpr: Expression{
+					Operator: "and",
+					Conditions: []Condition{
+						{Field: "event_type", Op: "eq", Value: "file_access"},
+						{Field: "file_path", Op: "regex", Value: "(^/etc/|^/root/\\.ssh/|^/home/[^/]+/\\.ssh/)"},
+						{Field: "file_operation", Op: "in", Values: tt.operationOps},
+					},
+				},
+				Tags: []string{"file-access"},
+			}}
+
+			enriched := ApplyRules(event, rules)
+
+			if enriched.Severity != tt.severity || enriched.RiskScore != tt.riskScore {
+				t.Fatalf("expected %s risk score %d, got severity=%q score=%d", tt.severity, tt.riskScore, enriched.Severity, enriched.RiskScore)
+			}
+			if len(enriched.RuleNames) != 1 || enriched.RuleNames[0] != tt.ruleName {
+				t.Fatalf("expected rule %q, got %#v", tt.ruleName, enriched.RuleNames)
+			}
+		})
+	}
+}

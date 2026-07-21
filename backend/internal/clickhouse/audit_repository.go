@@ -173,6 +173,9 @@ func buildAuditWhere(query audit.Query) string {
 	if query.Cmdline != "" {
 		conditions = append(conditions, "cmdline = '"+escapeSQL(query.Cmdline)+"'")
 	}
+	if query.FilePath != "" {
+		conditions = append(conditions, "file_path = '"+escapeSQL(query.FilePath)+"'")
+	}
 	if query.DstIP != "" {
 		conditions = append(conditions, "dst_ip = '"+escapeSQL(query.DstIP)+"'")
 	}
@@ -224,6 +227,9 @@ func eventMatchesQuery(event audit.Event, query audit.Query) bool {
 		return false
 	}
 	if query.Cmdline != "" && event.Cmdline != query.Cmdline {
+		return false
+	}
+	if query.FilePath != "" && event.FilePath != query.FilePath {
 		return false
 	}
 	if query.DstIP != "" && event.DstIP != query.DstIP {

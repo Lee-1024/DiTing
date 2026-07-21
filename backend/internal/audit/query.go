@@ -22,6 +22,7 @@ type Query struct {
 	ExecUsername  string
 	Keyword       string
 	Cmdline       string
+	FilePath      string
 	DstIP         string
 	DstPort       int
 	Page          int
@@ -47,6 +48,7 @@ func ParseQuery(r *http.Request) (Query, error) {
 		ExecUsername:  strings.TrimSpace(values.Get("exec_username")),
 		Keyword:       strings.TrimSpace(values.Get("keyword")),
 		Cmdline:       strings.TrimSpace(values.Get("cmdline")),
+		FilePath:      strings.TrimSpace(values.Get("file_path")),
 		DstIP:         strings.TrimSpace(values.Get("dst_ip")),
 		DstPort:       parsePositiveInt(values.Get("dst_port"), 0),
 	}
