@@ -375,16 +375,6 @@ export default function HostAuditPage() {
                 />
               </Col>
             </Row>
-            <Typography.Title level={5}>规则命中分布</Typography.Title>
-            <Table
-              rowKey={(record) => record.name}
-              size="small"
-              loading={detailLoading}
-              dataSource={hostBehavior.ruleHits}
-              locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无规则命中" /> }}
-              pagination={false}
-              columns={behaviorColumns('规则')}
-            />
             <Typography.Title level={5}>{selectedNetworkTarget ? `${selectedNetworkTarget.name} 连接明细` : '网络连接明细'}</Typography.Title>
             <Table
               rowKey="eventId"
@@ -395,6 +385,16 @@ export default function HostAuditPage() {
               pagination={false}
               scroll={{ x: 980 }}
               columns={networkColumns()}
+            />
+            <Typography.Title level={5}>规则命中分布</Typography.Title>
+            <Table
+              rowKey={(record) => record.name}
+              size="small"
+              loading={detailLoading}
+              dataSource={hostBehavior.ruleHits}
+              locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无规则命中" /> }}
+              pagination={false}
+              columns={behaviorColumns('规则')}
             />
             <Typography.Title level={5}>命令明细</Typography.Title>
             <Space wrap>
