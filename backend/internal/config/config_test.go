@@ -29,4 +29,13 @@ func TestLoadReadsServerAndDatabaseConfig(t *testing.T) {
 	if cfg.Collector.ReconnectIntervalSeconds != 5 {
 		t.Fatalf("expected reconnect interval 5, got %d", cfg.Collector.ReconnectIntervalSeconds)
 	}
+	if cfg.Collector.Token != "change-me-collector-token" {
+		t.Fatalf("expected collector token from config, got %q", cfg.Collector.Token)
+	}
+	if cfg.Collector.OutputMode != "clickhouse" {
+		t.Fatalf("expected collector output mode clickhouse, got %q", cfg.Collector.OutputMode)
+	}
+	if cfg.Collector.IngestURL != "http://127.0.0.1:8080/api/v1/ingest/events" {
+		t.Fatalf("expected ingest url from config, got %q", cfg.Collector.IngestURL)
+	}
 }

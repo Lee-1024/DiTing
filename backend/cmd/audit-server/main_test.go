@@ -66,6 +66,15 @@ func TestCollectorInputModeDefaultsAndNormalizes(t *testing.T) {
 	}
 }
 
+func TestCollectorOutputModeDefaultsAndNormalizes(t *testing.T) {
+	if collectorOutputMode("") != "clickhouse" {
+		t.Fatal("expected empty collector output mode to default to clickhouse")
+	}
+	if collectorOutputMode(" API ") != "api" {
+		t.Fatal("expected collector output mode to normalize api")
+	}
+}
+
 func TestParseArgsDefaultsToAPIAndExampleConfig(t *testing.T) {
 	mode, configPath := parseArgs([]string{"audit-server"})
 

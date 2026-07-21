@@ -22,11 +22,14 @@ clickhouse:
 
 collector:
   input_mode: file
+  output_mode: clickhouse
+  ingest_url: http://127.0.0.1:8080/api/v1/ingest/events
   tetragon_log_file: /data/tetragon/logs/tetragon.log
   tetragon_grpc_addr: 127.0.0.1:54321
   passwd_file: /etc/passwd
   host_id: server-001
   host_name: diting-test-host
+  token: change-me-collector-token
   flush_interval_seconds: 1
   batch_size: 1000
   reconnect_interval_seconds: 5

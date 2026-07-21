@@ -44,11 +44,14 @@ type ClickHouseConfig struct {
 
 type CollectorConfig struct {
 	InputMode                string
+	OutputMode               string
+	IngestURL                string
 	TetragonLogFile          string
 	TetragonGRPCAddr         string
 	PasswdFile               string
 	HostID                   string
 	HostName                 string
+	Token                    string
 	FlushIntervalSeconds     int
 	BatchSize                int
 	ReconnectIntervalSeconds int
@@ -136,6 +139,10 @@ func assignValue(cfg *Config, section, key, value string) error {
 		switch key {
 		case "input_mode":
 			cfg.Collector.InputMode = value
+		case "output_mode":
+			cfg.Collector.OutputMode = value
+		case "ingest_url":
+			cfg.Collector.IngestURL = value
 		case "tetragon_log_file":
 			cfg.Collector.TetragonLogFile = value
 		case "tetragon_grpc_addr":
@@ -146,6 +153,8 @@ func assignValue(cfg *Config, section, key, value string) error {
 			cfg.Collector.HostID = value
 		case "host_name":
 			cfg.Collector.HostName = value
+		case "token":
+			cfg.Collector.Token = value
 		case "flush_interval_seconds":
 			cfg.Collector.FlushIntervalSeconds = mustInt(key, value)
 		case "batch_size":

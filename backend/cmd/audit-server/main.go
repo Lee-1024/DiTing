@@ -75,7 +75,12 @@ func main() {
 		ruleRepository := rule.NewPostgresRepository(pool)
 		systemConfigRepository := systemconfig.NewPostgresRepository(pool)
 		collectorHealthRepository := collectorhealth.NewPostgresRepository(pool)
-		writer := newRefreshingRuleWriter(client, repositoryRuleProvider{repository: ruleRepository})
+		outputMode := collectorOutputMode(cfg.Collector.OutputMode)
+		sink := eventSink(client)
+		if outputMode == "api" {
+			sink = collectorAPIEventSink{writer: collector.NewAPIWriter(cfg.Collector.IngestURL, cfg.Collector.Token)}
+		}
+		writer := newRefreshingRuleWriter(sink, repositoryRuleProvider{repository: ruleRepository})
 		writer.SetCollectorFilterProvider(systemConfigRepository)
 		if err := writer.Refresh(context.Background()); err != nil {
 			slog.Error("load rules failed", "error", err)
@@ -103,7 +108,7 @@ func main() {
 		go collectorHeartbeatLoop(context.Background(), collectorHealthRepository, hostMetadata, inputMode, 30*time.Second)
 		eventWriter = collector.NewHostMetadataWriter(hostMetadata, eventWriter)
 
-		slog.Info("collector starting", "mode", mode, "input_mode", inputMode, "tetragon_log_file", cfg.Collector.TetragonLogFile, "tetragon_grpc_addr", cfg.Collector.TetragonGRPCAddr, "passwd_file", cfg.Collector.PasswdFile, "batch_size", cfg.Collector.BatchSize, "flush_interval_seconds", cfg.Collector.FlushIntervalSeconds)
+		slog.Info("collector starting", "mode", mode, "input_mode", inputMode, "output_mode", outputMode, "tetragon_log_file", cfg.Collector.TetragonLogFile, "tetragon_grpc_addr", cfg.Collector.TetragonGRPCAddr, "passwd_file", cfg.Collector.PasswdFile, "batch_size", cfg.Collector.BatchSize, "flush_interval_seconds", cfg.Collector.FlushIntervalSeconds)
 		switch inputMode {
 		case "file":
 			fileCollector := collector.NewFileCollector(cfg.Collector.TetragonLogFile, cfg.Collector.BatchSize, eventWriter)
@@ -282,7 +287,20 @@ func main() {
 
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
 	slog.Info("api server listening", "addr", addr)
-	if err := http.ListenAndServe(addr, server.NewRouter(auditRepository, ruleRepository, statsRepository, authService, operationRepository, hostAssetRepository, riskStatusRepository, systemConfigRepository, userAdminRepository, collectorHealthRepository)); err != nil {
+	if err := http.ListenAndServe(addr, server.NewRouter(
+		auditRepository,
+		ruleRepository,
+		statsRepository,
+		authService,
+		operationRepository,
+		hostAssetRepository,
+		riskStatusRepository,
+		systemConfigRepository,
+		userAdminRepository,
+		collectorHealthRepository,
+		server.WithIngestWriter(clickHouseClient),
+		server.WithCollectorToken(cfg.Collector.Token),
+	)); err != nil {
 		slog.Error("api server stopped with error", "addr", addr, "error", err)
 		fmt.Fprintf(os.Stderr, "listen: %v\n", err)
 		os.Exit(1)
@@ -401,6 +419,14 @@ func parseArgs(args []string) (string, string) {
 
 type eventSink interface {
 	WriteEvents(ctx context.Context, events []audit.Event) error
+}
+
+type collectorAPIEventSink struct {
+	writer collector.EventWriter
+}
+
+func (s collectorAPIEventSink) WriteEvents(ctx context.Context, events []audit.Event) error {
+	return s.writer.Write(ctx, events)
 }
 
 type ruleProvider interface {
@@ -540,6 +566,14 @@ func collectorInputMode(value string) string {
 	mode := strings.ToLower(strings.TrimSpace(value))
 	if mode == "" {
 		return "file"
+	}
+	return mode
+}
+
+func collectorOutputMode(value string) string {
+	mode := strings.ToLower(strings.TrimSpace(value))
+	if mode == "" {
+		return "clickhouse"
 	}
 	return mode
 }

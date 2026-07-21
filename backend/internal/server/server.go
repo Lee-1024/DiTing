@@ -9,6 +9,7 @@ import (
 	"diting/backend/internal/auth"
 	"diting/backend/internal/collectorhealth"
 	"diting/backend/internal/hostasset"
+	"diting/backend/internal/ingest"
 	"diting/backend/internal/operationlog"
 	"diting/backend/internal/riskstatus"
 	"diting/backend/internal/rule"
@@ -17,9 +18,33 @@ import (
 	"diting/backend/internal/useradmin"
 )
 
-func NewRouter(repository audit.Repository, ruleRepository rule.Repository, statsRepository stats.Repository, authService *auth.Service, operationRepository operationlog.Repository, hostAssetRepository hostasset.Repository, riskStatusRepository riskstatus.Repository, systemConfigRepository systemconfig.Repository, userAdminRepository useradmin.Repository, collectorHealthRepository collectorhealth.Repository) http.Handler {
+type routerOptions struct {
+	ingestWriter   ingest.EventWriter
+	collectorToken string
+}
+
+type RouterOption func(*routerOptions)
+
+func WithIngestWriter(writer ingest.EventWriter) RouterOption {
+	return func(options *routerOptions) {
+		options.ingestWriter = writer
+	}
+}
+
+func WithCollectorToken(token string) RouterOption {
+	return func(options *routerOptions) {
+		options.collectorToken = token
+	}
+}
+
+func NewRouter(repository audit.Repository, ruleRepository rule.Repository, statsRepository stats.Repository, authService *auth.Service, operationRepository operationlog.Repository, hostAssetRepository hostasset.Repository, riskStatusRepository riskstatus.Repository, systemConfigRepository systemconfig.Repository, userAdminRepository useradmin.Repository, collectorHealthRepository collectorhealth.Repository, opts ...RouterOption) http.Handler {
+	options := routerOptions{}
+	for _, opt := range opts {
+		opt(&options)
+	}
 	mux := http.NewServeMux()
 	auditHandler := audit.NewHandler(repository)
+	ingestHandler := ingest.NewHandler(options.ingestWriter, options.collectorToken)
 	if ruleRepository == nil {
 		ruleRepository = rule.NewMemoryRepository()
 	}
@@ -71,6 +96,7 @@ func NewRouter(repository audit.Repository, ruleRepository rule.Repository, stat
 	mux.Handle("/api/v1/audit/events", protect(http.HandlerFunc(auditHandler.ListEvents)))
 	mux.Handle("/api/v1/audit/events/export", protect(http.HandlerFunc(auditHandler.ExportEvents)))
 	mux.Handle("/api/v1/audit/events/{event_id}", protect(http.HandlerFunc(auditHandler.GetEvent)))
+	mux.HandleFunc("/api/v1/ingest/events", ingestHandler.IngestEvents)
 	if riskStatusHandler != nil {
 		mux.Handle("/api/v1/risk-dispositions/batch", protect(http.HandlerFunc(riskStatusHandler.BatchGet)))
 		mux.Handle("/api/v1/risk-dispositions/{event_id}", protect(http.HandlerFunc(riskStatusHandler.Upsert)))

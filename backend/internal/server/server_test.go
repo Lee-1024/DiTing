@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -9,10 +10,20 @@ import (
 	"testing"
 	"time"
 
+	"diting/backend/internal/audit"
 	"diting/backend/internal/auth"
 	"diting/backend/internal/collectorhealth"
 	"diting/backend/internal/systemconfig"
 )
+
+type fakeIngestWriter struct {
+	events []audit.Event
+}
+
+func (f *fakeIngestWriter) WriteEvents(_ context.Context, events []audit.Event) error {
+	f.events = append(f.events, events...)
+	return nil
+}
 
 func TestHealthzReturnsOK(t *testing.T) {
 	router := NewRouter(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
@@ -72,6 +83,36 @@ func TestProtectedRouteRequiresAuthWhenAuthServiceConfigured(t *testing.T) {
 
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("expected status 401, got %d", rec.Code)
+	}
+}
+
+func TestIngestRouteRequiresCollectorToken(t *testing.T) {
+	writer := &fakeIngestWriter{}
+	router := NewRouter(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, WithIngestWriter(writer), WithCollectorToken("secret-token"))
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/ingest/events", strings.NewReader(`{"events":[]}`))
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status 401, got %d", rec.Code)
+	}
+}
+
+func TestIngestRouteWritesAuthorizedEvents(t *testing.T) {
+	writer := &fakeIngestWriter{}
+	router := NewRouter(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, WithIngestWriter(writer), WithCollectorToken("secret-token"))
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/ingest/events", strings.NewReader(`{"events":[{"eventId":"evt-1","eventType":"process_exec"}]}`))
+	req.Header.Set("Authorization", "Bearer secret-token")
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("expected status 202, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	if len(writer.events) != 1 || writer.events[0].EventID != "evt-1" {
+		t.Fatalf("expected event written, got %#v", writer.events)
 	}
 }
 
