@@ -165,8 +165,8 @@ export default function MainLayout() {
           <Typography.Text strong>操作日志审计平台</Typography.Text>
           <Space className="header-actions">
             <Dropdown dropdownRender={() => alertDropdown} trigger={['click']} placement="bottomRight">
-              <Badge count={alerts.length} size="small">
-                <Button icon={<BellOutlined />} onClick={(event) => event.preventDefault()} />
+              <Badge count={alerts.length} size="small" showZero>
+                <Button icon={<BellOutlined />} onClick={(event) => event.preventDefault()}>告警</Button>
               </Badge>
             </Dropdown>
             <Typography.Text>{user?.displayName || user?.username}</Typography.Text>
