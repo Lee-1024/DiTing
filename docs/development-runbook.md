@@ -34,6 +34,25 @@ Build backend and frontend:
 .\scripts\build.ps1
 ```
 
+Build a static Linux collector binary without depending on the build machine C library:
+
+```bash
+bash scripts/build-collector-linux.sh
+```
+
+Build arm64 or run tests before packaging:
+
+```bash
+bash scripts/build-collector-linux.sh --arch arm64 --test
+```
+
+The output defaults to `dist/collector-linux-amd64`. Copy it to the Linux test host and start collector mode:
+
+```bash
+chmod +x ./collector-linux-amd64
+./collector-linux-amd64 collector --config ./config.yaml
+```
+
 ## Backend
 
 Run tests from the backend directory:
