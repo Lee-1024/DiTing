@@ -367,6 +367,8 @@ func TestStatsRepositoryHostBehaviorAggregatesFileNetworkAndEventTypes(t *testin
 			_, _ = w.Write([]byte(`{"name":"/etc/passwd","count":"2","first_seen":"2026-07-15 01:59:58.000","last_seen":"2026-07-15 02:26:45.000"}` + "\n"))
 		case strings.Contains(body, "event_type = 'network_connect'"):
 			_, _ = w.Write([]byte(`{"name":"93.184.216.34:443","count":"1","first_seen":"2026-07-15 02:10:00.000","last_seen":"2026-07-15 02:10:00.000"}` + "\n"))
+		case strings.Contains(body, "arrayJoin(rule_names) AS name"):
+			_, _ = w.Write([]byte(`{"name":"敏感文件探针访问","count":"2","first_seen":"2026-07-15 01:59:58.000","last_seen":"2026-07-15 02:26:45.000"}` + "\n"))
 		default:
 			_, _ = w.Write([]byte(`{"name":"file_access","count":"2","first_seen":"2026-07-15 01:59:58.000","last_seen":"2026-07-15 02:26:45.000"}` + "\n"))
 		}
@@ -397,6 +399,8 @@ func TestStatsRepositoryHostBehaviorAggregatesFileNetworkAndEventTypes(t *testin
 		"IPv6StringToNumOrNull(dst_ip) IS NOT NULL",
 		"dst_ip != 'invalid IP'",
 		"event_type != 'process_exec'",
+		"arrayJoin(rule_names) AS name",
+		"length(rule_names) > 0",
 	} {
 		if !strings.Contains(joined, expected) {
 			t.Fatalf("expected %q in host behavior queries, got %s", expected, joined)
@@ -410,6 +414,9 @@ func TestStatsRepositoryHostBehaviorAggregatesFileNetworkAndEventTypes(t *testin
 	}
 	if len(behavior.EventTypes) != 1 || behavior.EventTypes[0].Name != "file_access" {
 		t.Fatalf("unexpected event type behavior %#v", behavior.EventTypes)
+	}
+	if len(behavior.RuleHits) != 1 || behavior.RuleHits[0].Name != "敏感文件探针访问" || behavior.RuleHits[0].Count != 2 {
+		t.Fatalf("unexpected rule hit behavior %#v", behavior.RuleHits)
 	}
 }
 

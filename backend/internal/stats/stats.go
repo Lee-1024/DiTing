@@ -66,8 +66,9 @@ type HostUserItem struct {
 
 type HostBehavior struct {
 	FilePaths  []BehaviorItem `json:"filePaths"`
-	Network   []BehaviorItem `json:"network"`
+	Network    []BehaviorItem `json:"network"`
 	EventTypes []BehaviorItem `json:"eventTypes"`
+	RuleHits   []BehaviorItem `json:"ruleHits"`
 }
 
 type BehaviorItem struct {

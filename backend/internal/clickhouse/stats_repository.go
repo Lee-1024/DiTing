@@ -492,7 +492,23 @@ FORMAT JSONEachRow`, r.table(), statsWhere(query), hostFilter, limit)
 		return stats.HostBehavior{}, err
 	}
 
-	return stats.HostBehavior{FilePaths: filePaths, Network: network, EventTypes: eventTypes}, nil
+	ruleHitSQL := fmt.Sprintf(`SELECT
+	arrayJoin(rule_names) AS name,
+	count() AS count,
+	min(event_time) AS first_seen,
+	max(event_time) AS last_seen
+FROM %s
+WHERE %s%s AND length(rule_names) > 0
+GROUP BY name
+ORDER BY count DESC, last_seen DESC
+LIMIT %d
+FORMAT JSONEachRow`, r.table(), statsWhere(query), hostFilter, limit)
+	ruleHits, err := r.behaviorItems(ctx, ruleHitSQL)
+	if err != nil {
+		return stats.HostBehavior{}, err
+	}
+
+	return stats.HostBehavior{FilePaths: filePaths, Network: network, EventTypes: eventTypes, RuleHits: ruleHits}, nil
 }
 
 func (r *StatsRepository) behaviorItems(ctx context.Context, sql string) ([]stats.BehaviorItem, error) {

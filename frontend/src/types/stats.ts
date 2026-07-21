@@ -90,6 +90,7 @@ export interface HostBehavior {
   filePaths: BehaviorItem[];
   network: BehaviorItem[];
   eventTypes: BehaviorItem[];
+  ruleHits: BehaviorItem[];
 }
 
 export interface RuleHitItem {

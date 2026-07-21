@@ -49,8 +49,9 @@ func (fakeRepository) HostUsers(_ context.Context, query Query) ([]HostUserItem,
 func (fakeRepository) HostBehavior(_ context.Context, query Query) (HostBehavior, error) {
 	return HostBehavior{
 		FilePaths:  []BehaviorItem{{Name: query.HostName + ":/etc/passwd", Count: 2}},
-		Network:   []BehaviorItem{{Name: "93.184.216.34:443", Count: 1}},
+		Network:    []BehaviorItem{{Name: "93.184.216.34:443", Count: 1}},
 		EventTypes: []BehaviorItem{{Name: "file_access", Count: 2}},
+		RuleHits:   []BehaviorItem{{Name: "敏感文件探针访问", Count: 2}},
 	}, nil
 }
 

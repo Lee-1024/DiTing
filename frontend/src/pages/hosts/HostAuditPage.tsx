@@ -13,7 +13,7 @@ import { eventTypeLabel, severityOptions } from '../../utils/labels';
 import { formatLocalDateTime } from '../../utils/time';
 
 const defaultRange = [dayjs().subtract(7, 'day'), dayjs()] as const;
-const emptyBehavior: HostBehavior = { filePaths: [], network: [], eventTypes: [] };
+const emptyBehavior: HostBehavior = { filePaths: [], network: [], eventTypes: [], ruleHits: [] };
 
 interface DetailFilters {
   username?: string;
@@ -28,6 +28,7 @@ export default function HostAuditPage() {
   const [selected, setSelected] = useState<HostAuditItem>();
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [riskEvents, setRiskEvents] = useState<AuditEvent[]>([]);
+  const [riskTimeline, setRiskTimeline] = useState<AuditEvent[]>([]);
   const [hostUsers, setHostUsers] = useState<HostUserItem[]>([]);
   const [hostBehavior, setHostBehavior] = useState<HostBehavior>(emptyBehavior);
   const [selectedNetworkTarget, setSelectedNetworkTarget] = useState<BehaviorItem>();
@@ -92,7 +93,7 @@ export default function HostAuditPage() {
         host_name: hostName,
         limit: 20,
       };
-      const [data, riskData, usersData, behaviorData] = await Promise.all([
+      const [data, riskData, timelineData, usersData, behaviorData] = await Promise.all([
         queryAuditEvents({
           ...baseQuery,
           page_size: detailPageSize,
@@ -102,6 +103,14 @@ export default function HostAuditPage() {
           severity_in: 'high,critical',
           page_size: 10,
         }),
+        queryAuditEvents({
+          start_time: baseQuery.start_time,
+          end_time: baseQuery.end_time,
+          host_name: hostName,
+          severity_in: 'medium,high,critical',
+          page: 1,
+          page_size: 12,
+        }),
         getHostUsers(hostUserQuery),
         getHostBehavior(hostUserQuery),
       ]);
@@ -109,6 +118,7 @@ export default function HostAuditPage() {
       setDetailPage(data.page);
       setDetailTotal(data.total);
       setRiskEvents(riskData.items ?? []);
+      setRiskTimeline(timelineData.items ?? []);
       setHostUsers(usersData ?? []);
       setHostBehavior(behaviorData ?? emptyBehavior);
       setDetailFilters({});
@@ -243,6 +253,7 @@ export default function HostAuditPage() {
           setSelected(undefined);
           setEvents([]);
           setRiskEvents([]);
+          setRiskTimeline([]);
           setHostUsers([]);
           setHostBehavior(emptyBehavior);
           setSelectedNetworkTarget(undefined);
@@ -281,6 +292,17 @@ export default function HostAuditPage() {
               locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无高危命令" /> }}
               pagination={false}
               columns={commandColumns()}
+            />
+            <Typography.Title level={5}>最近风险时间线</Typography.Title>
+            <Table
+              rowKey="eventId"
+              size="small"
+              loading={detailLoading}
+              dataSource={riskTimeline}
+              locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无风险事件" /> }}
+              pagination={false}
+              scroll={{ x: 1120 }}
+              columns={riskTimelineColumns()}
             />
             <Typography.Title level={5}>用户分布</Typography.Title>
             <Table
@@ -353,6 +375,16 @@ export default function HostAuditPage() {
                 />
               </Col>
             </Row>
+            <Typography.Title level={5}>规则命中分布</Typography.Title>
+            <Table
+              rowKey={(record) => record.name}
+              size="small"
+              loading={detailLoading}
+              dataSource={hostBehavior.ruleHits}
+              locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无规则命中" /> }}
+              pagination={false}
+              columns={behaviorColumns('规则')}
+            />
             <Typography.Title level={5}>{selectedNetworkTarget ? `${selectedNetworkTarget.name} 连接明细` : '网络连接明细'}</Typography.Title>
             <Table
               rowKey="eventId"
@@ -469,6 +501,29 @@ function networkColumns() {
     { title: '协议', dataIndex: 'protocol', width: 80, render: (value: string) => value || '-' },
     { title: '等级', dataIndex: 'severity', width: 90, render: (value: string) => <SeverityTag value={value} /> },
   ];
+}
+
+function riskTimelineColumns() {
+  return [
+    { title: '时间', dataIndex: 'eventTime', width: 170, render: (value: string) => formatLocalDateTime(value) },
+    { title: '类型', dataIndex: 'eventType', width: 110, render: (value: string) => eventTypeLabel(value) },
+    { title: '登录用户', dataIndex: 'loginUsername', width: 110, render: (_: string, record: AuditEvent) => record.loginUsername || record.username },
+    { title: '执行用户', dataIndex: 'username', width: 110 },
+    { title: '进程', dataIndex: 'processName', width: 120 },
+    { title: '风险目标', dataIndex: 'cmdline', render: (_: string, record: AuditEvent) => riskTarget(record) },
+    { title: '命中规则', dataIndex: 'ruleNames', width: 220, render: (value: string[]) => value?.join('、') || '-' },
+    { title: '等级', dataIndex: 'severity', width: 90, render: (value: string) => <SeverityTag value={value} /> },
+  ];
+}
+
+function riskTarget(record: AuditEvent) {
+  if (record.eventType === 'file_access' && record.filePath) {
+    return `${record.fileOperation || '访问'} ${record.filePath}`;
+  }
+  if (record.eventType === 'network_connect' && record.dstIp) {
+    return formatNetworkTarget(record);
+  }
+  return <CommandText value={record.cmdline || record.processName || '-'} />;
 }
 
 function formatNetworkTarget(record: AuditEvent) {
