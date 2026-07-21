@@ -84,8 +84,8 @@ export default function EventDetailDrawer({ event, eventId, open, onClose }: Pro
           <Descriptions title="文件与网络" column={1} bordered size="small">
             <Descriptions.Item label="文件路径">{current.filePath || '-'}</Descriptions.Item>
             <Descriptions.Item label="文件操作">{current.fileOperation || '-'}</Descriptions.Item>
-            <Descriptions.Item label="源地址">{current.srcIp ? `${current.srcIp}:${current.srcPort || ''}` : '-'}</Descriptions.Item>
-            <Descriptions.Item label="目标地址">{current.dstIp ? `${current.dstIp}:${current.dstPort || ''}` : '-'}</Descriptions.Item>
+            <Descriptions.Item label="源地址">{formatAddress(current.srcIp, current.srcPort)}</Descriptions.Item>
+            <Descriptions.Item label="目标地址">{formatAddress(current.dstIp, current.dstPort)}</Descriptions.Item>
             <Descriptions.Item label="协议">{current.protocol || '-'}</Descriptions.Item>
             <Descriptions.Item label="域名">{current.domain || '-'}</Descriptions.Item>
           </Descriptions>
@@ -98,6 +98,8 @@ export default function EventDetailDrawer({ event, eventId, open, onClose }: Pro
             </Descriptions.Item>
           </Descriptions>
           {current.ruleMatches?.length ? (
+            <>
+            <Typography.Title level={5}>命中条件</Typography.Title>
             <Table
               rowKey={(record, index) => `${record.ruleId}-${record.field}-${index}`}
               size="small"
@@ -111,6 +113,7 @@ export default function EventDetailDrawer({ event, eventId, open, onClose }: Pro
                 { title: '实际值', dataIndex: 'actual' },
               ]}
             />
+            </>
           ) : null}
           <Typography.Title level={5}>原始事件</Typography.Title>
           <pre className="detail-json">{formatJSON(current.rawEvent)}</pre>
@@ -118,4 +121,12 @@ export default function EventDetailDrawer({ event, eventId, open, onClose }: Pro
       )}
     </Drawer>
   );
+}
+
+function formatAddress(ip?: string, port?: number) {
+  if (!ip) {
+    return '-';
+  }
+  const formattedIP = ip.includes(':') ? `[${ip}]` : ip;
+  return port ? `${formattedIP}:${port}` : formattedIP;
 }

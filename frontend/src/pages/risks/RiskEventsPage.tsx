@@ -9,7 +9,7 @@ import SeverityTag from '../../components/SeverityTag';
 import type { AuditEvent, AuditEventQuery } from '../../types/audit';
 import type { RiskDisposition, RiskDispositionMap, RiskDispositionStatus } from '../../types/riskDisposition';
 import { downloadBlob } from '../../utils/download';
-import { eventTypeOptions, severityLabel } from '../../utils/labels';
+import { eventTypeLabel, eventTypeOptions, severityLabel } from '../../utils/labels';
 import { formatLocalDateTime } from '../../utils/time';
 import EventDetailDrawer from '../audit-events/EventDetailDrawer';
 
@@ -169,7 +169,7 @@ export default function RiskEventsPage() {
           loading={loading}
           dataSource={events}
           locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无风险事件" /> }}
-          scroll={{ x: 1040 }}
+          scroll={{ x: 1240 }}
           onRow={(record) => ({ onClick: () => setSelected(record) })}
           pagination={{
             current: page,
@@ -186,10 +186,12 @@ export default function RiskEventsPage() {
           columns={[
             { title: '时间', dataIndex: 'eventTime', width: 170, fixed: 'left', render: (value) => formatLocalDateTime(value) },
             { title: '等级', dataIndex: 'severity', width: 86, render: (value) => <SeverityTag value={value} /> },
+            { title: '类型', dataIndex: 'eventType', width: 104, render: (value) => eventTypeLabel(value) || '-' },
             { title: '登录用户', dataIndex: 'loginUsername', width: 96, render: (_, record) => record.loginUsername || record.username },
             { title: '执行用户', dataIndex: 'username', width: 96 },
             { title: '节点', dataIndex: 'nodeName', width: 120, render: (_, record) => record.nodeName || record.hostName },
             { title: '进程', dataIndex: 'processName', width: 110 },
+            { title: '风险对象', width: 210, render: (_, record) => riskTarget(record) },
             { title: '命令', dataIndex: 'cmdline', render: (value, record) => <CommandText value={value} onView={() => setSelected(record)} /> },
             {
               title: '命中规则',
@@ -252,6 +254,34 @@ export default function RiskEventsPage() {
       </Modal>
     </>
   );
+}
+
+function riskTarget(record: AuditEvent) {
+  if (record.eventType === 'network_connect') {
+    return record.dstIp ? (
+      <Space direction="vertical" size={0}>
+        <Typography.Text>{formatNetworkTarget(record)}</Typography.Text>
+        <Typography.Text type="secondary">{record.protocol || '-'}</Typography.Text>
+      </Space>
+    ) : <Typography.Text type="secondary">-</Typography.Text>;
+  }
+  if (record.eventType === 'file_access') {
+    return record.filePath ? (
+      <Space direction="vertical" size={0}>
+        <Typography.Text ellipsis style={{ maxWidth: 190 }}>{record.filePath}</Typography.Text>
+        <Typography.Text type="secondary">{record.fileOperation || '-'}</Typography.Text>
+      </Space>
+    ) : <Typography.Text type="secondary">-</Typography.Text>;
+  }
+  return record.processName ? <Typography.Text>{record.processName}</Typography.Text> : <Typography.Text type="secondary">-</Typography.Text>;
+}
+
+function formatNetworkTarget(record: AuditEvent) {
+  if (!record.dstIp) {
+    return '-';
+  }
+  const ip = record.dstIp.includes(':') ? `[${record.dstIp}]` : record.dstIp;
+  return record.dstPort ? `${ip}:${record.dstPort}` : ip;
 }
 
 function DispositionTag({ disposition }: { disposition: RiskDisposition }) {
