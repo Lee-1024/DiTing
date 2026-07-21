@@ -169,7 +169,7 @@ export default function RiskEventsPage() {
           loading={loading}
           dataSource={events}
           locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无风险事件" /> }}
-          scroll={{ x: 1240 }}
+          scroll={{ x: 1400 }}
           onRow={(record) => ({ onClick: () => setSelected(record) })}
           pagination={{
             current: page,
@@ -191,6 +191,7 @@ export default function RiskEventsPage() {
             { title: '执行用户', dataIndex: 'username', width: 96 },
             { title: '节点', dataIndex: 'nodeName', width: 120, render: (_, record) => record.nodeName || record.hostName },
             { title: '进程', dataIndex: 'processName', width: 110 },
+            { title: '进程链路', width: 190, render: (_, record) => processChain(record) },
             { title: '风险对象', width: 210, render: (_, record) => riskTarget(record) },
             { title: '命令', dataIndex: 'cmdline', render: (value, record) => <CommandText value={value} onView={() => setSelected(record)} /> },
             {
@@ -274,6 +275,18 @@ function riskTarget(record: AuditEvent) {
     ) : <Typography.Text type="secondary">-</Typography.Text>;
   }
   return record.processName ? <Typography.Text>{record.processName}</Typography.Text> : <Typography.Text type="secondary">-</Typography.Text>;
+}
+
+function processChain(record: AuditEvent) {
+  if (!record.parentProcessName && !record.processName) {
+    return <Typography.Text type="secondary">-</Typography.Text>;
+  }
+  return (
+    <Space direction="vertical" size={0}>
+      {record.parentProcessName && <Typography.Text type="secondary">{record.parentProcessName}</Typography.Text>}
+      <Typography.Text>{record.parentProcessName ? `-> ${record.processName || '-'}` : record.processName || '-'}</Typography.Text>
+    </Space>
+  );
 }
 
 function formatNetworkTarget(record: AuditEvent) {

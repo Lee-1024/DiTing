@@ -327,7 +327,7 @@ export default function HostAuditPage() {
               dataSource={riskTimeline}
               locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无风险事件" /> }}
               pagination={false}
-              scroll={{ x: 1120 }}
+              scroll={{ x: 1280 }}
               columns={riskTimelineColumns()}
             />
             <Typography.Title level={5}>用户分布</Typography.Title>
@@ -416,7 +416,7 @@ export default function HostAuditPage() {
               dataSource={fileEvents}
               locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="点击敏感文件查看访问明细" /> }}
               pagination={false}
-              scroll={{ x: 1040 }}
+              scroll={{ x: 1200 }}
               columns={fileColumns()}
             />
             <Typography.Title level={5}>{selectedNetworkTarget ? `${selectedNetworkTarget.name} 连接明细` : '网络连接明细'}</Typography.Title>
@@ -427,7 +427,7 @@ export default function HostAuditPage() {
               dataSource={networkEvents}
               locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="点击网络目标查看连接明细" /> }}
               pagination={false}
-              scroll={{ x: 980 }}
+              scroll={{ x: 1140 }}
               columns={networkColumns()}
             />
             <Typography.Title level={5}>规则命中分布</Typography.Title>
@@ -540,6 +540,7 @@ function networkColumns() {
     { title: '登录用户', dataIndex: 'loginUsername', width: 110, render: (_: string, record: AuditEvent) => record.loginUsername || record.username },
     { title: '执行用户', dataIndex: 'username', width: 110 },
     { title: '进程', dataIndex: 'processName', width: 120 },
+    { title: '进程链路', width: 190, render: (_: string, record: AuditEvent) => processChain(record) },
     { title: '命令', dataIndex: 'cmdline', render: (value: string) => <CommandText value={value} /> },
     { title: '目标', dataIndex: 'dstIp', width: 190, render: (_: string, record: AuditEvent) => formatNetworkTarget(record) },
     { title: '协议', dataIndex: 'protocol', width: 80, render: (value: string) => value || '-' },
@@ -553,6 +554,7 @@ function fileColumns() {
     { title: '登录用户', dataIndex: 'loginUsername', width: 110, render: (_: string, record: AuditEvent) => record.loginUsername || record.username },
     { title: '执行用户', dataIndex: 'username', width: 110 },
     { title: '进程', dataIndex: 'processName', width: 120 },
+    { title: '进程链路', width: 190, render: (_: string, record: AuditEvent) => processChain(record) },
     { title: '操作', dataIndex: 'fileOperation', width: 150, render: (value: string) => value || '-' },
     { title: '文件路径', dataIndex: 'filePath', render: (value: string) => value || '-' },
     { title: '命中规则', dataIndex: 'ruleNames', width: 220, render: (value: string[]) => value?.join('、') || '-' },
@@ -567,6 +569,7 @@ function riskTimelineColumns() {
     { title: '登录用户', dataIndex: 'loginUsername', width: 110, render: (_: string, record: AuditEvent) => record.loginUsername || record.username },
     { title: '执行用户', dataIndex: 'username', width: 110 },
     { title: '进程', dataIndex: 'processName', width: 120 },
+    { title: '进程链路', width: 190, render: (_: string, record: AuditEvent) => processChain(record) },
     { title: '风险目标', dataIndex: 'cmdline', render: (_: string, record: AuditEvent) => riskTarget(record) },
     { title: '命中规则', dataIndex: 'ruleNames', width: 220, render: (value: string[]) => value?.join('、') || '-' },
     { title: '等级', dataIndex: 'severity', width: 90, render: (value: string) => <SeverityTag value={value} /> },
@@ -583,6 +586,13 @@ function riskTarget(record: AuditEvent) {
   return <CommandText value={record.cmdline || record.processName || '-'} />;
 }
 
+function processChain(record: AuditEvent) {
+  if (!record.parentProcessName && !record.processName) {
+    return '-';
+  }
+  return record.parentProcessName ? `${record.parentProcessName} -> ${record.processName || '-'}` : record.processName || '-';
+}
+
 function formatNetworkTarget(record: AuditEvent) {
   if (!record.dstIp) {
     return '-';
@@ -597,6 +607,7 @@ function commandColumns() {
     { title: '登录用户', dataIndex: 'loginUsername', width: 110, render: (_: string, record: AuditEvent) => record.loginUsername || record.username },
     { title: '执行用户', dataIndex: 'username', width: 110 },
     { title: '进程', dataIndex: 'processName', width: 120 },
+    { title: '进程链路', width: 190, render: (_: string, record: AuditEvent) => processChain(record) },
     { title: '命令', dataIndex: 'cmdline', render: (value: string) => <CommandText value={value} /> },
     { title: '等级', dataIndex: 'severity', width: 90, render: (value: string) => <SeverityTag value={value} /> },
   ];

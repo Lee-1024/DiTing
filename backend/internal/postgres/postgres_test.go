@@ -85,3 +85,12 @@ func TestBootstrapAddsDefaultFileAccessRiskRule(t *testing.T) {
 		}
 	}
 }
+
+func TestBootstrapAddsDefaultProcessChainRiskRules(t *testing.T) {
+	sql := bootstrapSQL + "\n" + defaultProcessChainRiskRulesSQL
+	for _, expected := range []string{"Shell 下载工具外联链路", "Web 服务拉起 Shell", "Shell 拉起解释器外联", `"field":"parent_process_name"`, `"process-chain"`} {
+		if !strings.Contains(sql, expected) {
+			t.Fatalf("expected bootstrap SQL to include %q", expected)
+		}
+	}
+}

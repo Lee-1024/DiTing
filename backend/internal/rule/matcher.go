@@ -124,6 +124,12 @@ func fieldValue(field string, event audit.Event) string {
 		return event.BinaryPath
 	case "cmdline":
 		return event.Cmdline
+	case "parent_process_name":
+		return event.ParentProcessName
+	case "parent_binary_path":
+		return event.ParentBinaryPath
+	case "parent_cmdline":
+		return event.ParentCmdline
 	case "username":
 		return event.Username
 	case "login_username":
