@@ -1,7 +1,7 @@
-import { AuditOutlined, BellOutlined, CodeOutlined, DashboardOutlined, FileSearchOutlined, HddOutlined, MonitorOutlined, SafetyCertificateOutlined, SettingOutlined, TeamOutlined, ThunderboltOutlined, UserOutlined } from '@ant-design/icons';
+import { AuditOutlined, BellOutlined, CodeOutlined, DashboardOutlined, DownOutlined, FileSearchOutlined, HddOutlined, MonitorOutlined, SafetyCertificateOutlined, SettingOutlined, TeamOutlined, ThunderboltOutlined, UserOutlined } from '@ant-design/icons';
 import { Badge, Button, Dropdown, Form, Input, Layout, List, Menu, Modal, Space, Typography, message } from 'antd';
 import dayjs from 'dayjs';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { queryAuditEvents } from '../api/audit';
 import { changePassword } from '../api/auth';
@@ -30,8 +30,6 @@ export default function MainLayout() {
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [alerts, setAlerts] = useState<HeaderAlert[]>([]);
-  const knownAlertIds = useRef<Set<string>>(new Set());
-  const alertInitialized = useRef(false);
   const [form] = Form.useForm();
 
   function logout() {
@@ -69,16 +67,6 @@ export default function MainLayout() {
       ...collectorAlerts(collectors),
       ...(riskData.items ?? []).map(riskAlert),
     ].slice(0, 20);
-    const nextIds = new Set(nextAlerts.map((item) => item.id));
-    if (alertInitialized.current) {
-      const fresh = nextAlerts.filter((item) => !knownAlertIds.current.has(item.id));
-      if (fresh.length > 0) {
-        const latest = fresh[0];
-        message.warning(latest.type === 'collector' ? latest.title : `发现新的高危事件：${latest.title}`);
-      }
-    }
-    knownAlertIds.current = nextIds;
-    alertInitialized.current = true;
     setAlerts(nextAlerts);
   }
 
@@ -95,7 +83,7 @@ export default function MainLayout() {
   }, []);
 
   const alertDropdown = (
-    <div style={{ width: 360, maxHeight: 420, overflow: 'auto', padding: 8 }}>
+    <div className="header-alert-dropdown">
       <List
         size="small"
         dataSource={alerts}
@@ -116,6 +104,21 @@ export default function MainLayout() {
       />
     </div>
   );
+
+  const userMenu = {
+    items: [
+      { key: 'password', label: '修改密码' },
+      { key: 'logout', label: '退出登录' },
+    ],
+    onClick: ({ key }: { key: string }) => {
+      if (key === 'password') {
+        setPasswordOpen(true);
+      }
+      if (key === 'logout') {
+        logout();
+      }
+    },
+  };
 
   return (
     <Layout className="app-shell">
@@ -169,9 +172,15 @@ export default function MainLayout() {
                 <Button icon={<BellOutlined />} onClick={(event) => event.preventDefault()}>告警</Button>
               </Badge>
             </Dropdown>
-            <Typography.Text>{user?.displayName || user?.username}</Typography.Text>
-            <Button onClick={() => setPasswordOpen(true)}>修改密码</Button>
-            <Button onClick={logout}>退出</Button>
+            <Dropdown menu={userMenu} trigger={['click']} placement="bottomRight">
+              <Button type="text">
+                <Space size={6}>
+                  <UserOutlined />
+                  <span>{user?.displayName || user?.username}</span>
+                  <DownOutlined />
+                </Space>
+              </Button>
+            </Dropdown>
           </Space>
         </Header>
         <Content className="app-content">
