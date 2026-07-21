@@ -48,6 +48,31 @@ func main() {
 	)
 
 	if mode == "collector" || mode == "collector-once" {
+		outputMode := collectorOutputMode(cfg.Collector.OutputMode)
+		inputMode := collectorInputMode(cfg.Collector.InputMode)
+		if outputMode == "api" {
+			eventWriter := collector.EventWriter(collector.NewAPIWriter(cfg.Collector.IngestURL, cfg.Collector.Token))
+			if cfg.Collector.PasswdFile != "" {
+				resolver, err := collector.NewPasswdUserResolver(cfg.Collector.PasswdFile)
+				if err != nil {
+					slog.Error("load passwd file failed", "path", cfg.Collector.PasswdFile, "error", err)
+					fmt.Fprintf(os.Stderr, "load passwd file: %v\n", err)
+					os.Exit(1)
+				}
+				slog.Info("passwd file loaded", "path", cfg.Collector.PasswdFile)
+				eventWriter = collector.NewIdentityWriter(resolver, eventWriter)
+			}
+			hostMetadata := collector.ResolveHostMetadata(cfg.Collector.HostID, cfg.Collector.HostName)
+			slog.Info("collector host metadata resolved", "host_id", hostMetadata.ID, "host_name", hostMetadata.Name)
+			eventWriter = collector.NewHostMetadataWriter(hostMetadata, eventWriter)
+			slog.Info("collector starting", "mode", mode, "input_mode", inputMode, "output_mode", outputMode, "ingest_url", cfg.Collector.IngestURL, "tetragon_log_file", cfg.Collector.TetragonLogFile, "tetragon_grpc_addr", cfg.Collector.TetragonGRPCAddr, "passwd_file", cfg.Collector.PasswdFile, "batch_size", cfg.Collector.BatchSize, "flush_interval_seconds", cfg.Collector.FlushIntervalSeconds)
+			if err := runCollectorInput(context.Background(), mode, inputMode, cfg, eventWriter, nil, nil); err != nil {
+				slog.Error("collector stopped with error", "error", err)
+				fmt.Fprintf(os.Stderr, "run collector: %v\n", err)
+				os.Exit(1)
+			}
+			return
+		}
 		client := ch.NewHTTPClient(ch.HTTPConfig{
 			URL:      ch.HTTPURLFromAddress(cfg.ClickHouse.Addr),
 			Database: cfg.ClickHouse.Database,
@@ -75,11 +100,7 @@ func main() {
 		ruleRepository := rule.NewPostgresRepository(pool)
 		systemConfigRepository := systemconfig.NewPostgresRepository(pool)
 		collectorHealthRepository := collectorhealth.NewPostgresRepository(pool)
-		outputMode := collectorOutputMode(cfg.Collector.OutputMode)
 		sink := eventSink(client)
-		if outputMode == "api" {
-			sink = collectorAPIEventSink{writer: collector.NewAPIWriter(cfg.Collector.IngestURL, cfg.Collector.Token)}
-		}
 		writer := newRefreshingRuleWriter(sink, repositoryRuleProvider{repository: ruleRepository})
 		writer.SetCollectorFilterProvider(systemConfigRepository)
 		if err := writer.Refresh(context.Background()); err != nil {
@@ -103,43 +124,16 @@ func main() {
 		}
 		hostMetadata := collector.ResolveHostMetadata(cfg.Collector.HostID, cfg.Collector.HostName)
 		slog.Info("collector host metadata resolved", "host_id", hostMetadata.ID, "host_name", hostMetadata.Name)
-		inputMode := collectorInputMode(cfg.Collector.InputMode)
 		writer.SetHeartbeatRecorder(collectorHealthRepository, inputMode)
 		go collectorHeartbeatLoop(context.Background(), collectorHealthRepository, hostMetadata, inputMode, 30*time.Second)
 		eventWriter = collector.NewHostMetadataWriter(hostMetadata, eventWriter)
 
 		slog.Info("collector starting", "mode", mode, "input_mode", inputMode, "output_mode", outputMode, "tetragon_log_file", cfg.Collector.TetragonLogFile, "tetragon_grpc_addr", cfg.Collector.TetragonGRPCAddr, "passwd_file", cfg.Collector.PasswdFile, "batch_size", cfg.Collector.BatchSize, "flush_interval_seconds", cfg.Collector.FlushIntervalSeconds)
-		switch inputMode {
-		case "file":
-			fileCollector := collector.NewFileCollector(cfg.Collector.TetragonLogFile, cfg.Collector.BatchSize, eventWriter)
-			if mode == "collector-once" {
-				err = fileCollector.RunOnce(context.Background())
-			} else {
-				err = fileCollector.Tail(context.Background(), time.Duration(cfg.Collector.FlushIntervalSeconds)*time.Second)
-			}
-		case "grpc":
-			grpcCollector := collector.NewGRPCCollector(cfg.Collector.TetragonGRPCAddr, cfg.Collector.BatchSize, eventWriter)
-			grpcCollector.SetReconnectInterval(time.Duration(cfg.Collector.ReconnectIntervalSeconds) * time.Second)
-			grpcCollector.SetFlushInterval(time.Duration(cfg.Collector.FlushIntervalSeconds) * time.Second)
-			grpcCollector.SetConnectHandler(func() {
-				recordCollectorConnected(context.Background(), collectorHealthRepository, hostMetadata, inputMode)
-			})
-			grpcCollector.SetErrorHandler(func(err error) {
-				recordCollectorError(context.Background(), collectorHealthRepository, hostMetadata, inputMode, err)
-			})
-			if mode == "collector-once" {
-				err = grpcCollector.RunOnce(context.Background())
-			} else {
-				err = grpcCollector.Run(context.Background())
-			}
-			if err != nil {
-				recordCollectorError(context.Background(), collectorHealthRepository, hostMetadata, inputMode, err)
-			}
-		default:
-			err = fmt.Errorf("unsupported collector input_mode %q", inputMode)
+		if err := runCollectorInput(context.Background(), mode, inputMode, cfg, eventWriter, func() {
+			recordCollectorConnected(context.Background(), collectorHealthRepository, hostMetadata, inputMode)
+		}, func(err error) {
 			recordCollectorError(context.Background(), collectorHealthRepository, hostMetadata, inputMode, err)
-		}
-		if err != nil {
+		}); err != nil {
 			slog.Error("collector stopped with error", "error", err)
 			fmt.Fprintf(os.Stderr, "run collector: %v\n", err)
 			os.Exit(1)
@@ -576,6 +570,37 @@ func collectorOutputMode(value string) string {
 		return "clickhouse"
 	}
 	return mode
+}
+
+func runCollectorInput(ctx context.Context, mode string, inputMode string, cfg config.Config, eventWriter collector.EventWriter, onConnect func(), onError func(error)) error {
+	switch inputMode {
+	case "file":
+		fileCollector := collector.NewFileCollector(cfg.Collector.TetragonLogFile, cfg.Collector.BatchSize, eventWriter)
+		if mode == "collector-once" {
+			return fileCollector.RunOnce(ctx)
+		}
+		return fileCollector.Tail(ctx, time.Duration(cfg.Collector.FlushIntervalSeconds)*time.Second)
+	case "grpc":
+		grpcCollector := collector.NewGRPCCollector(cfg.Collector.TetragonGRPCAddr, cfg.Collector.BatchSize, eventWriter)
+		grpcCollector.SetReconnectInterval(time.Duration(cfg.Collector.ReconnectIntervalSeconds) * time.Second)
+		grpcCollector.SetFlushInterval(time.Duration(cfg.Collector.FlushIntervalSeconds) * time.Second)
+		if onConnect != nil {
+			grpcCollector.SetConnectHandler(onConnect)
+		}
+		if onError != nil {
+			grpcCollector.SetErrorHandler(onError)
+		}
+		if mode == "collector-once" {
+			return grpcCollector.RunOnce(ctx)
+		}
+		return grpcCollector.Run(ctx)
+	default:
+		err := fmt.Errorf("unsupported collector input_mode %q", inputMode)
+		if onError != nil {
+			onError(err)
+		}
+		return err
+	}
 }
 
 func (w *refreshingRuleWriter) Refresh(ctx context.Context) error {
