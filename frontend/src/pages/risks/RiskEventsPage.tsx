@@ -14,9 +14,11 @@ import { formatLocalDateTime } from '../../utils/time';
 import EventDetailDrawer from '../audit-events/EventDetailDrawer';
 
 const defaultRange = [dayjs().subtract(7, 'day'), dayjs()] as const;
+type DispositionFilter = 'all' | RiskDispositionStatus;
 
 export default function RiskEventsPage() {
   const [events, setEvents] = useState<AuditEvent[]>([]);
+  const [visibleEvents, setVisibleEvents] = useState<AuditEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<AuditEvent>();
   const [total, setTotal] = useState(0);
@@ -55,12 +57,14 @@ export default function RiskEventsPage() {
       if (seq !== requestSeq.current) {
         return;
       }
-      setEvents(data.items ?? []);
-      const statusMap = await getRiskDispositions((data.items ?? []).map((item) => item.eventId));
+      const items = data.items ?? [];
+      setEvents(items);
+      const statusMap = await getRiskDispositions(items.map((item) => item.eventId));
       if (seq !== requestSeq.current) {
         return;
       }
       setDispositions(statusMap);
+      setVisibleEvents(filterEventsByDisposition(items, statusMap, formValues.dispositionStatus ?? 'all'));
       setTotal(data.total);
       setPage(data.page);
       setPageSize(nextPageSize);
@@ -105,6 +109,8 @@ export default function RiskEventsPage() {
     try {
       const updated = await updateRiskDisposition(dispositionEvent.eventId, values.status, values.note ?? '');
       setDispositions((current) => ({ ...current, [updated.eventId]: updated }));
+      const nextDispositions = { ...dispositions, [updated.eventId]: updated };
+      setVisibleEvents(filterEventsByDisposition(events, nextDispositions, form.getFieldValue('dispositionStatus') ?? 'all'));
       message.success('处置状态已更新');
       setDispositionOpen(false);
     } finally {
@@ -132,7 +138,7 @@ export default function RiskEventsPage() {
       <div className="page-heading">
         <Typography.Title level={3} className="page-title">风险事件</Typography.Title>
       </div>
-      <FilterToolbar form={form} initialValues={{ timeRange: defaultRange, severity: 'medium,high,critical' }} onSearch={submit} onReset={() => void resetAndLoad()} onExport={() => void exportCSV()}>
+      <FilterToolbar form={form} initialValues={{ timeRange: defaultRange, severity: 'medium,high,critical', dispositionStatus: 'all' }} onSearch={submit} onReset={() => void resetAndLoad()} onExport={() => void exportCSV()}>
         <Form.Item name="timeRange" label="时间" className="filter-field-time">
           <DatePicker.RangePicker />
         </Form.Item>
@@ -159,6 +165,17 @@ export default function RiskEventsPage() {
         <Form.Item name="username" label="用户">
           <Input className="filter-control-compact" placeholder="root / ubuntu" allowClear />
         </Form.Item>
+        <Form.Item name="dispositionStatus" label="处置状态">
+          <Select
+            className="filter-control-compact"
+            options={[
+              { value: 'all', label: '全部' },
+              { value: 'open', label: '未处理' },
+              { value: 'confirmed', label: '已确认' },
+              { value: 'ignored', label: '已忽略' },
+            ]}
+          />
+        </Form.Item>
         <Form.Item name="keyword" label="关键字">
           <Input className="filter-control-compact" placeholder="wget / docker" allowClear />
         </Form.Item>
@@ -167,7 +184,7 @@ export default function RiskEventsPage() {
         <Table
           rowKey="eventId"
           loading={loading}
-          dataSource={events}
+          dataSource={visibleEvents}
           locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无风险事件" /> }}
           scroll={{ x: 1400 }}
           onRow={(record) => ({ onClick: () => setSelected(record) })}
@@ -275,6 +292,13 @@ function riskTarget(record: AuditEvent) {
     ) : <Typography.Text type="secondary">-</Typography.Text>;
   }
   return record.processName ? <Typography.Text>{record.processName}</Typography.Text> : <Typography.Text type="secondary">-</Typography.Text>;
+}
+
+function filterEventsByDisposition(events: AuditEvent[], dispositions: RiskDispositionMap, status: DispositionFilter) {
+  if (status === 'all') {
+    return events;
+  }
+  return events.filter((event) => (dispositions[event.eventId]?.status ?? 'open') === status);
 }
 
 function processChain(record: AuditEvent) {
