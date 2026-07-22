@@ -48,7 +48,7 @@ func (r *AuditRepository) ListEvents(ctx context.Context, query audit.Query) ([]
 	if err != nil {
 		return nil, 0, err
 	}
-	return events, total, nil
+	return collapseDuplicateListEvents(events), total, nil
 }
 
 func (r *AuditRepository) GetEvent(ctx context.Context, eventID string) (audit.Event, error) {
@@ -105,21 +105,12 @@ func buildListEventsSQL(database string, query audit.Query) string {
 	}
 
 	where := buildAuditWhere(query)
-	if len(query.EventIDs) > 0 {
-		return fmt.Sprintf(`SELECT %s
+	return fmt.Sprintf(`SELECT %s
 FROM %s
 WHERE %s
 ORDER BY event_time DESC
 LIMIT %d OFFSET %d
 FORMAT JSONEachRow`, auditEventListSelectFields(), table, where, limit, offset)
-	}
-	return fmt.Sprintf(`SELECT %s
-FROM %s
-WHERE %s
-ORDER BY event_time DESC
-LIMIT 1 BY %s
-LIMIT %d OFFSET %d
-FORMAT JSONEachRow`, auditEventListSelectFields(), table, where, auditEventListDedupFields(), limit, offset)
 }
 
 func buildGetEventSQL(database string, eventID string) string {
@@ -139,24 +130,10 @@ func auditEventListSelectFields() string {
 }
 
 func buildCountEventsSQL(database string, query audit.Query) string {
-	if len(query.EventIDs) > 0 {
-		return fmt.Sprintf(`SELECT count() AS total
+	return fmt.Sprintf(`SELECT count() AS total
 FROM %s
 WHERE %s
 FORMAT JSONEachRow`, auditTable(database), buildAuditWhere(query))
-	}
-	return fmt.Sprintf(`SELECT count() AS total
-FROM (
-    SELECT 1
-    FROM %s
-    WHERE %s
-    LIMIT 1 BY %s
-)
-FORMAT JSONEachRow`, auditTable(database), buildAuditWhere(query), auditEventListDedupFields())
-}
-
-func auditEventListDedupFields() string {
-	return "toStartOfSecond(event_time), event_type, action, if(host_id != '', host_id, node_name), login_username, username, process_name, cmdline, dst_ip, dst_port"
 }
 
 func buildAuditWhere(query audit.Query) string {
@@ -300,6 +277,47 @@ func eventMatchesQuery(event audit.Event, query audit.Query) bool {
 		}
 	}
 	return true
+}
+
+func collapseDuplicateListEvents(events []audit.Event) []audit.Event {
+	if len(events) <= 1 {
+		return events
+	}
+	seen := map[string]struct{}{}
+	result := make([]audit.Event, 0, len(events))
+	for _, event := range events {
+		key := listEventDedupKey(event)
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		result = append(result, event)
+	}
+	return result
+}
+
+func listEventDedupKey(event audit.Event) string {
+	return strings.Join([]string{
+		event.EventTime.Truncate(time.Second).Format(time.RFC3339),
+		event.EventType,
+		event.Action,
+		firstNonEmpty(event.HostID, event.NodeName, event.HostName),
+		event.LoginUsername,
+		event.Username,
+		event.ProcessName,
+		event.Cmdline,
+		event.DstIP,
+		fmt.Sprintf("%d", event.DstPort),
+	}, "\x00")
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func escapeSQL(value string) string {

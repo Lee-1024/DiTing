@@ -41,8 +41,8 @@ func TestAuditRepositoryQueriesEventsAsJSON(t *testing.T) {
 	if !strings.Contains(joinedBodies, "FROM diting.audit_events") {
 		t.Fatalf("expected table in query, got %s", joinedBodies)
 	}
-	if !strings.Contains(joinedBodies, "LIMIT 1 BY toStartOfSecond(event_time), event_type") {
-		t.Fatalf("expected list query to collapse duplicate operation events, got %s", joinedBodies)
+	if strings.Contains(joinedBodies, "LIMIT 1 BY") {
+		t.Fatalf("expected list query to avoid expensive ClickHouse LIMIT BY, got %s", joinedBodies)
 	}
 	if !strings.Contains(joinedBodies, "count() AS total") {
 		t.Fatalf("expected count query, got %s", joinedBodies)
@@ -58,6 +58,24 @@ func TestAuditRepositoryQueriesEventsAsJSON(t *testing.T) {
 	}
 	if len(events[0].RuleMatches) != 1 || events[0].RuleMatches[0].Field != "cmdline" || events[0].RuleMatches[0].Value != "id" {
 		t.Fatalf("expected rule matches to be decoded, got %#v", events[0].RuleMatches)
+	}
+}
+
+func TestCollapseDuplicateListEvents(t *testing.T) {
+	eventTime := time.Date(2026, 7, 22, 14, 34, 6, 0, time.UTC)
+	events := []audit.Event{
+		{EventID: "evt-1", EventTime: eventTime, EventType: "file_access", Action: "sys_unlink", HostID: "host-1", LoginUsername: "ubuntu", Username: "ubuntu", ProcessName: "rm", Cmdline: "/usr/bin/rm test", FilePath: "test"},
+		{EventID: "evt-2", EventTime: eventTime.Add(100 * time.Millisecond), EventType: "file_access", Action: "sys_unlink", HostID: "host-1", LoginUsername: "ubuntu", Username: "ubuntu", ProcessName: "rm", Cmdline: "/usr/bin/rm test", FilePath: "test"},
+		{EventID: "evt-3", EventTime: eventTime, EventType: "process_exit", Action: "exit", HostID: "host-1", LoginUsername: "ubuntu", Username: "ubuntu", ProcessName: "rm", Cmdline: "/usr/bin/rm test"},
+	}
+
+	collapsed := collapseDuplicateListEvents(events)
+
+	if len(collapsed) != 2 {
+		t.Fatalf("expected duplicate file events to collapse while keeping process exit, got %#v", collapsed)
+	}
+	if collapsed[0].EventID != "evt-1" || collapsed[1].EventID != "evt-3" {
+		t.Fatalf("unexpected collapsed events %#v", collapsed)
 	}
 }
 
