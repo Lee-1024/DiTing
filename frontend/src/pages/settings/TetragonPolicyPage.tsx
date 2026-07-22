@@ -96,8 +96,7 @@ function generatePolicy(values: PolicyFormValues) {
   if (values.mode === 'disabled') {
     return `# 当前策略已禁用，未生成可部署的 TracingPolicy。\n# 请选择“仅审计”或“拦截”后再复制/下载。`;
   }
-  const action = values.mode === 'enforce' ? '\n        selectors:\n        - matchActions:\n          - action: Sigkill' : '';
-  const template = policyTemplate(values, action);
+  const template = policyTemplate(values);
   return `apiVersion: cilium.io/v1alpha1
 kind: TracingPolicy
 metadata:
@@ -106,25 +105,23 @@ spec:
 ${template}`;
 }
 
-function policyTemplate(values: PolicyFormValues, action: string) {
+function policyTemplate(values: PolicyFormValues) {
   switch (values.template) {
     case 'sensitive_file':
-      return kprobeBlock('file-access', 'security_file_open', 'file_access', 'file', values.filePaths ?? [], action);
+      return kprobeBlock('file-access', 'security_file_open', 'file_access', 'file', values.filePaths ?? [], values.mode);
     case 'permission_change':
-      return syscallBlock('permission-change', ['chmod', 'fchmodat', 'chown', 'fchownat'], 'process_exec', values.commands ?? [], action);
+      return syscallBlock('permission-change', ['chmod', 'fchmodat', 'chown', 'fchownat'], 'process_exec', values.commands ?? [], values.mode);
     case 'delete_behavior':
-      return syscallBlock('delete-behavior', ['unlink', 'unlinkat', 'rmdir'], 'process_exec', values.commands ?? [], action);
+      return syscallBlock('delete-behavior', ['unlink', 'unlinkat', 'rmdir'], 'process_exec', values.commands ?? [], values.mode);
     case 'suspicious_process':
-      return syscallBlock('suspicious-process', ['execve'], 'process_exec', values.processNames ?? [], action);
+      return syscallBlock('suspicious-process', ['execve'], 'process_exec', values.processNames ?? [], values.mode);
     default:
-      return syscallBlock('dangerous-command', ['execve'], 'process_exec', values.commands ?? [], action);
+      return syscallBlock('dangerous-command', ['execve'], 'process_exec', values.commands ?? [], values.mode);
   }
 }
 
-function syscallBlock(name: string, syscalls: string[], returnArg: string, binaries: string[], action: string) {
-  const binarySelectors = (binaries.length ? binaries : ['bash']).map((item) => `          - operator: In
-            values:
-            - "${escapeYaml(item)}"`).join('\n');
+function syscallBlock(name: string, _syscalls: string[], returnArg: string, binaries: string[], mode: PolicyMode) {
+  const binarySelectors = (binaries.length ? binaries : ['bash']).map((item) => `            - "${escapeYaml(item)}"`).join('\n');
   return `  kprobes:
   - call: "sys_execve"
     syscall: true
@@ -137,15 +134,16 @@ function syscallBlock(name: string, syscalls: string[], returnArg: string, binar
       type: "int"
     tags:
     - "${name}"
-    - "${returnArg}"${action}
-        - matchArgs:
-          - index: 0
-            operator: Prefix
-            values:
-${binarySelectors}`;
+    - "${returnArg}"
+    selectors:
+    - matchArgs:
+      - index: 0
+        operator: Postfix
+        values:
+${binarySelectors}${matchActions(mode)}`;
 }
 
-function kprobeBlock(name: string, call: string, tag: string, argType: string, paths: string[], action: string) {
+function kprobeBlock(name: string, call: string, tag: string, argType: string, paths: string[], mode: PolicyMode) {
   const values = (paths.length ? paths : ['/etc/passwd']).map((path) => `            - "${escapeYaml(path)}"`).join('\n');
   return `  kprobes:
   - call: "${call}"
@@ -156,12 +154,22 @@ function kprobeBlock(name: string, call: string, tag: string, argType: string, p
       type: "${argType}"
     tags:
     - "${name}"
-    - "${tag}"${action}
-        - matchArgs:
-          - index: 0
-            operator: Prefix
-            values:
-${values}`;
+    - "${tag}"
+    selectors:
+    - matchArgs:
+      - index: 0
+        operator: Prefix
+        values:
+${values}${matchActions(mode)}`;
+}
+
+function matchActions(mode: PolicyMode) {
+  if (mode !== 'enforce') {
+    return '';
+  }
+  return `
+      matchActions:
+      - action: Sigkill`;
 }
 
 function sanitizeName(value: string) {
