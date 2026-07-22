@@ -41,6 +41,9 @@ func TestAuditRepositoryQueriesEventsAsJSON(t *testing.T) {
 	if !strings.Contains(joinedBodies, "FROM diting.audit_events") {
 		t.Fatalf("expected table in query, got %s", joinedBodies)
 	}
+	if !strings.Contains(joinedBodies, "LIMIT 1 BY toStartOfSecond(event_time), event_type") {
+		t.Fatalf("expected list query to collapse duplicate operation events, got %s", joinedBodies)
+	}
 	if !strings.Contains(joinedBodies, "count() AS total") {
 		t.Fatalf("expected count query, got %s", joinedBodies)
 	}

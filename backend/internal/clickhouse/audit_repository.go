@@ -105,12 +105,21 @@ func buildListEventsSQL(database string, query audit.Query) string {
 	}
 
 	where := buildAuditWhere(query)
-	return fmt.Sprintf(`SELECT %s
+	if len(query.EventIDs) > 0 {
+		return fmt.Sprintf(`SELECT %s
 FROM %s
 WHERE %s
 ORDER BY event_time DESC
 LIMIT %d OFFSET %d
 FORMAT JSONEachRow`, auditEventListSelectFields(), table, where, limit, offset)
+	}
+	return fmt.Sprintf(`SELECT %s
+FROM %s
+WHERE %s
+ORDER BY event_time DESC
+LIMIT 1 BY %s
+LIMIT %d OFFSET %d
+FORMAT JSONEachRow`, auditEventListSelectFields(), table, where, auditEventListDedupFields(), limit, offset)
 }
 
 func buildGetEventSQL(database string, eventID string) string {
@@ -130,10 +139,24 @@ func auditEventListSelectFields() string {
 }
 
 func buildCountEventsSQL(database string, query audit.Query) string {
-	return fmt.Sprintf(`SELECT count() AS total
+	if len(query.EventIDs) > 0 {
+		return fmt.Sprintf(`SELECT count() AS total
 FROM %s
 WHERE %s
 FORMAT JSONEachRow`, auditTable(database), buildAuditWhere(query))
+	}
+	return fmt.Sprintf(`SELECT count() AS total
+FROM (
+    SELECT 1
+    FROM %s
+    WHERE %s
+    LIMIT 1 BY %s
+)
+FORMAT JSONEachRow`, auditTable(database), buildAuditWhere(query), auditEventListDedupFields())
+}
+
+func auditEventListDedupFields() string {
+	return "toStartOfSecond(event_time), event_type, action, if(host_id != '', host_id, node_name), login_username, username, process_name, cmdline, dst_ip, dst_port"
 }
 
 func buildAuditWhere(query audit.Query) string {
