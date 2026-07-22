@@ -121,7 +121,7 @@ export default function AuditEventsPage() {
           loading={loading}
           dataSource={events}
           locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无审计事件" /> }}
-          scroll={{ x: 1320 }}
+          scroll={{ x: 1540 }}
           onRow={(record) => ({ onClick: () => setSelected(record) })}
           pagination={{
             current: page,
@@ -144,6 +144,8 @@ export default function AuditEventsPage() {
             { title: '登录用户', dataIndex: 'loginUsername', width: 120, render: (_, record) => record.loginUsername || record.username },
             { title: '执行用户', dataIndex: 'username', width: 120 },
             { title: '进程', dataIndex: 'processName', width: 140 },
+            { title: '文件路径', dataIndex: 'filePath', width: 220, render: (value) => value || '-' },
+            { title: '文件操作', dataIndex: 'fileOperation', width: 120, render: (value) => value || '-' },
             { title: '命令', dataIndex: 'cmdline', render: (value, record) => <CommandText value={value} onView={() => setSelected(record)} /> },
           ]}
         />

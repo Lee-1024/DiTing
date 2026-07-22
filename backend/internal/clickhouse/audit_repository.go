@@ -48,7 +48,7 @@ func (r *AuditRepository) ListEvents(ctx context.Context, query audit.Query) ([]
 	if err != nil {
 		return nil, 0, err
 	}
-	return collapseDuplicateListEvents(events), total, nil
+	return events, total, nil
 }
 
 func (r *AuditRepository) GetEvent(ctx context.Context, eventID string) (audit.Event, error) {
@@ -277,47 +277,6 @@ func eventMatchesQuery(event audit.Event, query audit.Query) bool {
 		}
 	}
 	return true
-}
-
-func collapseDuplicateListEvents(events []audit.Event) []audit.Event {
-	if len(events) <= 1 {
-		return events
-	}
-	seen := map[string]struct{}{}
-	result := make([]audit.Event, 0, len(events))
-	for _, event := range events {
-		key := listEventDedupKey(event)
-		if _, exists := seen[key]; exists {
-			continue
-		}
-		seen[key] = struct{}{}
-		result = append(result, event)
-	}
-	return result
-}
-
-func listEventDedupKey(event audit.Event) string {
-	return strings.Join([]string{
-		event.EventTime.Truncate(time.Second).Format(time.RFC3339),
-		event.EventType,
-		event.Action,
-		firstNonEmpty(event.HostID, event.NodeName, event.HostName),
-		event.LoginUsername,
-		event.Username,
-		event.ProcessName,
-		event.Cmdline,
-		event.DstIP,
-		fmt.Sprintf("%d", event.DstPort),
-	}, "\x00")
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if value != "" {
-			return value
-		}
-	}
-	return ""
 }
 
 func escapeSQL(value string) string {

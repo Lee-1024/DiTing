@@ -61,24 +61,6 @@ func TestAuditRepositoryQueriesEventsAsJSON(t *testing.T) {
 	}
 }
 
-func TestCollapseDuplicateListEvents(t *testing.T) {
-	eventTime := time.Date(2026, 7, 22, 14, 34, 6, 0, time.UTC)
-	events := []audit.Event{
-		{EventID: "evt-1", EventTime: eventTime, EventType: "file_access", Action: "sys_unlink", HostID: "host-1", LoginUsername: "ubuntu", Username: "ubuntu", ProcessName: "rm", Cmdline: "/usr/bin/rm test", FilePath: "test"},
-		{EventID: "evt-2", EventTime: eventTime.Add(100 * time.Millisecond), EventType: "file_access", Action: "sys_unlink", HostID: "host-1", LoginUsername: "ubuntu", Username: "ubuntu", ProcessName: "rm", Cmdline: "/usr/bin/rm test", FilePath: "test"},
-		{EventID: "evt-3", EventTime: eventTime, EventType: "process_exit", Action: "exit", HostID: "host-1", LoginUsername: "ubuntu", Username: "ubuntu", ProcessName: "rm", Cmdline: "/usr/bin/rm test"},
-	}
-
-	collapsed := collapseDuplicateListEvents(events)
-
-	if len(collapsed) != 2 {
-		t.Fatalf("expected duplicate file events to collapse while keeping process exit, got %#v", collapsed)
-	}
-	if collapsed[0].EventID != "evt-1" || collapsed[1].EventID != "evt-3" {
-		t.Fatalf("unexpected collapsed events %#v", collapsed)
-	}
-}
-
 func TestAuditRepositoryFiltersCommandDetails(t *testing.T) {
 	var body string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
