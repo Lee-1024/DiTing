@@ -158,6 +158,7 @@ export default function MainLayout() {
                 { key: '/settings/collector-health', icon: <MonitorOutlined />, label: '采集状态' },
                 { key: '/settings/collector-debug', icon: <FileSearchOutlined />, label: '采集调试' },
                 { key: '/settings/collector', icon: <SettingOutlined />, label: '采集配置' },
+                { key: '/settings/tetragon-policies', icon: <SafetyCertificateOutlined />, label: '拦截策略' },
               ],
             },
           ]}
