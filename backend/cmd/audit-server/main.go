@@ -454,17 +454,23 @@ func (w *apiHeartbeatWriter) Write(ctx context.Context, events []audit.Event) er
 		recordCollectorAPIError(ctx, w.writer, w.metadata, w.inputMode, err)
 		return err
 	}
+	if w.writer.LastWriteBuffered() {
+		recordCollectorAPIConnected(ctx, w.writer, w.metadata, w.inputMode)
+		return nil
+	}
 	lastEventTime := newestEventTime(events)
 	writeAt := time.Now().UTC()
 	if heartbeatErr := w.writer.WriteHeartbeat(ctx, collector.APIHeartbeat{
-		HostID:        w.metadata.ID,
-		HostName:      w.metadata.Name,
-		InputMode:     w.inputMode,
-		ClearError:    true,
-		LastSeenAt:    writeAt,
-		LastEventTime: &lastEventTime,
-		LastWriteAt:   &writeAt,
-		EventsWritten: uint64(len(events)),
+		HostID:         w.metadata.ID,
+		HostName:       w.metadata.Name,
+		InputMode:      w.inputMode,
+		ClearError:     true,
+		LastSeenAt:     writeAt,
+		LastEventTime:  &lastEventTime,
+		LastWriteAt:    &writeAt,
+		EventsWritten:  uint64(len(events)),
+		BufferedEvents: w.writer.BufferedEvents(),
+		DroppedEvents:  w.writer.DroppedEvents(),
 	}); heartbeatErr != nil {
 		slog.Error("collector api heartbeat failed", "host_id", w.metadata.ID, "error", heartbeatErr)
 	}
@@ -629,11 +635,13 @@ func recordCollectorAPIConnected(ctx context.Context, writer *collector.APIWrite
 		return
 	}
 	if err := writer.WriteHeartbeat(ctx, collector.APIHeartbeat{
-		HostID:     metadata.ID,
-		HostName:   metadata.Name,
-		InputMode:  collectorInputMode(inputMode),
-		ClearError: true,
-		LastSeenAt: time.Now().UTC(),
+		HostID:         metadata.ID,
+		HostName:       metadata.Name,
+		InputMode:      collectorInputMode(inputMode),
+		ClearError:     true,
+		LastSeenAt:     time.Now().UTC(),
+		BufferedEvents: writer.BufferedEvents(),
+		DroppedEvents:  writer.DroppedEvents(),
 	}); err != nil {
 		slog.Error("collector api heartbeat failed", "host_id", metadata.ID, "error", err)
 	}
@@ -644,11 +652,13 @@ func recordCollectorAPIError(ctx context.Context, writer *collector.APIWriter, m
 		return
 	}
 	if heartbeatErr := writer.WriteHeartbeat(ctx, collector.APIHeartbeat{
-		HostID:     metadata.ID,
-		HostName:   metadata.Name,
-		InputMode:  collectorInputMode(inputMode),
-		LastError:  err.Error(),
-		LastSeenAt: time.Now().UTC(),
+		HostID:         metadata.ID,
+		HostName:       metadata.Name,
+		InputMode:      collectorInputMode(inputMode),
+		LastError:      err.Error(),
+		LastSeenAt:     time.Now().UTC(),
+		BufferedEvents: writer.BufferedEvents(),
+		DroppedEvents:  writer.DroppedEvents(),
 	}); heartbeatErr != nil {
 		slog.Error("collector api heartbeat failed", "host_id", metadata.ID, "error", heartbeatErr)
 	}

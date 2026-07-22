@@ -36,7 +36,7 @@ export default function CollectorHealthPage() {
           loading={loading}
           dataSource={items}
           locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无采集状态" /> }}
-          scroll={{ x: 1120 }}
+          scroll={{ x: 1360 }}
           pagination={{
             pageSize: tablePageSize,
             showSizeChanger: true,
@@ -69,6 +69,18 @@ export default function CollectorHealthPage() {
             { title: '最近写入', dataIndex: 'lastWriteAt', width: 190, render: (value) => formatLocalDateTime(value) },
             { title: '写入延迟', dataIndex: 'writeLagSeconds', width: 110, render: (value) => formatLag(value) },
             { title: '累计写入', dataIndex: 'eventsWritten', width: 120, render: (value) => compactNumber(value) },
+            {
+              title: '缓冲中',
+              dataIndex: 'bufferedEvents',
+              width: 110,
+              render: (value) => value ? <Tag color="gold">{compactNumber(value)}</Tag> : compactNumber(value || 0),
+            },
+            {
+              title: '累计丢弃',
+              dataIndex: 'droppedEvents',
+              width: 120,
+              render: (value) => value ? <Tag color="red">{compactNumber(value)}</Tag> : compactNumber(value || 0),
+            },
             { title: '更新时间', dataIndex: 'updatedAt', width: 190, render: (value) => formatLocalDateTime(value) },
           ]}
         />

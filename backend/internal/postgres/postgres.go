@@ -213,6 +213,8 @@ CREATE TABLE IF NOT EXISTS diting_collector_heartbeats (
     last_event_time TIMESTAMPTZ,
     last_write_at TIMESTAMPTZ,
     events_written BIGINT NOT NULL DEFAULT 0,
+    buffered_events BIGINT NOT NULL DEFAULT 0,
+    dropped_events BIGINT NOT NULL DEFAULT 0,
     updated_at TIMESTAMPTZ NOT NULL
 );
 
@@ -221,6 +223,12 @@ ALTER TABLE diting_collector_heartbeats
 
 ALTER TABLE diting_collector_heartbeats
     ADD COLUMN IF NOT EXISTS last_error TEXT NOT NULL DEFAULT '';
+
+ALTER TABLE diting_collector_heartbeats
+    ADD COLUMN IF NOT EXISTS buffered_events BIGINT NOT NULL DEFAULT 0;
+
+ALTER TABLE diting_collector_heartbeats
+    ADD COLUMN IF NOT EXISTS dropped_events BIGINT NOT NULL DEFAULT 0;
 
 CREATE INDEX IF NOT EXISTS idx_diting_collector_heartbeats_last_seen_at ON diting_collector_heartbeats(last_seen_at);
 

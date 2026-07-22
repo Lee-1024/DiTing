@@ -23,19 +23,23 @@ type Heartbeat struct {
 	EventLagSeconds     int64      `json:"eventLagSeconds,omitempty"`
 	WriteLagSeconds     int64      `json:"writeLagSeconds,omitempty"`
 	EventsWritten       uint64     `json:"eventsWritten"`
+	BufferedEvents      int        `json:"bufferedEvents"`
+	DroppedEvents       uint64     `json:"droppedEvents"`
 	UpdatedAt           time.Time  `json:"updatedAt"`
 }
 
 type HeartbeatUpdate struct {
-	HostID        string
-	HostName      string
-	InputMode     string
-	LastError     string
-	ClearError    bool
-	LastSeenAt    time.Time
-	LastEventTime *time.Time
-	LastWriteAt   *time.Time
-	EventsWritten uint64
+	HostID         string
+	HostName       string
+	InputMode      string
+	LastError      string
+	ClearError     bool
+	LastSeenAt     time.Time
+	LastEventTime  *time.Time
+	LastWriteAt    *time.Time
+	EventsWritten  uint64
+	BufferedEvents int
+	DroppedEvents  uint64
 }
 
 type Repository interface {
@@ -81,15 +85,17 @@ func (h *Handler) Report(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var request struct {
-		HostID        string     `json:"hostId"`
-		HostName      string     `json:"hostName"`
-		InputMode     string     `json:"inputMode"`
-		LastError     string     `json:"lastError"`
-		ClearError    bool       `json:"clearError"`
-		LastSeenAt    time.Time  `json:"lastSeenAt"`
-		LastEventTime *time.Time `json:"lastEventTime"`
-		LastWriteAt   *time.Time `json:"lastWriteAt"`
-		EventsWritten uint64     `json:"eventsWritten"`
+		HostID         string     `json:"hostId"`
+		HostName       string     `json:"hostName"`
+		InputMode      string     `json:"inputMode"`
+		LastError      string     `json:"lastError"`
+		ClearError     bool       `json:"clearError"`
+		LastSeenAt     time.Time  `json:"lastSeenAt"`
+		LastEventTime  *time.Time `json:"lastEventTime"`
+		LastWriteAt    *time.Time `json:"lastWriteAt"`
+		EventsWritten  uint64     `json:"eventsWritten"`
+		BufferedEvents int        `json:"bufferedEvents"`
+		DroppedEvents  uint64     `json:"droppedEvents"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 		http.Error(w, "invalid json", http.StatusBadRequest)
@@ -103,15 +109,17 @@ func (h *Handler) Report(w http.ResponseWriter, r *http.Request) {
 		request.LastSeenAt = time.Now().UTC()
 	}
 	if err := h.repository.Upsert(r.Context(), HeartbeatUpdate{
-		HostID:        strings.TrimSpace(request.HostID),
-		HostName:      strings.TrimSpace(request.HostName),
-		InputMode:     strings.TrimSpace(request.InputMode),
-		LastError:     request.LastError,
-		ClearError:    request.ClearError,
-		LastSeenAt:    request.LastSeenAt,
-		LastEventTime: request.LastEventTime,
-		LastWriteAt:   request.LastWriteAt,
-		EventsWritten: request.EventsWritten,
+		HostID:         strings.TrimSpace(request.HostID),
+		HostName:       strings.TrimSpace(request.HostName),
+		InputMode:      strings.TrimSpace(request.InputMode),
+		LastError:      request.LastError,
+		ClearError:     request.ClearError,
+		LastSeenAt:     request.LastSeenAt,
+		LastEventTime:  request.LastEventTime,
+		LastWriteAt:    request.LastWriteAt,
+		EventsWritten:  request.EventsWritten,
+		BufferedEvents: request.BufferedEvents,
+		DroppedEvents:  request.DroppedEvents,
 	}); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

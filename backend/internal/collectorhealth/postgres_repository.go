@@ -17,7 +17,7 @@ func NewPostgresRepository(pool *pgxpool.Pool) *PostgresRepository {
 
 func (r *PostgresRepository) List(ctx context.Context, now time.Time) ([]Heartbeat, error) {
 	rows, err := r.pool.Query(ctx, `
-SELECT host_id, host_name, input_mode, last_error, last_seen_at, last_event_time, last_write_at, events_written, updated_at
+SELECT host_id, host_name, input_mode, last_error, last_seen_at, last_event_time, last_write_at, events_written, buffered_events, dropped_events, updated_at
 FROM diting_collector_heartbeats
 ORDER BY last_seen_at DESC
 `)
@@ -29,7 +29,7 @@ ORDER BY last_seen_at DESC
 	items := []Heartbeat{}
 	for rows.Next() {
 		var item Heartbeat
-		if err := rows.Scan(&item.HostID, &item.HostName, &item.InputMode, &item.LastError, &item.LastSeenAt, &item.LastEventTime, &item.LastWriteAt, &item.EventsWritten, &item.UpdatedAt); err != nil {
+		if err := rows.Scan(&item.HostID, &item.HostName, &item.InputMode, &item.LastError, &item.LastSeenAt, &item.LastEventTime, &item.LastWriteAt, &item.EventsWritten, &item.BufferedEvents, &item.DroppedEvents, &item.UpdatedAt); err != nil {
 			return nil, err
 		}
 		items = append(items, Enrich(item, now))
@@ -48,21 +48,23 @@ func (r *PostgresRepository) Upsert(ctx context.Context, update HeartbeatUpdate)
 		update.LastSeenAt = time.Now().UTC()
 	}
 	_, err := r.pool.Exec(ctx, `
-INSERT INTO diting_collector_heartbeats (host_id, host_name, input_mode, last_error, last_seen_at, last_event_time, last_write_at, events_written, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+INSERT INTO diting_collector_heartbeats (host_id, host_name, input_mode, last_error, last_seen_at, last_event_time, last_write_at, events_written, buffered_events, dropped_events, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
 ON CONFLICT (host_id) DO UPDATE
 SET host_name = EXCLUDED.host_name,
     input_mode = EXCLUDED.input_mode,
     last_error = CASE
-        WHEN EXCLUDED.last_error != '' OR $9 THEN EXCLUDED.last_error
+        WHEN EXCLUDED.last_error != '' OR $11 THEN EXCLUDED.last_error
         ELSE diting_collector_heartbeats.last_error
     END,
     last_seen_at = EXCLUDED.last_seen_at,
     last_event_time = COALESCE(EXCLUDED.last_event_time, diting_collector_heartbeats.last_event_time),
     last_write_at = COALESCE(EXCLUDED.last_write_at, diting_collector_heartbeats.last_write_at),
     events_written = diting_collector_heartbeats.events_written + EXCLUDED.events_written,
+    buffered_events = EXCLUDED.buffered_events,
+    dropped_events = EXCLUDED.dropped_events,
     updated_at = NOW()
-`, update.HostID, update.HostName, inputMode(update.InputMode), update.LastError, update.LastSeenAt, update.LastEventTime, update.LastWriteAt, update.EventsWritten, update.ClearError)
+`, update.HostID, update.HostName, inputMode(update.InputMode), update.LastError, update.LastSeenAt, update.LastEventTime, update.LastWriteAt, update.EventsWritten, update.BufferedEvents, update.DroppedEvents, update.ClearError)
 	return err
 }
 

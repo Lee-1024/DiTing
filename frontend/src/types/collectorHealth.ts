@@ -13,5 +13,7 @@ export interface CollectorHeartbeat {
   eventLagSeconds?: number;
   writeLagSeconds?: number;
   eventsWritten: number;
+  bufferedEvents: number;
+  droppedEvents: number;
   updatedAt: string;
 }

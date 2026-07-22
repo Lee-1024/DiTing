@@ -69,6 +69,10 @@ collector:
 
 In API output mode the collector posts events to `/api/v1/ingest/events` and reports health to `/api/v1/ingest/heartbeat` with the same bearer token. The heartbeat URL is derived from `ingest_url`, so no extra heartbeat setting is required.
 
+API writes retry transient network errors, HTTP 429, and HTTP 5xx responses automatically. Authentication failures such as HTTP 401 are reported immediately and are not retried.
+
+If API writes still fail after retries, event batches are held in a bounded in-memory buffer. The default limit is 1000 events. When the buffer is full, the collector drops the lowest-severity, oldest events first so memory usage stays bounded on small hosts.
+
 ## Backend
 
 Run tests from the backend directory:

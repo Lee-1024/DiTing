@@ -46,6 +46,8 @@ func (r *MemoryRepository) Upsert(_ context.Context, update HeartbeatUpdate) err
 		item.LastWriteAt = update.LastWriteAt
 	}
 	item.EventsWritten += update.EventsWritten
+	item.BufferedEvents = update.BufferedEvents
+	item.DroppedEvents = update.DroppedEvents
 	item.UpdatedAt = time.Now().UTC()
 	r.items[update.HostID] = item
 	return nil
