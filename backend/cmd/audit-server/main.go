@@ -54,7 +54,7 @@ func main() {
 			apiWriter := collector.NewAPIWriter(cfg.Collector.IngestURL, cfg.Collector.Token)
 			hostMetadata := collector.ResolveHostMetadata(cfg.Collector.HostID, cfg.Collector.HostName)
 			slog.Info("collector host metadata resolved", "host_id", hostMetadata.ID, "host_name", hostMetadata.Name)
-			eventWriter := collector.EventWriter(newAPIHeartbeatWriter(apiWriter, hostMetadata, inputMode))
+			eventWriter := collector.EventWriter(newDedupingEventWriter(newAPIHeartbeatWriter(apiWriter, hostMetadata, inputMode), 5*time.Second))
 			if cfg.Collector.PasswdFile != "" {
 				resolver, err := collector.NewPasswdUserResolver(cfg.Collector.PasswdFile)
 				if err != nil {
@@ -118,7 +118,7 @@ func main() {
 		if mode == "collector" {
 			go writer.RefreshLoop(context.Background(), 30*time.Second)
 		}
-		eventWriter := collector.EventWriter(writer)
+		eventWriter := collector.EventWriter(newDedupingEventWriter(writer, 5*time.Second))
 		if cfg.Collector.PasswdFile != "" {
 			resolver, err := collector.NewPasswdUserResolver(cfg.Collector.PasswdFile)
 			if err != nil {
@@ -442,6 +442,55 @@ type apiHeartbeatWriter struct {
 	writer    *collector.APIWriter
 	metadata  collector.HostMetadata
 	inputMode string
+}
+
+type dedupingEventWriter struct {
+	next   collector.EventWriter
+	window time.Duration
+	mu     sync.Mutex
+	seen   map[string]time.Time
+}
+
+func newDedupingEventWriter(next collector.EventWriter, window time.Duration) *dedupingEventWriter {
+	if window <= 0 {
+		window = 5 * time.Second
+	}
+	return &dedupingEventWriter{next: next, window: window, seen: map[string]time.Time{}}
+}
+
+func (w *dedupingEventWriter) Write(ctx context.Context, events []audit.Event) error {
+	kept := make([]audit.Event, 0, len(events))
+	for _, event := range events {
+		if w.shouldDrop(event) {
+			continue
+		}
+		kept = append(kept, event)
+	}
+	if len(kept) == 0 {
+		slog.Info("collector duplicate events dropped", "events", len(events))
+		return nil
+	}
+	return w.next.Write(ctx, kept)
+}
+
+func (w *dedupingEventWriter) shouldDrop(event audit.Event) bool {
+	key := collectorEventDedupKey(event)
+	now := event.EventTime
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	for seenKey, seenAt := range w.seen {
+		if now.Sub(seenAt) > w.window {
+			delete(w.seen, seenKey)
+		}
+	}
+	if seenAt, exists := w.seen[key]; exists && now.Sub(seenAt) <= w.window {
+		return true
+	}
+	w.seen[key] = now
+	return false
 }
 
 func newAPIHeartbeatWriter(writer *collector.APIWriter, metadata collector.HostMetadata, inputMode string) *apiHeartbeatWriter {

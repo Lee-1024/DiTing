@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"testing"
+	"time"
 
 	"diting/backend/internal/audit"
 	"diting/backend/internal/rule"
@@ -11,6 +12,46 @@ import (
 
 type fakeEventSink struct {
 	events []audit.Event
+}
+
+func TestDedupingEventWriterDropsRepeatedEventsAcrossWrites(t *testing.T) {
+	sink := &fakeCollectorEventWriter{}
+	writer := newDedupingEventWriter(sink, 5*time.Second)
+	eventTime := time.Date(2026, 7, 22, 14, 19, 8, int(100*time.Millisecond), time.UTC)
+	event := audit.Event{
+		EventTime:     eventTime,
+		EventType:     "file_access",
+		Action:        "sys_chmod",
+		HostID:        "host-1",
+		LoginUsername: "ubuntu",
+		Username:      "ubuntu",
+		ProcessName:   "chmod",
+		Cmdline:       "/usr/bin/chmod 777 test",
+		FilePath:      "test",
+		FileOperation: "sys_chmod",
+	}
+
+	if err := writer.Write(context.Background(), []audit.Event{event}); err != nil {
+		t.Fatalf("first Write returned error: %v", err)
+	}
+	event.EventID = "another-raw-event-id"
+	event.EventTime = eventTime.Add(400 * time.Millisecond)
+	if err := writer.Write(context.Background(), []audit.Event{event}); err != nil {
+		t.Fatalf("second Write returned error: %v", err)
+	}
+
+	if len(sink.events) != 1 {
+		t.Fatalf("expected duplicate event to be dropped across writes, got %d events", len(sink.events))
+	}
+}
+
+type fakeCollectorEventWriter struct {
+	events []audit.Event
+}
+
+func (f *fakeCollectorEventWriter) Write(_ context.Context, events []audit.Event) error {
+	f.events = append(f.events, events...)
+	return nil
 }
 
 func (f *fakeEventSink) WriteEvents(_ context.Context, events []audit.Event) error {
