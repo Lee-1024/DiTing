@@ -59,12 +59,12 @@ export default function RiskEventsPage() {
       }
       const items = data.items ?? [];
       setEvents(items);
-      const statusMap = await getRiskDispositions(items.map((item) => item.eventId));
+      const statusMap = await getRiskDispositions(items);
       if (seq !== requestSeq.current) {
         return;
       }
       setDispositions(statusMap);
-      setVisibleEvents(filterEventsByDisposition(items, statusMap, formValues.dispositionStatus ?? 'all'));
+      setVisibleEvents(filterEventsByDisposition(items, statusMap, formValues.dispositionStatus ?? 'open'));
       setTotal(data.total);
       setPage(data.page);
       setPageSize(nextPageSize);
@@ -107,10 +107,10 @@ export default function RiskEventsPage() {
     const values = await dispositionForm.validateFields();
     setSavingDisposition(true);
     try {
-      const updated = await updateRiskDisposition(dispositionEvent.eventId, values.status, values.note ?? '');
+      const updated = await updateRiskDisposition(dispositionEvent, values.status, values.note ?? '');
       setDispositions((current) => ({ ...current, [updated.eventId]: updated }));
       const nextDispositions = { ...dispositions, [updated.eventId]: updated };
-      setVisibleEvents(filterEventsByDisposition(events, nextDispositions, form.getFieldValue('dispositionStatus') ?? 'all'));
+      setVisibleEvents(filterEventsByDisposition(events, nextDispositions, form.getFieldValue('dispositionStatus') ?? 'open'));
       message.success('处置状态已更新');
       setDispositionOpen(false);
     } finally {
@@ -123,6 +123,8 @@ export default function RiskEventsPage() {
       eventId: record.eventId,
       status: 'open',
       note: '',
+      scope: '',
+      fingerprint: '',
       handledBy: '',
       createdAt: '',
       updatedAt: '',
@@ -138,7 +140,7 @@ export default function RiskEventsPage() {
       <div className="page-heading">
         <Typography.Title level={3} className="page-title">风险事件</Typography.Title>
       </div>
-      <FilterToolbar form={form} initialValues={{ timeRange: defaultRange, severity: 'medium,high,critical', dispositionStatus: 'all' }} onSearch={submit} onReset={() => void resetAndLoad()} onExport={() => void exportCSV()}>
+      <FilterToolbar form={form} initialValues={{ timeRange: defaultRange, severity: 'medium,high,critical', dispositionStatus: 'open' }} onSearch={submit} onReset={() => void resetAndLoad()} onExport={() => void exportCSV()}>
         <Form.Item name="timeRange" label="时间" className="filter-field-time">
           <DatePicker.RangePicker />
         </Form.Item>
@@ -169,10 +171,13 @@ export default function RiskEventsPage() {
           <Select
             className="filter-control-compact"
             options={[
-              { value: 'all', label: '全部' },
-              { value: 'open', label: '未处理' },
-              { value: 'confirmed', label: '已确认' },
-              { value: 'ignored', label: '已忽略' },
+              { value: 'open', label: '待处理' },
+              { value: 'all', label: '全部状态' },
+              { value: 'confirmed', label: '已处理' },
+              { value: 'false_positive', label: '误报' },
+              { value: 'ignored', label: '忽略当前' },
+              { value: 'ignore_similar', label: '忽略同类' },
+              { value: 'closed', label: '已关闭' },
             ]}
           />
         </Form.Item>
@@ -260,8 +265,11 @@ export default function RiskEventsPage() {
             <Select
               options={[
                 { value: 'open', label: '未处理' },
-                { value: 'confirmed', label: '已确认' },
-                { value: 'ignored', label: '已忽略' },
+                { value: 'confirmed', label: '已处理' },
+                { value: 'false_positive', label: '误报' },
+                { value: 'ignored', label: '忽略当前' },
+                { value: 'ignore_similar', label: '忽略同类' },
+                { value: 'closed', label: '已关闭' },
               ]}
             />
           </Form.Item>
@@ -324,8 +332,11 @@ function formatNetworkTarget(record: AuditEvent) {
 function DispositionTag({ disposition }: { disposition: RiskDisposition }) {
   const config: Record<RiskDispositionStatus, { color: string; text: string }> = {
     open: { color: 'red', text: '未处理' },
-    confirmed: { color: 'green', text: '已确认' },
-    ignored: { color: 'default', text: '已忽略' },
+    confirmed: { color: 'green', text: '已处理' },
+    false_positive: { color: 'blue', text: '误报' },
+    ignored: { color: 'default', text: '忽略当前' },
+    ignore_similar: { color: 'purple', text: '忽略同类' },
+    closed: { color: 'cyan', text: '已关闭' },
   };
   const current = config[disposition.status] ?? config.open;
   return (

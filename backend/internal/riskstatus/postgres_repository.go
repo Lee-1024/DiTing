@@ -21,7 +21,7 @@ func (r *PostgresRepository) ListByEventIDs(ctx context.Context, eventIDs []stri
 		return result, nil
 	}
 	rows, err := r.pool.Query(ctx, `
-SELECT event_id, status, note, handled_by, handled_at, created_at, updated_at
+SELECT event_id, status, note, handled_by, handled_at, created_at, updated_at, scope, fingerprint
 FROM diting_risk_dispositions
 WHERE event_id = ANY($1)
 `, eventIDs)
@@ -30,11 +30,43 @@ WHERE event_id = ANY($1)
 	}
 	defer rows.Close()
 	for rows.Next() {
-		disposition, err := scanDisposition(rows)
+		disposition, err := scanDispositionWithScope(rows)
 		if err != nil {
 			return nil, err
 		}
 		result[disposition.EventID] = disposition
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (r *PostgresRepository) ListByFingerprints(ctx context.Context, fingerprints []string) (map[string]Disposition, error) {
+	result := map[string]Disposition{}
+	if len(fingerprints) == 0 {
+		return result, nil
+	}
+	rows, err := r.pool.Query(ctx, `
+SELECT event_id, status, note, handled_by, handled_at, created_at, updated_at, scope, fingerprint
+FROM diting_risk_dispositions
+WHERE status = 'ignore_similar'
+  AND scope = 'similar'
+  AND fingerprint = ANY($1)
+ORDER BY updated_at DESC
+`, fingerprints)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		disposition, err := scanDispositionWithScope(rows)
+		if err != nil {
+			return nil, err
+		}
+		if _, exists := result[disposition.Fingerprint]; !exists {
+			result[disposition.Fingerprint] = disposition
+		}
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -48,18 +80,25 @@ func (r *PostgresRepository) Upsert(ctx context.Context, disposition Disposition
 		return Disposition{}, err
 	}
 	disposition.Status = status
+	if disposition.Status == StatusIgnoreSimilar {
+		disposition.Scope = "similar"
+	} else if disposition.Scope == "" {
+		disposition.Scope = "event"
+	}
 	row := r.pool.QueryRow(ctx, `
-INSERT INTO diting_risk_dispositions (event_id, status, note, handled_by, handled_at, created_at, updated_at)
-VALUES ($1, $2::varchar, $3, $4, CASE WHEN $2::varchar = 'open' THEN NULL ELSE NOW() END, NOW(), NOW())
+INSERT INTO diting_risk_dispositions (event_id, status, note, handled_by, handled_at, created_at, updated_at, scope, fingerprint)
+VALUES ($1, $2::varchar, $3, $4, CASE WHEN $2::varchar = 'open' THEN NULL ELSE NOW() END, NOW(), NOW(), $5, $6)
 ON CONFLICT (event_id) DO UPDATE
 SET status = EXCLUDED.status,
     note = EXCLUDED.note,
     handled_by = EXCLUDED.handled_by,
     handled_at = CASE WHEN EXCLUDED.status = 'open' THEN NULL ELSE NOW() END,
+    scope = EXCLUDED.scope,
+    fingerprint = EXCLUDED.fingerprint,
     updated_at = NOW()
-RETURNING event_id, status, note, handled_by, handled_at, created_at, updated_at
-`, disposition.EventID, disposition.Status, disposition.Note, disposition.HandledBy)
-	return scanDisposition(row)
+RETURNING event_id, status, note, handled_by, handled_at, created_at, updated_at, scope, fingerprint
+`, disposition.EventID, disposition.Status, disposition.Note, disposition.HandledBy, disposition.Scope, disposition.Fingerprint)
+	return scanDispositionWithScope(row)
 }
 
 type dispositionScanner interface {
@@ -77,6 +116,26 @@ func scanDisposition(scanner dispositionScanner) (Disposition, error) {
 		&handledAt,
 		&disposition.CreatedAt,
 		&disposition.UpdatedAt,
+	); err != nil {
+		return Disposition{}, err
+	}
+	disposition.HandledAt = handledAt
+	return disposition, nil
+}
+
+func scanDispositionWithScope(scanner dispositionScanner) (Disposition, error) {
+	var disposition Disposition
+	var handledAt *time.Time
+	if err := scanner.Scan(
+		&disposition.EventID,
+		&disposition.Status,
+		&disposition.Note,
+		&disposition.HandledBy,
+		&handledAt,
+		&disposition.CreatedAt,
+		&disposition.UpdatedAt,
+		&disposition.Scope,
+		&disposition.Fingerprint,
 	); err != nil {
 		return Disposition{}, err
 	}
