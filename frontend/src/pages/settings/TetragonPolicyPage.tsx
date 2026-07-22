@@ -110,20 +110,20 @@ function policyTemplate(values: PolicyFormValues) {
     case 'sensitive_file':
       return kprobeBlock('file-access', 'security_file_open', 'file_access', 'file', values.filePaths ?? [], values.mode);
     case 'permission_change':
-      return syscallBlock('permission-change', ['chmod', 'fchmodat', 'chown', 'fchownat'], 'process_exec', values.commands ?? [], values.mode);
+      return syscallBlock('permission-change', ['chmod', 'fchmodat', 'chown', 'fchownat'], 'file_access', values.filePaths ?? ['/'], values.mode, 'Prefix');
     case 'delete_behavior':
-      return syscallBlock('delete-behavior', ['unlink', 'unlinkat', 'rmdir'], 'process_exec', values.commands ?? [], values.mode);
+      return syscallBlock('delete-behavior', ['unlink', 'unlinkat', 'rmdir'], 'file_access', values.filePaths ?? ['/'], values.mode, 'Prefix');
     case 'suspicious_process':
-      return syscallBlock('suspicious-process', ['execve'], 'process_exec', values.processNames ?? [], values.mode);
+      return syscallBlock('suspicious-process', ['execve'], 'process_exec', values.processNames ?? [], values.mode, 'Postfix');
     default:
-      return syscallBlock('dangerous-command', ['execve'], 'process_exec', values.commands ?? [], values.mode);
+      return syscallBlock('dangerous-command', ['execve'], 'process_exec', values.commands ?? [], values.mode, 'Postfix');
   }
 }
 
-function syscallBlock(name: string, _syscalls: string[], returnArg: string, binaries: string[], mode: PolicyMode) {
-  const binarySelectors = (binaries.length ? binaries : ['bash']).map((item) => `            - "${escapeYaml(item)}"`).join('\n');
+function syscallBlock(name: string, syscalls: string[], returnArg: string, values: string[], mode: PolicyMode, operator: 'Prefix' | 'Postfix') {
+  const matchValues = (values.filter(Boolean).length ? values.filter(Boolean) : ['']).map((item) => `            - "${escapeYaml(item)}"`).join('\n');
   return `  kprobes:
-  - call: "sys_execve"
+${syscalls.map((syscall) => `  - call: "sys_${syscall}"
     syscall: true
     return: true
     args:
@@ -138,9 +138,9 @@ function syscallBlock(name: string, _syscalls: string[], returnArg: string, bina
     selectors:
     - matchArgs:
       - index: 0
-        operator: Postfix
+        operator: ${operator}
         values:
-${binarySelectors}${matchActions(mode)}`;
+${matchValues}${matchActions(mode)}`).join('\n')}`;
 }
 
 function kprobeBlock(name: string, call: string, tag: string, argType: string, paths: string[], mode: PolicyMode) {

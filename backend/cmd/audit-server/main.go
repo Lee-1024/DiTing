@@ -764,11 +764,17 @@ func (w *refreshingRuleWriter) Write(ctx context.Context, events []audit.Event) 
 	w.mu.RUnlock()
 
 	enriched := make([]audit.Event, 0, len(events))
+	seen := map[string]struct{}{}
 	for _, event := range events {
 		next := rule.ApplyRules(event, rules)
 		if filter.ShouldDrop(next) {
 			continue
 		}
+		key := collectorEventDedupKey(next)
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
 		enriched = append(enriched, next)
 	}
 	if len(enriched) == 0 {
@@ -797,6 +803,24 @@ func (w *refreshingRuleWriter) Write(ctx context.Context, events []audit.Event) 
 	}
 	slog.Info("events written", "events", len(enriched), "rules", len(rules))
 	return nil
+}
+
+func collectorEventDedupKey(event audit.Event) string {
+	return strings.Join([]string{
+		event.EventTime.Truncate(time.Second).Format(time.RFC3339),
+		event.EventType,
+		event.Action,
+		event.HostID,
+		event.NodeName,
+		event.LoginUsername,
+		event.Username,
+		event.ProcessName,
+		event.Cmdline,
+		event.FilePath,
+		event.FileOperation,
+		event.DstIP,
+		fmt.Sprintf("%d", event.DstPort),
+	}, "\x00")
 }
 
 func (w *refreshingRuleWriter) WriteEvents(ctx context.Context, events []audit.Event) error {

@@ -110,7 +110,7 @@ FROM %s
 WHERE %s
 ORDER BY event_time DESC
 LIMIT %d OFFSET %d
-FORMAT JSONEachRow`, auditEventSelectFields(), table, where, limit, offset)
+FORMAT JSONEachRow`, auditEventListSelectFields(), table, where, limit, offset)
 }
 
 func buildGetEventSQL(database string, eventID string) string {
@@ -123,6 +123,10 @@ FORMAT JSONEachRow`, auditEventSelectFields(), auditTable(database), escapeSQL(e
 
 func auditEventSelectFields() string {
 	return "event_id, event_time, event_type, severity, risk_score, host_name, host_id, node_name, namespace, pod_name, username, uid, gid, auid, euid, egid, login_username, process_name, binary_path, cmdline, cwd, parent_process_name, parent_binary_path, parent_cmdline, file_path, file_operation, src_ip, src_port, dst_ip, dst_port, protocol, domain, tags, rule_ids, rule_names, rule_matches, raw_event"
+}
+
+func auditEventListSelectFields() string {
+	return "event_id, event_time, event_type, severity, risk_score, host_name, host_id, node_name, namespace, pod_name, username, uid, gid, auid, euid, egid, login_username, process_name, binary_path, cmdline, cwd, parent_process_name, parent_binary_path, parent_cmdline, file_path, file_operation, src_ip, src_port, dst_ip, dst_port, protocol, domain, tags, rule_ids, rule_names, '' AS rule_matches, '' AS raw_event"
 }
 
 func buildCountEventsSQL(database string, query audit.Query) string {
@@ -244,6 +248,18 @@ func eventMatchesQuery(event audit.Event, query audit.Query) bool {
 	}
 	if query.DstPort > 0 && int(event.DstPort) != query.DstPort {
 		return false
+	}
+	if len(query.EventIDs) > 0 {
+		matched := false
+		for _, eventID := range query.EventIDs {
+			if event.EventID == eventID {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return false
+		}
 	}
 	if query.Keyword != "" {
 		keyword := strings.ToLower(query.Keyword)
