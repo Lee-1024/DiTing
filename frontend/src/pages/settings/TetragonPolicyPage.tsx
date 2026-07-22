@@ -25,9 +25,21 @@ const defaultValues: PolicyFormValues = {
 
 export default function TetragonPolicyPage() {
   const [form] = Form.useForm<PolicyFormValues>();
-  const values = Form.useWatch([], form) ?? defaultValues;
-  const template = values.template ?? defaultValues.template;
-  const yaml = useMemo(() => generatePolicy({ ...defaultValues, ...values }), [values]);
+  const template = Form.useWatch('template', form) ?? defaultValues.template;
+  const mode = Form.useWatch('mode', form) ?? defaultValues.mode;
+  const name = Form.useWatch('name', form) ?? defaultValues.name;
+  const commands = Form.useWatch('commands', form) ?? defaultValues.commands;
+  const filePaths = Form.useWatch('filePaths', form) ?? defaultValues.filePaths;
+  const processNames = Form.useWatch('processNames', form) ?? defaultValues.processNames;
+  const policy = useMemo<PolicyFormValues>(() => ({
+    template,
+    mode,
+    name,
+    commands,
+    filePaths,
+    processNames,
+  }), [template, mode, name, commands, filePaths, processNames]);
+  const yaml = useMemo(() => generatePolicy(policy), [policy]);
 
   async function copyYaml() {
     await navigator.clipboard.writeText(yaml);
@@ -39,7 +51,7 @@ export default function TetragonPolicyPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `${values.name || 'diting-tetragon-policy'}.yaml`;
+    link.download = `${name || 'diting-tetragon-policy'}.yaml`;
     link.click();
     URL.revokeObjectURL(url);
   }
