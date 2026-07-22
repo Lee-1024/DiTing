@@ -237,6 +237,9 @@ function kprobeBlock(name: string, call: string, tag: string, argType: string, p
     - index: 0
       type: "${argType}"
 ${uidDataBlock(userIds)}
+    returnArg:
+      index: 0
+      type: "int"
     tags:
     - "${name}"
     - "${tag}"
