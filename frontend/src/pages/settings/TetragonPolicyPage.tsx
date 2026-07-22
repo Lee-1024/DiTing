@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 
 type PolicyTemplate = 'dangerous_command' | 'sensitive_file' | 'permission_change' | 'delete_behavior' | 'suspicious_process';
 type PolicyMode = 'audit' | 'enforce' | 'disabled';
+type UserMatchMode = 'all' | 'include' | 'exclude_root';
 
 interface PolicyFormValues {
   template: PolicyTemplate;
@@ -12,6 +13,7 @@ interface PolicyFormValues {
   commands?: string[];
   filePaths?: string[];
   processNames?: string[];
+  userMatchMode?: UserMatchMode;
   userIds?: string[];
 }
 
@@ -22,6 +24,7 @@ const defaultValues: PolicyFormValues = {
   commands: ['curl', 'wget', 'bash'],
   filePaths: ['/etc/passwd', '/etc/shadow', '/etc/sudoers', '/root/.ssh'],
   processNames: [],
+  userMatchMode: 'exclude_root',
   userIds: [],
 };
 
@@ -33,6 +36,7 @@ export default function TetragonPolicyPage() {
   const commands = Form.useWatch('commands', form) ?? defaultValues.commands;
   const filePaths = Form.useWatch('filePaths', form) ?? defaultValues.filePaths;
   const processNames = Form.useWatch('processNames', form) ?? defaultValues.processNames;
+  const userMatchMode = Form.useWatch('userMatchMode', form) ?? defaultValues.userMatchMode;
   const userIds = Form.useWatch('userIds', form) ?? defaultValues.userIds;
   const policy = useMemo<PolicyFormValues>(() => ({
     template,
@@ -41,8 +45,9 @@ export default function TetragonPolicyPage() {
     commands,
     filePaths,
     processNames,
+    userMatchMode,
     userIds,
-  }), [template, mode, name, commands, filePaths, processNames, userIds]);
+  }), [template, mode, name, commands, filePaths, processNames, userMatchMode, userIds]);
   const yaml = useMemo(() => generatePolicy(policy), [policy]);
 
   async function copyYaml() {
@@ -116,10 +121,19 @@ export default function TetragonPolicyPage() {
                 <Form.Item name="processNames" label="限定进程（可选）" tooltip="留空表示不限制进程；填写 vim、rm、chmod 等可只拦截指定进程访问这些路径。">
                   <Select mode="tags" tokenSeparators={[',']} placeholder="例如 vim / rm / chmod，留空为不限进程" />
                 </Form.Item>
-                <Form.Item name="userIds" label="限定执行用户 UID（可选）" tooltip="Tetragon 策略按 UID 匹配用户；如 ubuntu 通常为 1000，可在主机上用 id -u ubuntu 查询。">
-                  <Select mode="tags" tokenSeparators={[',']} placeholder="例如 1000 / 1001，留空为不限用户" />
+                <Form.Item name="userMatchMode" label="用户范围">
+                  <Select options={[
+                    { value: 'exclude_root', label: '除 root 外所有用户' },
+                    { value: 'include', label: '仅指定 UID' },
+                    { value: 'all', label: '所有用户' },
+                  ]} />
                 </Form.Item>
-                {userIds?.some((item) => item && !isUserId(item)) && (
+                {userMatchMode === 'include' && (
+                  <Form.Item name="userIds" label="限定执行用户 UID" tooltip="Tetragon 策略按 UID 匹配用户；如 ubuntu 通常为 1000，可在主机上用 id -u ubuntu 查询。">
+                    <Select mode="tags" tokenSeparators={[',']} placeholder="例如 1000 / 1001" />
+                  </Form.Item>
+                )}
+                {userMatchMode === 'include' && userIds?.some((item) => item && !isUserId(item)) && (
                   <Alert
                     type="warning"
                     showIcon
@@ -177,24 +191,24 @@ ${template}`;
 function policyTemplate(values: PolicyFormValues) {
   switch (values.template) {
     case 'sensitive_file':
-      return kprobeBlock('file-access', 'security_file_open', 'file_access', 'file', values.filePaths ?? [], values.processNames ?? [], values.userIds ?? [], values.mode);
+      return kprobeBlock('file-access', 'security_file_open', 'file_access', 'file', values.filePaths ?? [], values.processNames ?? [], userMatcher(values), values.mode);
     case 'permission_change':
       return syscallBlock('permission-change', [
         { syscall: 'chmod', argIndex: 0 },
         { syscall: 'fchmodat', argIndex: 1 },
         { syscall: 'chown', argIndex: 0 },
         { syscall: 'fchownat', argIndex: 1 },
-      ], 'file_access', values.filePaths ?? ['/'], values.processNames ?? [], values.userIds ?? [], values.mode, 'Prefix');
+      ], 'file_access', values.filePaths ?? ['/'], values.processNames ?? [], userMatcher(values), values.mode, 'Prefix');
     case 'delete_behavior':
       return syscallBlock('delete-behavior', [
         { syscall: 'unlink', argIndex: 0 },
         { syscall: 'unlinkat', argIndex: 1 },
         { syscall: 'rmdir', argIndex: 0 },
-      ], 'file_access', values.filePaths ?? ['/'], values.processNames ?? [], values.userIds ?? [], values.mode, 'Prefix');
+      ], 'file_access', values.filePaths ?? ['/'], values.processNames ?? [], userMatcher(values), values.mode, 'Prefix');
     case 'suspicious_process':
-      return syscallBlock('suspicious-process', [{ syscall: 'execve', argIndex: 0 }], 'process_exec', values.processNames ?? [], [], [], values.mode, 'Postfix');
+      return syscallBlock('suspicious-process', [{ syscall: 'execve', argIndex: 0 }], 'process_exec', values.processNames ?? [], [], null, values.mode, 'Postfix');
     default:
-      return syscallBlock('dangerous-command', [{ syscall: 'execve', argIndex: 0 }], 'process_exec', values.commands ?? [], [], [], 'audit', 'Postfix');
+      return syscallBlock('dangerous-command', [{ syscall: 'execve', argIndex: 0 }], 'process_exec', values.commands ?? [], [], null, 'audit', 'Postfix');
   }
 }
 
@@ -203,7 +217,12 @@ interface SyscallProbe {
   argIndex: number;
 }
 
-function syscallBlock(name: string, syscalls: SyscallProbe[], returnArg: string, values: string[], processNames: string[], userIds: string[], mode: PolicyMode, operator: 'Prefix' | 'Postfix') {
+interface UserMatcher {
+  operator: 'Equal' | 'NotEqual';
+  values: string[];
+}
+
+function syscallBlock(name: string, syscalls: SyscallProbe[], returnArg: string, values: string[], processNames: string[], user: UserMatcher | null, mode: PolicyMode, operator: 'Prefix' | 'Postfix') {
   const matchValues = (values.filter(Boolean).length ? values.filter(Boolean) : ['']).map((item) => `            - "${escapeYaml(item)}"`).join('\n');
   return `  kprobes:
 ${syscalls.map(({ syscall, argIndex }) => `  - call: "sys_${syscall}"
@@ -212,7 +231,7 @@ ${syscalls.map(({ syscall, argIndex }) => `  - call: "sys_${syscall}"
     args:
     - index: ${argIndex}
       type: "string"
-${uidDataBlock(userIds)}
+${uidDataBlock(user)}
     returnArg:
       index: 0
       type: "int"
@@ -224,10 +243,10 @@ ${uidDataBlock(userIds)}
       - index: ${argIndex}
         operator: ${operator}
         values:
-${matchValues}${matchBinaries(processNames)}${matchUserIds(userIds)}${matchActions(mode)}`).join('\n')}`;
+${matchValues}${matchBinaries(processNames)}${matchUser(user)}${matchActions(mode)}`).join('\n')}`;
 }
 
-function kprobeBlock(name: string, call: string, tag: string, argType: string, paths: string[], processNames: string[], userIds: string[], mode: PolicyMode) {
+function kprobeBlock(name: string, call: string, tag: string, argType: string, paths: string[], processNames: string[], user: UserMatcher | null, mode: PolicyMode) {
   const values = (paths.length ? paths : ['/etc/passwd']).map((path) => `            - "${escapeYaml(path)}"`).join('\n');
   return `  kprobes:
   - call: "${call}"
@@ -236,7 +255,7 @@ function kprobeBlock(name: string, call: string, tag: string, argType: string, p
     args:
     - index: 0
       type: "${argType}"
-${uidDataBlock(userIds)}
+${uidDataBlock(user)}
     returnArg:
       index: 0
       type: "int"
@@ -248,7 +267,7 @@ ${uidDataBlock(userIds)}
       - index: 0
         operator: Prefix
         values:
-${values}${matchBinaries(processNames)}${matchUserIds(userIds)}${matchActions(mode)}`;
+${values}${matchBinaries(processNames)}${matchUser(user)}${matchActions(mode)}`;
 }
 
 function matchBinaries(processNames: string[]) {
@@ -263,8 +282,8 @@ function matchBinaries(processNames: string[]) {
 ${values.map((item) => `        - "${escapeYaml(item)}"`).join('\n')}`;
 }
 
-function uidDataBlock(userIds: string[]) {
-  if (!hasUserIds(userIds)) {
+function uidDataBlock(user: UserMatcher | null) {
+  if (!user) {
     return '';
   }
   return `    data:
@@ -274,21 +293,27 @@ function uidDataBlock(userIds: string[]) {
       resolve: "cred.uid.val"`;
 }
 
-function matchUserIds(userIds: string[]) {
-  const values = userIds.filter(isUserId);
-  if (values.length === 0) {
+function matchUser(user: UserMatcher | null) {
+  if (!user) {
     return '';
   }
   return `
       matchData:
       - index: 0
-        operator: Equal
+        operator: ${user.operator}
         values:
-${values.map((item) => `        - "${escapeYaml(item)}"`).join('\n')}`;
+${user.values.map((item) => `        - "${escapeYaml(item)}"`).join('\n')}`;
 }
 
-function hasUserIds(userIds: string[]) {
-  return userIds.some(isUserId);
+function userMatcher(values: PolicyFormValues): UserMatcher | null {
+  if (values.userMatchMode === 'exclude_root') {
+    return { operator: 'NotEqual', values: ['0'] };
+  }
+  if (values.userMatchMode === 'include') {
+    const ids = (values.userIds ?? []).filter(isUserId);
+    return ids.length > 0 ? { operator: 'Equal', values: ids } : null;
+  }
+  return null;
 }
 
 function isUserId(value: string) {
