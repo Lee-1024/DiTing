@@ -26,6 +26,7 @@ const defaultValues: PolicyFormValues = {
 export default function TetragonPolicyPage() {
   const [form] = Form.useForm<PolicyFormValues>();
   const values = Form.useWatch([], form) ?? defaultValues;
+  const template = values.template ?? defaultValues.template;
   const yaml = useMemo(() => generatePolicy({ ...defaultValues, ...values }), [values]);
 
   async function copyYaml() {
@@ -54,13 +55,16 @@ export default function TetragonPolicyPage() {
         <Card className="data-card">
           <Form form={form} layout="vertical" initialValues={defaultValues}>
             <Form.Item name="template" label="策略模板" rules={[{ required: true }]}>
-              <Select options={[
-                { value: 'dangerous_command', label: '危险命令' },
-                { value: 'sensitive_file', label: '敏感文件读写' },
-                { value: 'permission_change', label: '权限变更' },
-                { value: 'delete_behavior', label: '删除行为' },
-                { value: 'suspicious_process', label: '可疑进程链路' },
-              ]} />
+              <Select
+                onChange={(nextTemplate: PolicyTemplate) => form.setFieldsValue({ name: defaultPolicyName(nextTemplate) })}
+                options={[
+                  { value: 'dangerous_command', label: '危险命令' },
+                  { value: 'sensitive_file', label: '敏感文件读写' },
+                  { value: 'permission_change', label: '权限变更' },
+                  { value: 'delete_behavior', label: '删除行为' },
+                  { value: 'suspicious_process', label: '可疑进程链路' },
+                ]}
+              />
             </Form.Item>
             <Form.Item name="mode" label="策略模式" rules={[{ required: true }]}>
               <Select options={[
@@ -72,15 +76,21 @@ export default function TetragonPolicyPage() {
             <Form.Item name="name" label="策略名称" rules={[{ required: true }]}>
               <Input />
             </Form.Item>
-            <Form.Item name="commands" label="命令/关键进程">
-              <Select mode="tags" tokenSeparators={[',']} />
-            </Form.Item>
-            <Form.Item name="filePaths" label="敏感路径">
-              <Select mode="tags" tokenSeparators={[',']} />
-            </Form.Item>
-            <Form.Item name="processNames" label="可疑父子进程">
-              <Select mode="tags" tokenSeparators={[',']} />
-            </Form.Item>
+            {template === 'dangerous_command' && (
+              <Form.Item name="commands" label="命令">
+                <Select mode="tags" tokenSeparators={[',']} />
+              </Form.Item>
+            )}
+            {(template === 'sensitive_file' || template === 'permission_change' || template === 'delete_behavior') && (
+              <Form.Item name="filePaths" label={template === 'sensitive_file' ? '敏感路径' : '监控路径'}>
+                <Select mode="tags" tokenSeparators={[',']} />
+              </Form.Item>
+            )}
+            {template === 'suspicious_process' && (
+              <Form.Item name="processNames" label="可疑进程">
+                <Select mode="tags" tokenSeparators={[',']} />
+              </Form.Item>
+            )}
           </Form>
         </Card>
         <Card className="data-card" title="TracingPolicy YAML">
@@ -89,6 +99,21 @@ export default function TetragonPolicyPage() {
       </div>
     </>
   );
+}
+
+function defaultPolicyName(template: PolicyTemplate) {
+  switch (template) {
+    case 'sensitive_file':
+      return 'diting-sensitive-file';
+    case 'permission_change':
+      return 'diting-permission-change';
+    case 'delete_behavior':
+      return 'diting-delete-behavior';
+    case 'suspicious_process':
+      return 'diting-suspicious-process';
+    default:
+      return 'diting-dangerous-command';
+  }
 }
 
 function generatePolicy(values: PolicyFormValues) {
