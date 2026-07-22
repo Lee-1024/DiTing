@@ -1,5 +1,5 @@
 import { CopyOutlined, DownloadOutlined } from '@ant-design/icons';
-import { Button, Card, Form, Input, Select, Space, Typography, message } from 'antd';
+import { Alert, Button, Card, Form, Input, Select, Space, Typography, message } from 'antd';
 import { useMemo } from 'react';
 
 type PolicyTemplate = 'dangerous_command' | 'sensitive_file' | 'permission_change' | 'delete_behavior' | 'suspicious_process';
@@ -18,9 +18,9 @@ const defaultValues: PolicyFormValues = {
   template: 'dangerous_command',
   mode: 'audit',
   name: 'diting-dangerous-command',
-  commands: ['rm', 'chmod', 'chown', 'curl', 'wget', 'bash'],
+  commands: ['curl', 'wget', 'bash'],
   filePaths: ['/etc/passwd', '/etc/shadow', '/etc/sudoers', '/root/.ssh'],
-  processNames: ['bash', 'sh', 'python', 'perl', 'nc', 'ncat', 'socat'],
+  processNames: [],
 };
 
 export default function TetragonPolicyPage() {
@@ -89,14 +89,30 @@ export default function TetragonPolicyPage() {
               <Input />
             </Form.Item>
             {template === 'dangerous_command' && (
-              <Form.Item name="commands" label="命令">
-                <Select mode="tags" tokenSeparators={[',']} />
-              </Form.Item>
+              <>
+                <Alert
+                  type={mode === 'enforce' ? 'warning' : 'info'}
+                  showIcon
+                  style={{ marginBottom: 16 }}
+                  message={mode === 'enforce' ? '危险命令模板不建议直接拦截' : '危险命令模板适合先审计观察'}
+                  description={mode === 'enforce'
+                    ? 'rm、chmod、vim 等命令本身不是风险，直接拦截会影响普通用户操作。需要拦截时请优先使用敏感文件、权限变更或删除行为模板，并配置目标路径。'
+                    : '该模板按进程执行命令匹配，建议用于审计和发现行为。精确拦截请使用文件路径类模板。'}
+                />
+                <Form.Item name="commands" label="命令/关键进程">
+                  <Select mode="tags" tokenSeparators={[',']} />
+                </Form.Item>
+              </>
             )}
             {(template === 'sensitive_file' || template === 'permission_change' || template === 'delete_behavior') && (
-              <Form.Item name="filePaths" label={template === 'sensitive_file' ? '敏感路径' : '监控路径'}>
-                <Select mode="tags" tokenSeparators={[',']} />
-              </Form.Item>
+              <>
+                <Form.Item name="filePaths" label={template === 'sensitive_file' ? '敏感路径' : '监控路径'}>
+                  <Select mode="tags" tokenSeparators={[',']} />
+                </Form.Item>
+                <Form.Item name="processNames" label="限定进程（可选）" tooltip="留空表示不限制进程；填写 vim、rm、chmod 等可只拦截指定进程访问这些路径。">
+                  <Select mode="tags" tokenSeparators={[',']} placeholder="例如 vim / rm / chmod，留空为不限进程" />
+                </Form.Item>
+              </>
             )}
             {template === 'suspicious_process' && (
               <Form.Item name="processNames" label="可疑进程">
@@ -145,26 +161,40 @@ ${template}`;
 function policyTemplate(values: PolicyFormValues) {
   switch (values.template) {
     case 'sensitive_file':
-      return kprobeBlock('file-access', 'security_file_open', 'file_access', 'file', values.filePaths ?? [], values.mode);
+      return kprobeBlock('file-access', 'security_file_open', 'file_access', 'file', values.filePaths ?? [], values.processNames ?? [], values.mode);
     case 'permission_change':
-      return syscallBlock('permission-change', ['chmod', 'fchmodat', 'chown', 'fchownat'], 'file_access', values.filePaths ?? ['/'], values.mode, 'Prefix');
+      return syscallBlock('permission-change', [
+        { syscall: 'chmod', argIndex: 0 },
+        { syscall: 'fchmodat', argIndex: 1 },
+        { syscall: 'chown', argIndex: 0 },
+        { syscall: 'fchownat', argIndex: 1 },
+      ], 'file_access', values.filePaths ?? ['/'], values.processNames ?? [], values.mode, 'Prefix');
     case 'delete_behavior':
-      return syscallBlock('delete-behavior', ['unlink', 'unlinkat', 'rmdir'], 'file_access', values.filePaths ?? ['/'], values.mode, 'Prefix');
+      return syscallBlock('delete-behavior', [
+        { syscall: 'unlink', argIndex: 0 },
+        { syscall: 'unlinkat', argIndex: 1 },
+        { syscall: 'rmdir', argIndex: 0 },
+      ], 'file_access', values.filePaths ?? ['/'], values.processNames ?? [], values.mode, 'Prefix');
     case 'suspicious_process':
-      return syscallBlock('suspicious-process', ['execve'], 'process_exec', values.processNames ?? [], values.mode, 'Postfix');
+      return syscallBlock('suspicious-process', [{ syscall: 'execve', argIndex: 0 }], 'process_exec', values.processNames ?? [], [], values.mode, 'Postfix');
     default:
-      return syscallBlock('dangerous-command', ['execve'], 'process_exec', values.commands ?? [], values.mode, 'Postfix');
+      return syscallBlock('dangerous-command', [{ syscall: 'execve', argIndex: 0 }], 'process_exec', values.commands ?? [], [], 'audit', 'Postfix');
   }
 }
 
-function syscallBlock(name: string, syscalls: string[], returnArg: string, values: string[], mode: PolicyMode, operator: 'Prefix' | 'Postfix') {
+interface SyscallProbe {
+  syscall: string;
+  argIndex: number;
+}
+
+function syscallBlock(name: string, syscalls: SyscallProbe[], returnArg: string, values: string[], processNames: string[], mode: PolicyMode, operator: 'Prefix' | 'Postfix') {
   const matchValues = (values.filter(Boolean).length ? values.filter(Boolean) : ['']).map((item) => `            - "${escapeYaml(item)}"`).join('\n');
   return `  kprobes:
-${syscalls.map((syscall) => `  - call: "sys_${syscall}"
+${syscalls.map(({ syscall, argIndex }) => `  - call: "sys_${syscall}"
     syscall: true
     return: true
     args:
-    - index: 0
+    - index: ${argIndex}
       type: "string"
     returnArg:
       index: 0
@@ -174,13 +204,13 @@ ${syscalls.map((syscall) => `  - call: "sys_${syscall}"
     - "${returnArg}"
     selectors:
     - matchArgs:
-      - index: 0
+      - index: ${argIndex}
         operator: ${operator}
         values:
-${matchValues}${matchActions(mode)}`).join('\n')}`;
+${matchValues}${matchBinaries(processNames)}${matchActions(mode)}`).join('\n')}`;
 }
 
-function kprobeBlock(name: string, call: string, tag: string, argType: string, paths: string[], mode: PolicyMode) {
+function kprobeBlock(name: string, call: string, tag: string, argType: string, paths: string[], processNames: string[], mode: PolicyMode) {
   const values = (paths.length ? paths : ['/etc/passwd']).map((path) => `            - "${escapeYaml(path)}"`).join('\n');
   return `  kprobes:
   - call: "${call}"
@@ -197,7 +227,19 @@ function kprobeBlock(name: string, call: string, tag: string, argType: string, p
       - index: 0
         operator: Prefix
         values:
-${values}${matchActions(mode)}`;
+${values}${matchBinaries(processNames)}${matchActions(mode)}`;
+}
+
+function matchBinaries(processNames: string[]) {
+  const values = processNames.filter(Boolean);
+  if (values.length === 0) {
+    return '';
+  }
+  return `
+      matchBinaries:
+      - operator: Postfix
+        values:
+${values.map((item) => `        - "${escapeYaml(item)}"`).join('\n')}`;
 }
 
 function matchActions(mode: PolicyMode) {
