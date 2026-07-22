@@ -2,7 +2,7 @@ import { Button, Card, DatePicker, Empty, Form, Input, Modal, Select, Space, Tab
 import dayjs from 'dayjs';
 import { useEffect, useRef, useState } from 'react';
 import { exportAuditEvents, queryAuditEvents } from '../../api/audit';
-import { getRiskDispositions, updateRiskDisposition } from '../../api/riskDispositions';
+import { getRiskDispositions, listRiskDispositions, updateRiskDisposition } from '../../api/riskDispositions';
 import CommandText from '../../components/CommandText';
 import FilterToolbar from '../../components/FilterToolbar';
 import SeverityTag from '../../components/SeverityTag';
@@ -53,6 +53,41 @@ export default function RiskEventsPage() {
     requestSeq.current = seq;
     setLoading(true);
     try {
+      const dispositionStatus = formValues.dispositionStatus ?? 'open';
+      if (dispositionStatus !== 'open' && dispositionStatus !== 'all') {
+        const dispositionItems = await listRiskDispositions(dispositionStatus, 500);
+        if (seq !== requestSeq.current) {
+          return;
+        }
+        const eventIds = dispositionItems.map((item) => item.eventId).filter(Boolean);
+        if (eventIds.length === 0) {
+          setEvents([]);
+          setDispositions({});
+          setVisibleEvents([]);
+          setTotal(0);
+          setPage(1);
+          setPageSize(nextPageSize);
+          return;
+        }
+        const data = await queryAuditEvents({
+          ...buildQuery(1, Math.min(eventIds.length, 500), formValues),
+          event_ids: eventIds.join(','),
+          page: 1,
+          page_size: Math.min(eventIds.length, 500),
+        });
+        if (seq !== requestSeq.current) {
+          return;
+        }
+        const dispositionMap = Object.fromEntries(dispositionItems.map((item) => [item.eventId, item]));
+        const items = data.items ?? [];
+        setEvents(items);
+        setDispositions(dispositionMap);
+        setVisibleEvents(items);
+        setTotal(items.length);
+        setPage(1);
+        setPageSize(nextPageSize);
+        return;
+      }
       const data = await queryAuditEvents(buildQuery(nextPage, nextPageSize, formValues));
       if (seq !== requestSeq.current) {
         return;

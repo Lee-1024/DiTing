@@ -99,6 +99,14 @@ func NewRouter(repository audit.Repository, ruleRepository rule.Repository, stat
 	mux.HandleFunc("/api/v1/ingest/events", ingestHandler.IngestEvents)
 	mux.HandleFunc("/api/v1/ingest/heartbeat", collectorHealthHandler.Report)
 	if riskStatusHandler != nil {
+		mux.Handle("/api/v1/risk-dispositions", protect(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.Method {
+			case http.MethodGet:
+				riskStatusHandler.List(w, r)
+			default:
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			}
+		})))
 		mux.Handle("/api/v1/risk-dispositions/batch", protect(http.HandlerFunc(riskStatusHandler.BatchGet)))
 		mux.Handle("/api/v1/risk-dispositions/{event_id}", protect(http.HandlerFunc(riskStatusHandler.Upsert)))
 	}

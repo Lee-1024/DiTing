@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 
 	"diting/backend/internal/auth"
 )
@@ -14,6 +15,22 @@ type Handler struct {
 
 func NewHandler(repository Repository) *Handler {
 	return &Handler{repository: repository}
+}
+
+func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
+	status := r.URL.Query().Get("status")
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	items, err := h.repository.List(r.Context(), status, limit)
+	if err != nil {
+		if errors.Is(err, ErrInvalidStatus) {
+			http.Error(w, "invalid status", http.StatusBadRequest)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{"items": items})
 }
 
 func (h *Handler) BatchGet(w http.ResponseWriter, r *http.Request) {

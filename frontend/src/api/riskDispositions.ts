@@ -13,6 +13,11 @@ export async function getRiskDispositions(events: AuditEvent[]): Promise<RiskDis
   return response.data;
 }
 
+export async function listRiskDispositions(status: RiskDispositionStatus, limit = 500): Promise<RiskDisposition[]> {
+  const response = await apiClient.get<{ items: RiskDisposition[] }>('/risk-dispositions', { params: { status, limit } });
+  return response.data.items ?? [];
+}
+
 export async function updateRiskDisposition(event: AuditEvent, status: RiskDispositionStatus, note: string): Promise<RiskDisposition> {
   const response = await apiClient.put<RiskDisposition>(`/risk-dispositions/${encodeURIComponent(event.eventId)}`, {
     status,

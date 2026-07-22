@@ -182,6 +182,13 @@ func buildAuditWhere(query audit.Query) string {
 	if query.DstPort > 0 {
 		conditions = append(conditions, fmt.Sprintf("dst_port = %d", query.DstPort))
 	}
+	if len(query.EventIDs) > 0 {
+		values := make([]string, 0, len(query.EventIDs))
+		for _, eventID := range query.EventIDs {
+			values = append(values, "'"+escapeSQL(eventID)+"'")
+		}
+		conditions = append(conditions, "event_id IN ("+strings.Join(values, ", ")+")")
+	}
 	if query.Keyword != "" {
 		keyword := escapeSQL(query.Keyword)
 		conditions = append(conditions, "(positionCaseInsensitive(cmdline, '"+keyword+"') > 0 OR positionCaseInsensitive(process_name, '"+keyword+"') > 0 OR positionCaseInsensitive(username, '"+keyword+"') > 0 OR positionCaseInsensitive(login_username, '"+keyword+"') > 0 OR positionCaseInsensitive(file_path, '"+keyword+"') > 0 OR positionCaseInsensitive(file_operation, '"+keyword+"') > 0 OR positionCaseInsensitive(src_ip, '"+keyword+"') > 0 OR positionCaseInsensitive(dst_ip, '"+keyword+"') > 0 OR positionCaseInsensitive(protocol, '"+keyword+"') > 0 OR positionCaseInsensitive(domain, '"+keyword+"') > 0)")

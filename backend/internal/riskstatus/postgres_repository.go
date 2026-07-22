@@ -15,6 +15,39 @@ func NewPostgresRepository(pool *pgxpool.Pool) *PostgresRepository {
 	return &PostgresRepository{pool: pool}
 }
 
+func (r *PostgresRepository) List(ctx context.Context, status string, limit int) ([]Disposition, error) {
+	if limit <= 0 || limit > 500 {
+		limit = 500
+	}
+	status, err := NormalizeStatus(status)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := r.pool.Query(ctx, `
+SELECT event_id, status, note, handled_by, handled_at, created_at, updated_at, scope, fingerprint
+FROM diting_risk_dispositions
+WHERE status = $1
+ORDER BY updated_at DESC
+LIMIT $2
+`, status, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Disposition{}
+	for rows.Next() {
+		disposition, err := scanDispositionWithScope(rows)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, disposition)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 func (r *PostgresRepository) ListByEventIDs(ctx context.Context, eventIDs []string) (map[string]Disposition, error) {
 	result := map[string]Disposition{}
 	if len(eventIDs) == 0 {

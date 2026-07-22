@@ -25,6 +25,7 @@ type Query struct {
 	FilePath      string
 	DstIP         string
 	DstPort       int
+	EventIDs      []string
 	Page          int
 	PageSize      int
 }
@@ -51,6 +52,7 @@ func ParseQuery(r *http.Request) (Query, error) {
 		FilePath:      strings.TrimSpace(values.Get("file_path")),
 		DstIP:         strings.TrimSpace(values.Get("dst_ip")),
 		DstPort:       parsePositiveInt(values.Get("dst_port"), 0),
+		EventIDs:      parseCSV(values.Get("event_ids")),
 	}
 	if query.PageSize > 500 {
 		query.PageSize = 500

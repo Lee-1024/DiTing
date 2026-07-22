@@ -28,6 +28,7 @@ type Disposition struct {
 }
 
 type Repository interface {
+	List(ctx context.Context, status string, limit int) ([]Disposition, error)
 	ListByEventIDs(ctx context.Context, eventIDs []string) (map[string]Disposition, error)
 	ListByFingerprints(ctx context.Context, fingerprints []string) (map[string]Disposition, error)
 	Upsert(ctx context.Context, disposition Disposition) (Disposition, error)
