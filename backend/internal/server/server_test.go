@@ -116,6 +116,39 @@ func TestIngestRouteWritesAuthorizedEvents(t *testing.T) {
 	}
 }
 
+func TestIngestHeartbeatRouteWritesAuthorizedHeartbeat(t *testing.T) {
+	repository := collectorhealth.NewMemoryRepository()
+	router := NewRouter(nil, nil, nil, nil, nil, nil, nil, nil, nil, repository, WithCollectorToken("secret-token"))
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/ingest/heartbeat", strings.NewReader(`{"hostId":"server-1","hostName":"server-1","inputMode":"grpc","eventsWritten":2}`))
+	req.Header.Set("Authorization", "Bearer secret-token")
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("expected status 202, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	items, err := repository.List(context.Background(), time.Now().UTC())
+	if err != nil {
+		t.Fatalf("List returned error: %v", err)
+	}
+	if len(items) != 1 || items[0].HostID != "server-1" || items[0].EventsWritten != 2 {
+		t.Fatalf("expected heartbeat written, got %#v", items)
+	}
+}
+
+func TestIngestHeartbeatRouteRequiresCollectorToken(t *testing.T) {
+	router := NewRouter(nil, nil, nil, nil, nil, nil, nil, nil, nil, collectorhealth.NewMemoryRepository(), WithCollectorToken("secret-token"))
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/ingest/heartbeat", strings.NewReader(`{"hostId":"server-1"}`))
+
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status 401, got %d", rec.Code)
+	}
+}
+
 func TestRuleDetailRouteAllowsGet(t *testing.T) {
 	router := NewRouter(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 	createRec := httptest.NewRecorder()

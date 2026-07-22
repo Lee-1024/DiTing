@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -44,10 +45,15 @@ type Repository interface {
 
 type Handler struct {
 	repository Repository
+	token      string
 }
 
 func NewHandler(repository Repository) *Handler {
 	return &Handler{repository: repository}
+}
+
+func NewHandlerWithToken(repository Repository, token string) *Handler {
+	return &Handler{repository: repository, token: strings.TrimSpace(token)}
 }
 
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
@@ -58,6 +64,69 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(items)
+}
+
+func (h *Handler) Report(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if h.repository == nil || h.token == "" {
+		http.Error(w, "collector heartbeat is not configured", http.StatusNotFound)
+		return
+	}
+	if bearerToken(r.Header.Get("Authorization")) != h.token {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	var request struct {
+		HostID        string     `json:"hostId"`
+		HostName      string     `json:"hostName"`
+		InputMode     string     `json:"inputMode"`
+		LastError     string     `json:"lastError"`
+		ClearError    bool       `json:"clearError"`
+		LastSeenAt    time.Time  `json:"lastSeenAt"`
+		LastEventTime *time.Time `json:"lastEventTime"`
+		LastWriteAt   *time.Time `json:"lastWriteAt"`
+		EventsWritten uint64     `json:"eventsWritten"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	if strings.TrimSpace(request.HostID) == "" {
+		http.Error(w, "hostId is required", http.StatusBadRequest)
+		return
+	}
+	if request.LastSeenAt.IsZero() {
+		request.LastSeenAt = time.Now().UTC()
+	}
+	if err := h.repository.Upsert(r.Context(), HeartbeatUpdate{
+		HostID:        strings.TrimSpace(request.HostID),
+		HostName:      strings.TrimSpace(request.HostName),
+		InputMode:     strings.TrimSpace(request.InputMode),
+		LastError:     request.LastError,
+		ClearError:    request.ClearError,
+		LastSeenAt:    request.LastSeenAt,
+		LastEventTime: request.LastEventTime,
+		LastWriteAt:   request.LastWriteAt,
+		EventsWritten: request.EventsWritten,
+	}); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
+	_ = json.NewEncoder(w).Encode(map[string]bool{"accepted": true})
+}
+
+func bearerToken(header string) string {
+	const prefix = "Bearer "
+	if !strings.HasPrefix(header, prefix) {
+		return ""
+	}
+	return strings.TrimSpace(strings.TrimPrefix(header, prefix))
 }
 
 func Status(lastSeenAt time.Time, now time.Time) string {

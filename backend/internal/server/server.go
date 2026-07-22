@@ -64,7 +64,7 @@ func NewRouter(repository audit.Repository, ruleRepository rule.Repository, stat
 	if collectorHealthRepository == nil {
 		collectorHealthRepository = collectorhealth.NewMemoryRepository()
 	}
-	collectorHealthHandler := collectorhealth.NewHandler(collectorHealthRepository)
+	collectorHealthHandler := collectorhealth.NewHandlerWithToken(collectorHealthRepository, options.collectorToken)
 	var riskStatusHandler *riskstatus.Handler
 	if riskStatusRepository != nil {
 		riskStatusHandler = riskstatus.NewHandler(riskStatusRepository)
@@ -97,6 +97,7 @@ func NewRouter(repository audit.Repository, ruleRepository rule.Repository, stat
 	mux.Handle("/api/v1/audit/events/export", protect(http.HandlerFunc(auditHandler.ExportEvents)))
 	mux.Handle("/api/v1/audit/events/{event_id}", protect(http.HandlerFunc(auditHandler.GetEvent)))
 	mux.HandleFunc("/api/v1/ingest/events", ingestHandler.IngestEvents)
+	mux.HandleFunc("/api/v1/ingest/heartbeat", collectorHealthHandler.Report)
 	if riskStatusHandler != nil {
 		mux.Handle("/api/v1/risk-dispositions/batch", protect(http.HandlerFunc(riskStatusHandler.BatchGet)))
 		mux.Handle("/api/v1/risk-dispositions/{event_id}", protect(http.HandlerFunc(riskStatusHandler.Upsert)))

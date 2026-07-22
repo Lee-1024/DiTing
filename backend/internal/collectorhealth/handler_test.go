@@ -102,3 +102,36 @@ func TestHandlerListsCollectorHealth(t *testing.T) {
 		t.Fatalf("unexpected body %s", rec.Body.String())
 	}
 }
+
+func TestHandlerReportsAuthorizedHeartbeat(t *testing.T) {
+	repository := NewMemoryRepository()
+	handler := NewHandlerWithToken(repository, "secret-token")
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/ingest/heartbeat", strings.NewReader(`{"hostId":"server-1","hostName":"server-1","inputMode":"grpc","eventsWritten":5}`))
+	req.Header.Set("Authorization", "Bearer secret-token")
+
+	handler.Report(rec, req)
+
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	items, err := repository.List(context.Background(), time.Now().UTC())
+	if err != nil {
+		t.Fatalf("List returned error: %v", err)
+	}
+	if len(items) != 1 || items[0].HostID != "server-1" || items[0].InputMode != "grpc" || items[0].EventsWritten != 5 {
+		t.Fatalf("unexpected heartbeat items: %#v", items)
+	}
+}
+
+func TestHandlerRejectsHeartbeatWithoutToken(t *testing.T) {
+	handler := NewHandlerWithToken(NewMemoryRepository(), "secret-token")
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/ingest/heartbeat", strings.NewReader(`{"hostId":"server-1"}`))
+
+	handler.Report(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401, got %d", rec.Code)
+	}
+}

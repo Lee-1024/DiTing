@@ -51,7 +51,10 @@ func main() {
 		outputMode := collectorOutputMode(cfg.Collector.OutputMode)
 		inputMode := collectorInputMode(cfg.Collector.InputMode)
 		if outputMode == "api" {
-			eventWriter := collector.EventWriter(collector.NewAPIWriter(cfg.Collector.IngestURL, cfg.Collector.Token))
+			apiWriter := collector.NewAPIWriter(cfg.Collector.IngestURL, cfg.Collector.Token)
+			hostMetadata := collector.ResolveHostMetadata(cfg.Collector.HostID, cfg.Collector.HostName)
+			slog.Info("collector host metadata resolved", "host_id", hostMetadata.ID, "host_name", hostMetadata.Name)
+			eventWriter := collector.EventWriter(newAPIHeartbeatWriter(apiWriter, hostMetadata, inputMode))
 			if cfg.Collector.PasswdFile != "" {
 				resolver, err := collector.NewPasswdUserResolver(cfg.Collector.PasswdFile)
 				if err != nil {
@@ -62,11 +65,15 @@ func main() {
 				slog.Info("passwd file loaded", "path", cfg.Collector.PasswdFile)
 				eventWriter = collector.NewIdentityWriter(resolver, eventWriter)
 			}
-			hostMetadata := collector.ResolveHostMetadata(cfg.Collector.HostID, cfg.Collector.HostName)
-			slog.Info("collector host metadata resolved", "host_id", hostMetadata.ID, "host_name", hostMetadata.Name)
 			eventWriter = collector.NewHostMetadataWriter(hostMetadata, eventWriter)
+			go collectorAPIHeartbeatLoop(context.Background(), apiWriter, hostMetadata, inputMode, 30*time.Second)
 			slog.Info("collector starting", "mode", mode, "input_mode", inputMode, "output_mode", outputMode, "ingest_url", cfg.Collector.IngestURL, "tetragon_log_file", cfg.Collector.TetragonLogFile, "tetragon_grpc_addr", cfg.Collector.TetragonGRPCAddr, "passwd_file", cfg.Collector.PasswdFile, "batch_size", cfg.Collector.BatchSize, "flush_interval_seconds", cfg.Collector.FlushIntervalSeconds)
-			if err := runCollectorInput(context.Background(), mode, inputMode, cfg, eventWriter, nil, nil); err != nil {
+			if err := runCollectorInput(context.Background(), mode, inputMode, cfg, eventWriter, func() {
+				recordCollectorAPIConnected(context.Background(), apiWriter, hostMetadata, inputMode)
+			}, func(err error) {
+				recordCollectorAPIError(context.Background(), apiWriter, hostMetadata, inputMode, err)
+			}); err != nil {
+				recordCollectorAPIError(context.Background(), apiWriter, hostMetadata, inputMode, err)
 				slog.Error("collector stopped with error", "error", err)
 				fmt.Fprintf(os.Stderr, "run collector: %v\n", err)
 				os.Exit(1)
@@ -278,6 +285,14 @@ func main() {
 	systemConfigRepository := systemconfig.NewPostgresRepository(pool)
 	userAdminRepository := useradmin.NewPostgresRepository(pool)
 	collectorHealthRepository := collectorhealth.NewPostgresRepository(pool)
+	ingestWriter := newRefreshingRuleWriter(eventSink(clickHouseClient), repositoryRuleProvider{repository: ruleRepository})
+	ingestWriter.SetCollectorFilterProvider(systemConfigRepository)
+	if err := ingestWriter.Refresh(context.Background()); err != nil {
+		slog.Error("load ingest rules failed", "error", err)
+		fmt.Fprintf(os.Stderr, "load ingest rules: %v\n", err)
+		os.Exit(1)
+	}
+	go ingestWriter.RefreshLoop(context.Background(), 30*time.Second)
 
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
 	slog.Info("api server listening", "addr", addr)
@@ -292,7 +307,7 @@ func main() {
 		systemConfigRepository,
 		userAdminRepository,
 		collectorHealthRepository,
-		server.WithIngestWriter(clickHouseClient),
+		server.WithIngestWriter(ingestWriter),
 		server.WithCollectorToken(cfg.Collector.Token),
 	)); err != nil {
 		slog.Error("api server stopped with error", "addr", addr, "error", err)
@@ -421,6 +436,39 @@ type collectorAPIEventSink struct {
 
 func (s collectorAPIEventSink) WriteEvents(ctx context.Context, events []audit.Event) error {
 	return s.writer.Write(ctx, events)
+}
+
+type apiHeartbeatWriter struct {
+	writer    *collector.APIWriter
+	metadata  collector.HostMetadata
+	inputMode string
+}
+
+func newAPIHeartbeatWriter(writer *collector.APIWriter, metadata collector.HostMetadata, inputMode string) *apiHeartbeatWriter {
+	return &apiHeartbeatWriter{writer: writer, metadata: metadata, inputMode: collectorInputMode(inputMode)}
+}
+
+func (w *apiHeartbeatWriter) Write(ctx context.Context, events []audit.Event) error {
+	err := w.writer.Write(ctx, events)
+	if err != nil {
+		recordCollectorAPIError(ctx, w.writer, w.metadata, w.inputMode, err)
+		return err
+	}
+	lastEventTime := newestEventTime(events)
+	writeAt := time.Now().UTC()
+	if heartbeatErr := w.writer.WriteHeartbeat(ctx, collector.APIHeartbeat{
+		HostID:        w.metadata.ID,
+		HostName:      w.metadata.Name,
+		InputMode:     w.inputMode,
+		ClearError:    true,
+		LastSeenAt:    writeAt,
+		LastEventTime: &lastEventTime,
+		LastWriteAt:   &writeAt,
+		EventsWritten: uint64(len(events)),
+	}); heartbeatErr != nil {
+		slog.Error("collector api heartbeat failed", "host_id", w.metadata.ID, "error", heartbeatErr)
+	}
+	return nil
 }
 
 type ruleProvider interface {
@@ -553,6 +601,56 @@ func recordCollectorConnected(ctx context.Context, recorder collectorHeartbeatRe
 		LastSeenAt: time.Now().UTC(),
 	}); err != nil {
 		slog.Error("record collector heartbeat failed", "host_id", metadata.ID, "error", err)
+	}
+}
+
+func collectorAPIHeartbeatLoop(ctx context.Context, writer *collector.APIWriter, metadata collector.HostMetadata, inputMode string, interval time.Duration) {
+	if writer == nil || metadata.ID == "" {
+		return
+	}
+	if interval <= 0 {
+		interval = 30 * time.Second
+	}
+	recordCollectorAPIConnected(ctx, writer, metadata, inputMode)
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			recordCollectorAPIConnected(ctx, writer, metadata, inputMode)
+		}
+	}
+}
+
+func recordCollectorAPIConnected(ctx context.Context, writer *collector.APIWriter, metadata collector.HostMetadata, inputMode string) {
+	if writer == nil || metadata.ID == "" {
+		return
+	}
+	if err := writer.WriteHeartbeat(ctx, collector.APIHeartbeat{
+		HostID:     metadata.ID,
+		HostName:   metadata.Name,
+		InputMode:  collectorInputMode(inputMode),
+		ClearError: true,
+		LastSeenAt: time.Now().UTC(),
+	}); err != nil {
+		slog.Error("collector api heartbeat failed", "host_id", metadata.ID, "error", err)
+	}
+}
+
+func recordCollectorAPIError(ctx context.Context, writer *collector.APIWriter, metadata collector.HostMetadata, inputMode string, err error) {
+	if writer == nil || metadata.ID == "" || err == nil {
+		return
+	}
+	if heartbeatErr := writer.WriteHeartbeat(ctx, collector.APIHeartbeat{
+		HostID:     metadata.ID,
+		HostName:   metadata.Name,
+		InputMode:  collectorInputMode(inputMode),
+		LastError:  err.Error(),
+		LastSeenAt: time.Now().UTC(),
+	}); heartbeatErr != nil {
+		slog.Error("collector api heartbeat failed", "host_id", metadata.ID, "error", heartbeatErr)
 	}
 }
 
@@ -689,6 +787,10 @@ func (w *refreshingRuleWriter) Write(ctx context.Context, events []audit.Event) 
 	}
 	slog.Info("events written", "events", len(enriched), "rules", len(rules))
 	return nil
+}
+
+func (w *refreshingRuleWriter) WriteEvents(ctx context.Context, events []audit.Event) error {
+	return w.Write(ctx, events)
 }
 
 func newestEventTime(events []audit.Event) time.Time {

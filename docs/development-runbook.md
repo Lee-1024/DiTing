@@ -53,6 +53,22 @@ chmod +x ./collector-linux-amd64
 ./collector-linux-amd64 collector --config ./config.yaml
 ```
 
+For a remote test host that only runs collector, use API output mode so the collector does not need database access or migration files:
+
+```yaml
+collector:
+  input_mode: grpc
+  output_mode: api
+  ingest_url: http://DITING_SERVER_IP:8080/api/v1/ingest/events
+  tetragon_grpc_addr: 127.0.0.1:54321
+  passwd_file: /etc/passwd
+  host_id: test-server-01
+  host_name: test-server-01
+  token: change-me-collector-token
+```
+
+In API output mode the collector posts events to `/api/v1/ingest/events` and reports health to `/api/v1/ingest/heartbeat` with the same bearer token. The heartbeat URL is derived from `ingest_url`, so no extra heartbeat setting is required.
+
 ## Backend
 
 Run tests from the backend directory:
