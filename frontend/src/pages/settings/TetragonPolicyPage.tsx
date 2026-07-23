@@ -613,9 +613,9 @@ ${values}${matchBinaries(processNames)}${matchUser(user)}${matchActions(mode)}`;
 }
 
 function deleteBehaviorBlock(paths: string[], processNames: string[], user: UserMatcher | null, mode: PolicyMode, matchMode: DeleteMatchMode) {
-  const selectors = deleteSelectors(paths, processNames, user, mode);
-  const selectorBlock = matchMode === 'debug' ? '' : `    selectors:
-${selectors}`;
+  if (matchMode === 'directory') {
+    return deleteSyscallBlock(paths, processNames, user, mode);
+  }
   return `  kprobes:
   - call: "security_path_unlink"
     syscall: false
@@ -628,7 +628,6 @@ ${uidDataBlock(user)}
     - "delete-behavior"
     - "file_access"
     - "delete-debug"
-${selectorBlock}
   - call: "security_path_rmdir"
     syscall: false
     return: false
@@ -639,23 +638,73 @@ ${uidDataBlock(user)}
     tags:
     - "delete-behavior"
     - "file_access"
-    - "delete-debug"
-${selectorBlock}`;
+    - "delete-debug"`;
 }
 
-function deleteSelectors(paths: string[], processNames: string[], user: UserMatcher | null, mode: PolicyMode) {
+function deleteSyscallBlock(paths: string[], processNames: string[], user: UserMatcher | null, mode: PolicyMode) {
+  return `  kprobes:
+  - call: "sys_unlink"
+    syscall: true
+    return: false
+    args:
+    - index: 0
+      type: "string"
+${uidDataBlock(user)}
+    tags:
+    - "delete-behavior"
+    - "file_access"
+    selectors:
+${deleteSyscallSelectors(0, paths, processNames, user, mode)}
+  - call: "sys_unlinkat"
+    syscall: true
+    return: false
+    args:
+    - index: 1
+      type: "string"
+${uidDataBlock(user)}
+    tags:
+    - "delete-behavior"
+    - "file_access"
+    selectors:
+${deleteSyscallSelectors(1, paths, processNames, user, mode)}
+  - call: "sys_rmdir"
+    syscall: true
+    return: false
+    args:
+    - index: 0
+      type: "string"
+${uidDataBlock(user)}
+    tags:
+    - "delete-behavior"
+    - "file_access"
+    selectors:
+${deleteSyscallSelectors(0, paths, processNames, user, mode)}`;
+}
+
+function deleteSyscallSelectors(argIndex: number, paths: string[], processNames: string[], user: UserMatcher | null, mode: PolicyMode) {
   const selectors: string[] = [];
-  for (const path of paths.filter(Boolean)) {
-    const normalized = normalizePath(path);
-    for (const matchPath of Array.from(new Set([normalized, parentPath(normalized)]))) {
-      selectors.push(`    - matchArgs:
-      - index: 0
+  const values = deleteSyscallValues(paths).map((item) => `            - "${escapeYaml(item)}"`).join('\n');
+  selectors.push(`    - matchArgs:
+      - index: ${argIndex}
         operator: Prefix
         values:
-            - "${escapeYaml(matchPath)}"${matchBinaries(processNames)}${matchUser(user)}${deleteMatchActions(mode)}`);
+${values}${matchBinaries(processNames)}${matchUser(user)}${deleteMatchActions(mode)}`);
+  return selectors.join('\n');
+}
+
+function deleteSyscallValues(paths: string[]) {
+  const result: string[] = [];
+  for (const path of paths.filter(Boolean)) {
+    const normalized = normalizePath(path);
+    const base = baseName(normalized);
+    result.push(normalized);
+    result.push(`${normalized}/`);
+    if (base) {
+      result.push(base);
+      result.push(`${base}/`);
     }
   }
-  return selectors.join('\n');
+  return Array.from(new Set(result));
 }
 
 function deleteMatchActions(mode: PolicyMode) {
@@ -680,6 +729,12 @@ function parentPath(value: string) {
     return '/';
   }
   return normalized.slice(0, index);
+}
+
+function baseName(value: string) {
+  const normalized = normalizePath(value);
+  const index = normalized.lastIndexOf('/');
+  return index >= 0 ? normalized.slice(index + 1) : normalized;
 }
 
 function matchBinaries(processNames: string[]) {
