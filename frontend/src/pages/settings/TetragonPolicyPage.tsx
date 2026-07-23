@@ -86,10 +86,19 @@ export default function TetragonPolicyPage() {
   async function loadPolicies() {
     setLoading(true);
     try {
-      setPolicies(await listEnforcementPolicies());
+      const nextPolicies = await listEnforcementPolicies();
+      setPolicies(nextPolicies);
+      await loadDeploymentSummaries(nextPolicies);
     } finally {
       setLoading(false);
     }
+  }
+
+  async function loadDeploymentSummaries(nextPolicies: EnforcementPolicy[]) {
+    const entries = await Promise.all(
+      nextPolicies.map(async (item) => [item.id, await listEnforcementDeployments(item.id)] as const),
+    );
+    setDeployments(Object.fromEntries(entries));
   }
 
   async function copyYaml() {
@@ -306,11 +315,14 @@ export default function TetragonPolicyPage() {
           showIcon
           style={{ marginBottom: 16 }}
           message="自动下发依赖 Collector 开启拦截策略同步"
-          description="开启后 Collector 会拉取适用于本机的启用策略，写入本机 Tetragon 策略目录并上报部署结果。紧急停用会让后续同步删除 DiTing 管理的策略文件。"
+          description="保存并启用策略后，不需要手动点击部署。开启同步的 Collector 会在下个同步周期自动拉取适用于本机的策略，写入本机 Tetragon 策略目录、重启 Tetragon 并上报主机部署结果。"
           action={(
-            <Popconfirm title="确认紧急停用所有拦截策略？" onConfirm={() => void emergencyDisable()}>
-              <Button danger>紧急停用全部</Button>
-            </Popconfirm>
+            <Space>
+              <Button onClick={() => void loadPolicies()}>刷新同步状态</Button>
+              <Popconfirm title="确认紧急停用所有拦截策略？" onConfirm={() => void emergencyDisable()}>
+                <Button danger>紧急停用全部</Button>
+              </Popconfirm>
+            </Space>
           )}
         />
         <Table
@@ -382,7 +394,7 @@ export default function TetragonPolicyPage() {
             { title: '模式', dataIndex: 'mode', render: modeTag },
             { title: '启用', dataIndex: 'enabled', render: (value: boolean) => (value ? <Tag color="green">启用</Tag> : <Tag>停用</Tag>) },
             { title: '适用主机', dataIndex: 'targetHosts', render: (hosts: string[]) => hosts?.length ? hosts.join(', ') : '通用' },
-            { title: '部署状态', dataIndex: 'deploymentStatus', render: deploymentTag },
+            { title: '自动同步状态', render: (_: unknown, record: EnforcementPolicy) => deploymentSummary(record, deployments[record.id] ?? []) },
             { title: '更新时间', dataIndex: 'updatedAt', render: (value: string) => formatTime(value) },
             {
               title: '操作',
@@ -390,8 +402,8 @@ export default function TetragonPolicyPage() {
                 <Space>
                   <Button size="small" onClick={() => editPolicy(record)}>编辑</Button>
                   <Button size="small" icon={<DownloadOutlined />} onClick={() => downloadContent(record.name, record.yaml)}>下载</Button>
-                  <Button size="small" onClick={() => void markDeployment(record.id, 'deployed', '已手动放入 Tetragon 策略目录')}>标记已部署</Button>
-                  <Button size="small" onClick={() => void markDeployment(record.id, 'failed', 'Tetragon 加载失败，请检查 YAML 或日志')}>标记失败</Button>
+                  <Button size="small" onClick={() => void markDeployment(record.id, 'deployed', '人工校正为已部署')}>校正已部署</Button>
+                  <Button size="small" onClick={() => void markDeployment(record.id, 'failed', '人工校正为加载失败')}>校正失败</Button>
                   <Popconfirm title="确认删除该拦截策略？" onConfirm={() => void removePolicy(record.id)}>
                     <Button size="small" danger>删除</Button>
                   </Popconfirm>
@@ -457,6 +469,26 @@ function deploymentTag(value: string) {
     default:
       return <Tag color="blue">草稿</Tag>;
   }
+}
+
+function deploymentSummary(policy: EnforcementPolicy, deployments: EnforcementDeployment[]) {
+  if (!policy.enabled || policy.mode === 'disabled') {
+    return <Tag>策略停用</Tag>;
+  }
+  if (deployments.length === 0) {
+    return <Tag color="blue">等待 Collector 同步</Tag>;
+  }
+  const deployed = deployments.filter((item) => item.status === 'deployed').length;
+  const failed = deployments.filter((item) => item.status === 'failed').length;
+  const disabled = deployments.filter((item) => item.status === 'disabled').length;
+  return (
+    <Space size={4} wrap>
+      {deployed > 0 && <Tag color="green">{deployed} 已部署</Tag>}
+      {failed > 0 && <Tag color="red">{failed} 失败</Tag>}
+      {disabled > 0 && <Tag>{disabled} 已停用</Tag>}
+      {deployed === 0 && failed === 0 && disabled === 0 && <Tag color="blue">等待同步</Tag>}
+    </Space>
+  );
 }
 
 function formatTime(value: string) {
