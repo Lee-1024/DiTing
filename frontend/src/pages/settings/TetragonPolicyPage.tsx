@@ -16,6 +16,7 @@ import type { EnforcementDeployment, EnforcementDeploymentStatus, EnforcementPol
 type PolicyTemplate = 'dangerous_command' | 'sensitive_file' | 'permission_change' | 'delete_behavior' | 'suspicious_process';
 type PolicyMode = 'audit' | 'enforce' | 'disabled';
 type UserMatchMode = 'all' | 'include' | 'exclude_root';
+type DeleteMatchMode = 'debug' | 'directory';
 
 interface PolicyFormValues {
   template: PolicyTemplate;
@@ -26,6 +27,7 @@ interface PolicyFormValues {
   processNames?: string[];
   userMatchMode?: UserMatchMode;
   userIds?: string[];
+  deleteMatchMode?: DeleteMatchMode;
   enabled?: boolean;
   description?: string;
   targetHosts?: string[];
@@ -42,6 +44,7 @@ const defaultValues: PolicyFormValues = {
   processNames: [],
   userMatchMode: 'exclude_root',
   userIds: [],
+  deleteMatchMode: 'debug',
   targetHosts: [],
 };
 
@@ -63,6 +66,7 @@ export default function TetragonPolicyPage() {
   const processNames = Form.useWatch('processNames', form) ?? defaultValues.processNames;
   const userMatchMode = Form.useWatch('userMatchMode', form) ?? defaultValues.userMatchMode;
   const userIds = Form.useWatch('userIds', form) ?? defaultValues.userIds;
+  const deleteMatchMode = Form.useWatch('deleteMatchMode', form) ?? defaultValues.deleteMatchMode;
   const targetHosts = Form.useWatch('targetHosts', form) ?? defaultValues.targetHosts;
   const policy = useMemo<PolicyFormValues>(() => ({
     template,
@@ -75,8 +79,9 @@ export default function TetragonPolicyPage() {
     processNames,
     userMatchMode,
     userIds,
+    deleteMatchMode,
     targetHosts,
-  }), [template, mode, name, description, enabled, commands, filePaths, processNames, userMatchMode, userIds, targetHosts]);
+  }), [template, mode, name, description, enabled, commands, filePaths, processNames, userMatchMode, userIds, deleteMatchMode, targetHosts]);
   const yaml = useMemo(() => generatePolicy(policy), [policy]);
 
   useEffect(() => {
@@ -269,6 +274,14 @@ export default function TetragonPolicyPage() {
             )}
             {(template === 'sensitive_file' || template === 'permission_change' || template === 'delete_behavior') && (
               <>
+                {template === 'delete_behavior' && (
+                  <Form.Item name="deleteMatchMode" label="删除匹配模式">
+                    <Select options={[
+                      { value: 'debug', label: '调试：只采集删除事件' },
+                      { value: 'directory', label: '目录保护：按目录范围拦截' },
+                    ]} />
+                  </Form.Item>
+                )}
                 <Form.Item
                   name="filePaths"
                   label={template === 'sensitive_file' ? '敏感路径' : '监控路径'}
@@ -525,7 +538,7 @@ function policyTemplate(values: PolicyFormValues) {
         { syscall: 'fchownat', argIndex: 1 },
       ], 'file_access', values.filePaths ?? ['/'], values.processNames ?? [], userMatcher(values), values.mode, 'Prefix', false);
     case 'delete_behavior':
-      return deleteBehaviorBlock(values.filePaths ?? ['/'], values.processNames ?? [], userMatcher(values), values.mode);
+      return deleteBehaviorBlock(values.filePaths ?? ['/'], values.processNames ?? [], userMatcher(values), values.mode, values.deleteMatchMode ?? 'debug');
     case 'suspicious_process':
       return syscallBlock('suspicious-process', [{ syscall: 'execve', argIndex: 0 }], 'process_exec', values.processNames ?? [], [], null, values.mode, 'Postfix', false);
     default:
@@ -599,8 +612,10 @@ ${uidDataBlock(user)}
 ${values}${matchBinaries(processNames)}${matchUser(user)}${matchActions(mode)}`;
 }
 
-function deleteBehaviorBlock(paths: string[], processNames: string[], user: UserMatcher | null, mode: PolicyMode) {
+function deleteBehaviorBlock(paths: string[], processNames: string[], user: UserMatcher | null, mode: PolicyMode, matchMode: DeleteMatchMode) {
   const selectors = deleteSelectors(paths, processNames, user, mode);
+  const selectorBlock = matchMode === 'debug' ? '' : `    selectors:
+${selectors}`;
   return `  kprobes:
   - call: "security_path_unlink"
     syscall: false
@@ -612,8 +627,8 @@ ${uidDataBlock(user)}
     tags:
     - "delete-behavior"
     - "file_access"
-    selectors:
-${selectors}
+    - "delete-debug"
+${selectorBlock}
   - call: "security_path_rmdir"
     syscall: false
     return: false
@@ -624,8 +639,8 @@ ${uidDataBlock(user)}
     tags:
     - "delete-behavior"
     - "file_access"
-    selectors:
-${selectors}`;
+    - "delete-debug"
+${selectorBlock}`;
 }
 
 function deleteSelectors(paths: string[], processNames: string[], user: UserMatcher | null, mode: PolicyMode) {
