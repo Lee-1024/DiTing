@@ -8,6 +8,7 @@ import (
 	"diting/backend/internal/audit"
 	"diting/backend/internal/auth"
 	"diting/backend/internal/collectorhealth"
+	"diting/backend/internal/enforcement"
 	"diting/backend/internal/hostasset"
 	"diting/backend/internal/ingest"
 	"diting/backend/internal/operationlog"
@@ -19,8 +20,9 @@ import (
 )
 
 type routerOptions struct {
-	ingestWriter   ingest.EventWriter
-	collectorToken string
+	ingestWriter          ingest.EventWriter
+	collectorToken        string
+	enforcementRepository enforcement.Repository
 }
 
 type RouterOption func(*routerOptions)
@@ -34,6 +36,12 @@ func WithIngestWriter(writer ingest.EventWriter) RouterOption {
 func WithCollectorToken(token string) RouterOption {
 	return func(options *routerOptions) {
 		options.collectorToken = token
+	}
+}
+
+func WithEnforcementRepository(repository enforcement.Repository) RouterOption {
+	return func(options *routerOptions) {
+		options.enforcementRepository = repository
 	}
 }
 
@@ -65,6 +73,10 @@ func NewRouter(repository audit.Repository, ruleRepository rule.Repository, stat
 		collectorHealthRepository = collectorhealth.NewMemoryRepository()
 	}
 	collectorHealthHandler := collectorhealth.NewHandlerWithToken(collectorHealthRepository, options.collectorToken)
+	if options.enforcementRepository == nil {
+		options.enforcementRepository = enforcement.NewMemoryRepository()
+	}
+	enforcementHandler := enforcement.NewHandler(options.enforcementRepository)
 	var riskStatusHandler *riskstatus.Handler
 	if riskStatusRepository != nil {
 		riskStatusHandler = riskstatus.NewHandler(riskStatusRepository)
@@ -136,6 +148,36 @@ func NewRouter(repository audit.Repository, ruleRepository rule.Repository, stat
 			ruleHandler.Update(w, r)
 		case http.MethodDelete:
 			ruleHandler.Delete(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})))
+	mux.Handle("/api/v1/enforcement-policies", protect(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			enforcementHandler.List(w, r)
+		case http.MethodPost:
+			enforcementHandler.Create(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})))
+	mux.Handle("/api/v1/enforcement-policies/{id}", protect(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			enforcementHandler.Get(w, r)
+		case http.MethodPut:
+			enforcementHandler.Update(w, r)
+		case http.MethodDelete:
+			enforcementHandler.Delete(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})))
+	mux.Handle("/api/v1/enforcement-policies/{id}/deployment", protect(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			enforcementHandler.UpdateDeployment(w, r)
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}

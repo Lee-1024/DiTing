@@ -1,6 +1,14 @@
 import { CopyOutlined, DownloadOutlined } from '@ant-design/icons';
-import { Alert, Button, Card, Form, Input, Select, Space, Typography, message } from 'antd';
-import { useMemo } from 'react';
+import { Alert, Button, Card, Form, Input, Popconfirm, Select, Space, Switch, Table, Tag, Typography, message } from 'antd';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  createEnforcementPolicy,
+  deleteEnforcementPolicy,
+  listEnforcementPolicies,
+  updateEnforcementDeployment,
+  updateEnforcementPolicy,
+} from '../../api/enforcement';
+import type { EnforcementDeploymentStatus, EnforcementPolicy, EnforcementPolicyPayload } from '../../types/enforcement';
 
 type PolicyTemplate = 'dangerous_command' | 'sensitive_file' | 'permission_change' | 'delete_behavior' | 'suspicious_process';
 type PolicyMode = 'audit' | 'enforce' | 'disabled';
@@ -15,40 +23,69 @@ interface PolicyFormValues {
   processNames?: string[];
   userMatchMode?: UserMatchMode;
   userIds?: string[];
+  enabled?: boolean;
+  description?: string;
+  targetHosts?: string[];
 }
 
 const defaultValues: PolicyFormValues = {
   template: 'dangerous_command',
   mode: 'audit',
   name: 'diting-dangerous-command',
+  description: '',
+  enabled: true,
   commands: ['curl', 'wget', 'bash'],
   filePaths: ['/etc/passwd', '/etc/shadow', '/etc/sudoers', '/root/.ssh'],
   processNames: [],
   userMatchMode: 'exclude_root',
   userIds: [],
+  targetHosts: [],
 };
 
 export default function TetragonPolicyPage() {
   const [form] = Form.useForm<PolicyFormValues>();
+  const [policies, setPolicies] = useState<EnforcementPolicy[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState<EnforcementPolicy | null>(null);
   const template = Form.useWatch('template', form) ?? defaultValues.template;
   const mode = Form.useWatch('mode', form) ?? defaultValues.mode;
   const name = Form.useWatch('name', form) ?? defaultValues.name;
+  const description = Form.useWatch('description', form) ?? defaultValues.description;
+  const enabled = Form.useWatch('enabled', form) ?? defaultValues.enabled;
   const commands = Form.useWatch('commands', form) ?? defaultValues.commands;
   const filePaths = Form.useWatch('filePaths', form) ?? defaultValues.filePaths;
   const processNames = Form.useWatch('processNames', form) ?? defaultValues.processNames;
   const userMatchMode = Form.useWatch('userMatchMode', form) ?? defaultValues.userMatchMode;
   const userIds = Form.useWatch('userIds', form) ?? defaultValues.userIds;
+  const targetHosts = Form.useWatch('targetHosts', form) ?? defaultValues.targetHosts;
   const policy = useMemo<PolicyFormValues>(() => ({
     template,
     mode,
     name,
+    description,
+    enabled,
     commands,
     filePaths,
     processNames,
     userMatchMode,
     userIds,
-  }), [template, mode, name, commands, filePaths, processNames, userMatchMode, userIds]);
+    targetHosts,
+  }), [template, mode, name, description, enabled, commands, filePaths, processNames, userMatchMode, userIds, targetHosts]);
   const yaml = useMemo(() => generatePolicy(policy), [policy]);
+
+  useEffect(() => {
+    void loadPolicies();
+  }, []);
+
+  async function loadPolicies() {
+    setLoading(true);
+    try {
+      setPolicies(await listEnforcementPolicies());
+    } finally {
+      setLoading(false);
+    }
+  }
 
   async function copyYaml() {
     await navigator.clipboard.writeText(yaml);
@@ -56,19 +93,83 @@ export default function TetragonPolicyPage() {
   }
 
   function downloadYaml() {
-    const blob = new Blob([yaml], { type: 'text/yaml;charset=utf-8' });
+    downloadContent(name || 'diting-tetragon-policy', yaml);
+  }
+
+  function downloadContent(fileName: string, content: string) {
+    const blob = new Blob([content], { type: 'text/yaml;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `${name || 'diting-tetragon-policy'}.yaml`;
+    link.download = `${fileName || 'diting-tetragon-policy'}.yaml`;
     link.click();
     URL.revokeObjectURL(url);
+  }
+
+  async function savePolicy() {
+    const values = await form.validateFields();
+    const payload: EnforcementPolicyPayload = {
+      name: values.name,
+      description: values.description ?? '',
+      template: values.template,
+      mode: values.mode,
+      enabled: values.enabled ?? true,
+      targetHosts: values.targetHosts ?? [],
+      definition: values as unknown as Record<string, unknown>,
+      yaml: generatePolicy(values),
+      deploymentStatus: editing?.deploymentStatus ?? 'draft',
+      deploymentMessage: editing?.deploymentMessage ?? '',
+    };
+    setSaving(true);
+    try {
+      if (editing) {
+        await updateEnforcementPolicy(editing.id, payload);
+        message.success('拦截策略已更新');
+      } else {
+        await createEnforcementPolicy(payload);
+        message.success('拦截策略已保存');
+      }
+      setEditing(null);
+      form.setFieldsValue(defaultValues);
+      await loadPolicies();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function editPolicy(policy: EnforcementPolicy) {
+    setEditing(policy);
+    const definition = policy.definition as Partial<PolicyFormValues> | undefined;
+    form.setFieldsValue({
+      ...defaultValues,
+      name: policy.name,
+      description: policy.description,
+      template: policy.template,
+      mode: policy.mode,
+      enabled: policy.enabled,
+      targetHosts: policy.targetHosts,
+      ...definition,
+    });
+  }
+
+  async function removePolicy(id: string) {
+    await deleteEnforcementPolicy(id);
+    message.success('拦截策略已删除');
+    await loadPolicies();
+  }
+
+  async function markDeployment(id: string, status: EnforcementDeploymentStatus, deploymentMessage: string) {
+    await updateEnforcementDeployment(id, status, deploymentMessage);
+    message.success('部署状态已更新');
+    await loadPolicies();
   }
 
   return (
     <>
       <Space className="page-heading">
         <Typography.Title level={3} className="page-title">拦截策略</Typography.Title>
+        <Button type="primary" loading={saving} onClick={() => void savePolicy()}>{editing ? '保存修改' : '保存策略'}</Button>
+        {editing && <Button onClick={() => { setEditing(null); form.setFieldsValue(defaultValues); }}>取消编辑</Button>}
         <Button icon={<CopyOutlined />} onClick={() => void copyYaml()}>复制 YAML</Button>
         <Button icon={<DownloadOutlined />} onClick={downloadYaml}>下载 YAML</Button>
       </Space>
@@ -96,6 +197,15 @@ export default function TetragonPolicyPage() {
             </Form.Item>
             <Form.Item name="name" label="策略名称" rules={[{ required: true }]}>
               <Input />
+            </Form.Item>
+            <Form.Item name="description" label="策略说明">
+              <Input.TextArea rows={2} placeholder="说明这个策略保护的文件、用户范围和部署注意事项" />
+            </Form.Item>
+            <Form.Item name="enabled" label="启用策略" valuePropName="checked">
+              <Switch checkedChildren="启用" unCheckedChildren="停用" />
+            </Form.Item>
+            <Form.Item name="targetHosts" label="适用主机（可选）" tooltip="用于记录这份 YAML 计划部署到哪些主机；当前版本仍需手动放到对应 Tetragon 策略目录。">
+              <Select mode="tags" tokenSeparators={[',']} placeholder="例如 server-001 / 10.40.0.184，留空表示通用策略" />
             </Form.Item>
             {template === 'dangerous_command' && (
               <>
@@ -155,6 +265,37 @@ export default function TetragonPolicyPage() {
           <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: 13 }}>{yaml}</pre>
         </Card>
       </div>
+      <Card className="data-card" title="已保存拦截策略" style={{ marginTop: 16 }}>
+        <Table
+          rowKey="id"
+          loading={loading}
+          dataSource={policies}
+          pagination={{ pageSize: 10 }}
+          columns={[
+            { title: '策略名称', dataIndex: 'name' },
+            { title: '模板', dataIndex: 'template', render: templateLabel },
+            { title: '模式', dataIndex: 'mode', render: modeTag },
+            { title: '启用', dataIndex: 'enabled', render: (value: boolean) => (value ? <Tag color="green">启用</Tag> : <Tag>停用</Tag>) },
+            { title: '适用主机', dataIndex: 'targetHosts', render: (hosts: string[]) => hosts?.length ? hosts.join(', ') : '通用' },
+            { title: '部署状态', dataIndex: 'deploymentStatus', render: deploymentTag },
+            { title: '更新时间', dataIndex: 'updatedAt', render: (value: string) => formatTime(value) },
+            {
+              title: '操作',
+              render: (_: unknown, record: EnforcementPolicy) => (
+                <Space>
+                  <Button size="small" onClick={() => editPolicy(record)}>编辑</Button>
+                  <Button size="small" icon={<DownloadOutlined />} onClick={() => downloadContent(record.name, record.yaml)}>下载</Button>
+                  <Button size="small" onClick={() => void markDeployment(record.id, 'deployed', '已手动放入 Tetragon 策略目录')}>标记已部署</Button>
+                  <Button size="small" onClick={() => void markDeployment(record.id, 'failed', 'Tetragon 加载失败，请检查 YAML 或日志')}>标记失败</Button>
+                  <Popconfirm title="确认删除该拦截策略？" onConfirm={() => void removePolicy(record.id)}>
+                    <Button size="small" danger>删除</Button>
+                  </Popconfirm>
+                </Space>
+              ),
+            },
+          ]}
+        />
+      </Card>
     </>
   );
 }
@@ -174,9 +315,52 @@ function defaultPolicyName(template: PolicyTemplate) {
   }
 }
 
+function templateLabel(value: string) {
+  switch (value) {
+    case 'sensitive_file':
+      return '敏感文件读写';
+    case 'permission_change':
+      return '权限变更';
+    case 'delete_behavior':
+      return '删除行为';
+    case 'suspicious_process':
+      return '可疑进程链路';
+    default:
+      return '危险命令';
+  }
+}
+
+function modeTag(value: string) {
+  switch (value) {
+    case 'enforce':
+      return <Tag color="red">拦截</Tag>;
+    case 'disabled':
+      return <Tag>禁用</Tag>;
+    default:
+      return <Tag color="blue">仅审计</Tag>;
+  }
+}
+
+function deploymentTag(value: string) {
+  switch (value) {
+    case 'deployed':
+      return <Tag color="green">已部署</Tag>;
+    case 'failed':
+      return <Tag color="red">加载失败</Tag>;
+    case 'disabled':
+      return <Tag>已停用</Tag>;
+    default:
+      return <Tag color="blue">草稿</Tag>;
+  }
+}
+
+function formatTime(value: string) {
+  return value ? new Date(value).toLocaleString() : '-';
+}
+
 function generatePolicy(values: PolicyFormValues) {
   const name = sanitizeName(values.name || 'diting-tetragon-policy');
-  if (values.mode === 'disabled') {
+  if (values.mode === 'disabled' || values.enabled === false) {
     return `# 当前策略已禁用，未生成可部署的 TracingPolicy。\n# 请选择“仅审计”或“拦截”后再复制/下载。`;
   }
   const template = policyTemplate(values);

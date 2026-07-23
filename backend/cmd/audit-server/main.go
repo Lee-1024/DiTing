@@ -18,6 +18,7 @@ import (
 	"diting/backend/internal/collector"
 	"diting/backend/internal/collectorhealth"
 	"diting/backend/internal/config"
+	"diting/backend/internal/enforcement"
 	"diting/backend/internal/hostasset"
 	"diting/backend/internal/operationlog"
 	"diting/backend/internal/postgres"
@@ -285,6 +286,7 @@ func main() {
 	systemConfigRepository := systemconfig.NewPostgresRepository(pool)
 	userAdminRepository := useradmin.NewPostgresRepository(pool)
 	collectorHealthRepository := collectorhealth.NewPostgresRepository(pool)
+	enforcementRepository := enforcement.NewPostgresRepository(pool)
 	ingestWriter := newRefreshingRuleWriter(eventSink(clickHouseClient), repositoryRuleProvider{repository: ruleRepository})
 	ingestWriter.SetCollectorFilterProvider(systemConfigRepository)
 	if err := ingestWriter.Refresh(context.Background()); err != nil {
@@ -309,6 +311,7 @@ func main() {
 		collectorHealthRepository,
 		server.WithIngestWriter(ingestWriter),
 		server.WithCollectorToken(cfg.Collector.Token),
+		server.WithEnforcementRepository(enforcementRepository),
 	)); err != nil {
 		slog.Error("api server stopped with error", "addr", addr, "error", err)
 		fmt.Fprintf(os.Stderr, "listen: %v\n", err)
