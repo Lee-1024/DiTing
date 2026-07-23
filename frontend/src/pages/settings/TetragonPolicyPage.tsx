@@ -16,7 +16,6 @@ import type { EnforcementDeployment, EnforcementDeploymentStatus, EnforcementPol
 type PolicyTemplate = 'dangerous_command' | 'sensitive_file' | 'permission_change' | 'delete_behavior' | 'suspicious_process';
 type PolicyMode = 'audit' | 'enforce' | 'disabled';
 type UserMatchMode = 'all' | 'include' | 'exclude_root';
-type DeleteMatchMode = 'debug' | 'syscall_debug' | 'directory';
 
 interface PolicyFormValues {
   template: PolicyTemplate;
@@ -27,7 +26,6 @@ interface PolicyFormValues {
   processNames?: string[];
   userMatchMode?: UserMatchMode;
   userIds?: string[];
-  deleteMatchMode?: DeleteMatchMode;
   enabled?: boolean;
   description?: string;
   targetHosts?: string[];
@@ -44,7 +42,6 @@ const defaultValues: PolicyFormValues = {
   processNames: [],
   userMatchMode: 'exclude_root',
   userIds: [],
-  deleteMatchMode: 'debug',
   targetHosts: [],
 };
 
@@ -66,7 +63,6 @@ export default function TetragonPolicyPage() {
   const processNames = Form.useWatch('processNames', form) ?? defaultValues.processNames;
   const userMatchMode = Form.useWatch('userMatchMode', form) ?? defaultValues.userMatchMode;
   const userIds = Form.useWatch('userIds', form) ?? defaultValues.userIds;
-  const deleteMatchMode = Form.useWatch('deleteMatchMode', form) ?? defaultValues.deleteMatchMode;
   const targetHosts = Form.useWatch('targetHosts', form) ?? defaultValues.targetHosts;
   const policy = useMemo<PolicyFormValues>(() => ({
     template,
@@ -79,14 +75,19 @@ export default function TetragonPolicyPage() {
     processNames,
     userMatchMode,
     userIds,
-    deleteMatchMode,
     targetHosts,
-  }), [template, mode, name, description, enabled, commands, filePaths, processNames, userMatchMode, userIds, deleteMatchMode, targetHosts]);
+  }), [template, mode, name, description, enabled, commands, filePaths, processNames, userMatchMode, userIds, targetHosts]);
   const yaml = useMemo(() => generatePolicy(policy), [policy]);
 
   useEffect(() => {
     void loadPolicies();
   }, []);
+
+  useEffect(() => {
+    if (template === 'delete_behavior' && mode === 'enforce') {
+      form.setFieldValue('mode', 'audit');
+    }
+  }, [form, mode, template]);
 
   async function loadPolicies() {
     setLoading(true);
@@ -240,7 +241,7 @@ export default function TetragonPolicyPage() {
             <Form.Item name="mode" label="策略模式" rules={[{ required: true }]}>
               <Select options={[
                 { value: 'audit', label: '仅审计' },
-                { value: 'enforce', label: '拦截' },
+                { value: 'enforce', label: '拦截', disabled: template === 'delete_behavior' },
                 { value: 'disabled', label: '禁用' },
               ]} />
             </Form.Item>
@@ -262,31 +263,31 @@ export default function TetragonPolicyPage() {
                   type={mode === 'enforce' ? 'warning' : 'info'}
                   showIcon
                   style={{ marginBottom: 16 }}
-                  message={mode === 'enforce' ? '危险命令模板不建议直接拦截' : '危险命令模板适合先审计观察'}
+                  message={mode === 'enforce' ? '危险命令模板会按进程名拦截' : '危险命令模板适合先审计观察'}
                   description={mode === 'enforce'
-                    ? 'rm、chmod、vim 等命令本身不是风险，直接拦截会影响普通用户操作。需要拦截时请优先使用敏感文件、权限变更或删除行为模板，并配置目标路径。'
-                    : '该模板按进程执行命令匹配，建议用于审计和发现行为。精确拦截请使用文件路径类模板。'}
+                    ? '当前按二进制进程名拦截，适合明确禁止某类命令启动。不要直接拦截 rm、chmod 这类常用命令，避免影响正常运维。'
+                    : '该模板按进程执行命令匹配，建议先审计观察；参数级危险组合先进入风险告警，不在这里承诺强拦截。'}
                 />
                 <Form.Item name="commands" label="命令/关键进程">
-                  <Select mode="tags" tokenSeparators={[',']} />
+                  <Select mode="tags" tokenSeparators={[',']} placeholder="例如 nc / ncat / socat，拦截会在命令启动时生效" />
                 </Form.Item>
               </>
             )}
             {(template === 'sensitive_file' || template === 'permission_change' || template === 'delete_behavior') && (
               <>
                 {template === 'delete_behavior' && (
-                  <Form.Item name="deleteMatchMode" label="删除匹配模式">
-                    <Select options={[
-                      { value: 'debug', label: '调试：采集 security 删除事件' },
-                      { value: 'syscall_debug', label: '调试：采集 syscall 删除参数' },
-                      { value: 'directory', label: '目录保护：按目录范围拦截' },
-                    ]} />
-                  </Form.Item>
+                  <Alert
+                    type="info"
+                    showIcon
+                    style={{ marginBottom: 16 }}
+                    message="删除行为模板仅用于审计和告警"
+                    description="Tetragon 当前不提供稳定的按路径删除强拦截能力。需要阻止 rm -rf / 这类危险操作时，请使用危险命令模板。"
+                  />
                 )}
                 <Form.Item
                   name="filePaths"
                   label={template === 'sensitive_file' ? '敏感路径' : '监控路径'}
-                  tooltip={template === 'delete_behavior' ? '删除保护建议填写目录。系统会同时保护该目录内删除行为，并保护该目录本身不被删除；单文件精确保护受 Tetragon dentry 匹配限制，按父目录范围处理。' : undefined}
+                  tooltip={template === 'delete_behavior' ? '仅用于记录删除行为涉及的路径范围和风险命中，不承诺阻止删除。' : undefined}
                 >
                   <Select mode="tags" tokenSeparators={[',']} />
                 </Form.Item>
@@ -539,11 +540,11 @@ function policyTemplate(values: PolicyFormValues) {
         { syscall: 'fchownat', argIndex: 1 },
       ], 'file_access', values.filePaths ?? ['/'], values.processNames ?? [], userMatcher(values), values.mode, 'Prefix', false);
     case 'delete_behavior':
-      return deleteBehaviorBlock(values.filePaths ?? ['/'], values.processNames ?? [], userMatcher(values), values.mode, values.deleteMatchMode ?? 'debug');
+      return deleteBehaviorBlock(values.filePaths ?? ['/'], values.processNames ?? [], userMatcher(values));
     case 'suspicious_process':
       return syscallBlock('suspicious-process', [{ syscall: 'execve', argIndex: 0 }], 'process_exec', values.processNames ?? [], [], null, values.mode, 'Postfix', false);
     default:
-      return syscallBlock('dangerous-command', [{ syscall: 'execve', argIndex: 0 }], 'process_exec', values.commands ?? [], [], null, 'audit', 'Postfix', false);
+      return syscallBlock('dangerous-command', [{ syscall: 'execve', argIndex: 0 }], 'process_exec', values.commands ?? [], [], null, values.mode, 'Postfix', false);
   }
 }
 
@@ -613,13 +614,8 @@ ${uidDataBlock(user)}
 ${values}${matchBinaries(processNames)}${matchUser(user)}${matchActions(mode)}`;
 }
 
-function deleteBehaviorBlock(paths: string[], processNames: string[], user: UserMatcher | null, mode: PolicyMode, matchMode: DeleteMatchMode) {
-  if (matchMode === 'syscall_debug') {
-    return deleteSyscallDebugBlock();
-  }
-  if (matchMode === 'directory') {
-    return deleteSyscallBlock(paths, processNames, user, mode);
-  }
+function deleteBehaviorBlock(paths: string[], processNames: string[], user: UserMatcher | null) {
+  const values = (paths.filter(Boolean).length ? paths.filter(Boolean) : ['/']).map((path) => `            - "${escapeYaml(path)}"`).join('\n');
   return `  kprobes:
   - call: "security_path_unlink"
     syscall: false
@@ -631,7 +627,12 @@ ${uidDataBlock(user)}
     tags:
     - "delete-behavior"
     - "file_access"
-    - "delete-debug"
+    selectors:
+    - matchArgs:
+      - index: 0
+        operator: Prefix
+        values:
+${values}${matchBinaries(processNames)}${matchUser(user)}
   - call: "security_path_rmdir"
     syscall: false
     return: false
@@ -642,147 +643,12 @@ ${uidDataBlock(user)}
     tags:
     - "delete-behavior"
     - "file_access"
-    - "delete-debug"`;
-}
-
-function deleteSyscallDebugBlock() {
-  const rmOnly = rmSelectorBlock();
-  return `  kprobes:
-  - call: "sys_unlink"
-    syscall: true
-    return: false
-    args:
-    - index: 0
-      type: "string"
-    tags:
-    - "delete-behavior"
-    - "delete-syscall-debug"
     selectors:
-${rmOnly}
-  - call: "sys_unlinkat"
-    syscall: true
-    return: false
-    args:
-    - index: 1
-      type: "string"
-    tags:
-    - "delete-behavior"
-    - "delete-syscall-debug"
-    selectors:
-${rmOnly}
-  - call: "sys_rmdir"
-    syscall: true
-    return: false
-    args:
-    - index: 0
-      type: "string"
-    tags:
-    - "delete-behavior"
-    - "delete-syscall-debug"
-    selectors:
-${rmOnly}`;
-}
-
-function rmSelectorBlock() {
-  return `    - matchBinaries:
-      - operator: Postfix
-        values:
-        - "rm"`;
-}
-
-function deleteSyscallBlock(paths: string[], processNames: string[], user: UserMatcher | null, mode: PolicyMode) {
-  return `  kprobes:
-  - call: "sys_unlink"
-    syscall: true
-    return: false
-    args:
-    - index: 0
-      type: "string"
-${uidDataBlock(user)}
-    tags:
-    - "delete-behavior"
-    - "file_access"
-    selectors:
-${deleteSyscallSelectors(0, paths, processNames, user, mode)}
-  - call: "sys_unlinkat"
-    syscall: true
-    return: false
-    args:
-    - index: 1
-      type: "string"
-${uidDataBlock(user)}
-    tags:
-    - "delete-behavior"
-    - "file_access"
-    selectors:
-${deleteSyscallSelectors(0, paths, processNames, user, mode)}
-  - call: "sys_rmdir"
-    syscall: true
-    return: false
-    args:
-    - index: 0
-      type: "string"
-${uidDataBlock(user)}
-    tags:
-    - "delete-behavior"
-    - "file_access"
-    selectors:
-${deleteSyscallSelectors(0, paths, processNames, user, mode)}`;
-}
-
-function deleteSyscallSelectors(argIndex: number, paths: string[], processNames: string[], user: UserMatcher | null, mode: PolicyMode) {
-  const selectors: string[] = [];
-  const values = deleteSyscallValues(paths).map((item) => `            - "${escapeYaml(item)}"`).join('\n');
-  selectors.push(`    - matchArgs:
-      - index: ${argIndex}
+    - matchArgs:
+      - index: 0
         operator: Prefix
         values:
-${values}${matchBinaries(processNames)}${matchUser(user)}${deleteMatchActions(mode)}`);
-  return selectors.join('\n');
-}
-
-function deleteSyscallValues(paths: string[]) {
-  const result: string[] = [];
-  for (const path of paths.filter(Boolean)) {
-    const normalized = normalizePath(path);
-    const base = baseName(normalized);
-    result.push(normalized);
-    result.push(`${normalized}/`);
-    if (base) {
-      result.push(base);
-      result.push(`${base}/`);
-    }
-  }
-  return Array.from(new Set(result));
-}
-
-function deleteMatchActions(mode: PolicyMode) {
-  if (mode !== 'enforce') {
-    return '';
-  }
-  return `
-      matchActions:
-      - action: Sigkill`;
-}
-
-function normalizePath(value: string) {
-  const trimmed = value.trim().replace(/\/+$/g, '');
-  return trimmed || '/';
-}
-
-function parentPath(value: string) {
-  const normalized = normalizePath(value);
-  const index = normalized.lastIndexOf('/');
-  if (index <= 0) {
-    return '/';
-  }
-  return normalized.slice(0, index);
-}
-
-function baseName(value: string) {
-  const normalized = normalizePath(value);
-  const index = normalized.lastIndexOf('/');
-  return index >= 0 ? normalized.slice(index + 1) : normalized;
+${values}${matchBinaries(processNames)}${matchUser(user)}`;
 }
 
 function matchBinaries(processNames: string[]) {
