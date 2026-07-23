@@ -109,3 +109,37 @@ func TestHandlerDisablesAllEnabledPolicies(t *testing.T) {
 		}
 	}
 }
+
+func TestHandlerRecordsPolicyDeploymentsByHost(t *testing.T) {
+	repository := NewMemoryRepository()
+	created, err := repository.Create(nil, Policy{Name: "敏感文件拦截", Template: "sensitive_file", Mode: "enforce", Enabled: true, YAML: "kind: TracingPolicy"})
+	if err != nil {
+		t.Fatalf("create policy: %v", err)
+	}
+	handler := NewHandler(repository)
+	reportReq := httptest.NewRequest(http.MethodPost, "/api/v1/enforcement-policies/"+created.ID+"/deployments", bytes.NewBufferString(`{"hostId":"host-1","hostName":"测试主机","status":"deployed","message":"tetragon loaded"}`))
+	reportReq.SetPathValue("id", created.ID)
+	reportResp := httptest.NewRecorder()
+
+	handler.UpsertDeployment(reportResp, reportReq)
+
+	if reportResp.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", reportResp.Code, reportResp.Body.String())
+	}
+
+	listReq := httptest.NewRequest(http.MethodGet, "/api/v1/enforcement-policies/"+created.ID+"/deployments", nil)
+	listReq.SetPathValue("id", created.ID)
+	listResp := httptest.NewRecorder()
+	handler.ListDeployments(listResp, listReq)
+
+	if listResp.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", listResp.Code, listResp.Body.String())
+	}
+	var deployments []Deployment
+	if err := json.NewDecoder(listResp.Body).Decode(&deployments); err != nil {
+		t.Fatalf("decode deployments: %v", err)
+	}
+	if len(deployments) != 1 || deployments[0].HostID != "host-1" || deployments[0].Status != "deployed" {
+		t.Fatalf("unexpected deployments: %#v", deployments)
+	}
+}

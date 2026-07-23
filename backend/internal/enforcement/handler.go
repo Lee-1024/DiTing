@@ -114,6 +114,34 @@ func (h *Handler) EmergencyDisable(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, emergencyDisableResponse{DisabledCount: count, Message: message})
 }
 
+func (h *Handler) UpsertDeployment(w http.ResponseWriter, r *http.Request) {
+	var request Deployment
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	if request.HostID == "" || !validDeploymentStatus(request.Status) {
+		http.Error(w, "hostId and valid status are required", http.StatusBadRequest)
+		return
+	}
+	request.PolicyID = r.PathValue("id")
+	updated, err := h.repository.UpsertHostDeployment(r.Context(), request)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, updated)
+}
+
+func (h *Handler) ListDeployments(w http.ResponseWriter, r *http.Request) {
+	deployments, err := h.repository.ListHostDeployments(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, deployments)
+}
+
 func validPolicy(policy Policy) bool {
 	return policy.Name != "" && policy.Template != "" && policy.YAML != ""
 }

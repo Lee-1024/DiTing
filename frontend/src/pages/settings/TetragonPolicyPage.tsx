@@ -5,11 +5,13 @@ import {
   createEnforcementPolicy,
   deleteEnforcementPolicy,
   emergencyDisableEnforcementPolicies,
+  listEnforcementDeployments,
   listEnforcementPolicies,
   updateEnforcementDeployment,
   updateEnforcementPolicy,
+  upsertEnforcementDeployment,
 } from '../../api/enforcement';
-import type { EnforcementDeploymentStatus, EnforcementPolicy, EnforcementPolicyPayload } from '../../types/enforcement';
+import type { EnforcementDeployment, EnforcementDeploymentStatus, EnforcementPolicy, EnforcementPolicyPayload } from '../../types/enforcement';
 
 type PolicyTemplate = 'dangerous_command' | 'sensitive_file' | 'permission_change' | 'delete_behavior' | 'suspicious_process';
 type PolicyMode = 'audit' | 'enforce' | 'disabled';
@@ -49,6 +51,8 @@ export default function TetragonPolicyPage() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState<EnforcementPolicy | null>(null);
+  const [deployments, setDeployments] = useState<Record<string, EnforcementDeployment[]>>({});
+  const [deploymentForms, setDeploymentForms] = useState<Record<string, Partial<EnforcementDeployment>>>({});
   const template = Form.useWatch('template', form) ?? defaultValues.template;
   const mode = Form.useWatch('mode', form) ?? defaultValues.mode;
   const name = Form.useWatch('name', form) ?? defaultValues.name;
@@ -163,6 +167,28 @@ export default function TetragonPolicyPage() {
     await updateEnforcementDeployment(id, status, deploymentMessage);
     message.success('部署状态已更新');
     await loadPolicies();
+  }
+
+  async function loadDeployments(policyId: string) {
+    const next = await listEnforcementDeployments(policyId);
+    setDeployments((current) => ({ ...current, [policyId]: next }));
+  }
+
+  async function saveHostDeployment(policyId: string) {
+    const formValue = deploymentForms[policyId] ?? {};
+    if (!formValue.hostId || !formValue.status) {
+      message.warning('请填写主机 ID 和部署状态');
+      return;
+    }
+    await upsertEnforcementDeployment(policyId, {
+      hostId: formValue.hostId,
+      hostName: formValue.hostName ?? '',
+      status: formValue.status,
+      message: formValue.message ?? '',
+    });
+    message.success('主机部署记录已保存');
+    setDeploymentForms((current) => ({ ...current, [policyId]: {} }));
+    await loadDeployments(policyId);
   }
 
   async function emergencyDisable() {
@@ -292,6 +318,64 @@ export default function TetragonPolicyPage() {
           loading={loading}
           dataSource={policies}
           pagination={{ pageSize: 10 }}
+          expandable={{
+            onExpand: (expanded, record) => {
+              if (expanded && !deployments[record.id]) {
+                void loadDeployments(record.id);
+              }
+            },
+            expandedRowRender: (record) => (
+              <div>
+                <Space style={{ marginBottom: 12 }} wrap>
+                  <Input
+                    style={{ width: 180 }}
+                    placeholder="主机 ID"
+                    value={deploymentForms[record.id]?.hostId}
+                    onChange={(event) => setDeploymentForms((current) => ({ ...current, [record.id]: { ...current[record.id], hostId: event.target.value } }))}
+                  />
+                  <Input
+                    style={{ width: 180 }}
+                    placeholder="主机名"
+                    value={deploymentForms[record.id]?.hostName}
+                    onChange={(event) => setDeploymentForms((current) => ({ ...current, [record.id]: { ...current[record.id], hostName: event.target.value } }))}
+                  />
+                  <Select
+                    style={{ width: 140 }}
+                    placeholder="部署状态"
+                    value={deploymentForms[record.id]?.status}
+                    options={[
+                      { value: 'deployed', label: '已部署' },
+                      { value: 'failed', label: '加载失败' },
+                      { value: 'disabled', label: '已停用' },
+                      { value: 'draft', label: '未部署' },
+                    ]}
+                    onChange={(value) => setDeploymentForms((current) => ({ ...current, [record.id]: { ...current[record.id], status: value } }))}
+                  />
+                  <Input
+                    style={{ width: 260 }}
+                    placeholder="部署说明 / 失败原因"
+                    value={deploymentForms[record.id]?.message}
+                    onChange={(event) => setDeploymentForms((current) => ({ ...current, [record.id]: { ...current[record.id], message: event.target.value } }))}
+                  />
+                  <Button type="primary" onClick={() => void saveHostDeployment(record.id)}>保存主机记录</Button>
+                </Space>
+                <Table
+                  size="small"
+                  rowKey="id"
+                  dataSource={deployments[record.id] ?? []}
+                  pagination={false}
+                  columns={[
+                    { title: '主机 ID', dataIndex: 'hostId' },
+                    { title: '主机名', dataIndex: 'hostName', render: (value: string) => value || '-' },
+                    { title: '状态', dataIndex: 'status', render: deploymentTag },
+                    { title: '说明', dataIndex: 'message', render: (value: string) => value || '-' },
+                    { title: '部署时间', dataIndex: 'deployedAt', render: (value: string) => formatTime(value) },
+                    { title: '更新时间', dataIndex: 'updatedAt', render: (value: string) => formatTime(value) },
+                  ]}
+                />
+              </div>
+            ),
+          }}
           columns={[
             { title: '策略名称', dataIndex: 'name' },
             { title: '模板', dataIndex: 'template', render: templateLabel },

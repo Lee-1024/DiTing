@@ -137,6 +137,63 @@ WHERE enabled = TRUE OR mode <> 'disabled' OR deployment_status <> 'disabled'
 	return int(commandTag.RowsAffected()), nil
 }
 
+func (r *PostgresRepository) UpsertHostDeployment(ctx context.Context, deployment Deployment) (Deployment, error) {
+	deployment.Status = normalizeDeploymentStatus(deployment.Status)
+	row := r.pool.QueryRow(ctx, `
+INSERT INTO diting_enforcement_policy_deployments (
+    id, policy_id, host_id, host_name, status, message, deployed_at, updated_at
+)
+VALUES (
+    gen_random_uuid(), $1, $2, $3, $4, $5,
+    CASE WHEN $4 = 'deployed' THEN NOW() ELSE NULL END,
+    NOW()
+)
+ON CONFLICT (policy_id, host_id) DO UPDATE
+SET host_name = EXCLUDED.host_name,
+    status = EXCLUDED.status,
+    message = EXCLUDED.message,
+    deployed_at = CASE WHEN EXCLUDED.status = 'deployed' THEN NOW() ELSE diting_enforcement_policy_deployments.deployed_at END,
+    updated_at = NOW()
+RETURNING id::text, policy_id::text, host_id, host_name, status, message, deployed_at, updated_at
+`, deployment.PolicyID, deployment.HostID, deployment.HostName, deployment.Status, deployment.Message)
+	result, err := scanDeployment(row)
+	if err != nil {
+		return Deployment{}, mapNotFound(err)
+	}
+	return result, nil
+}
+
+func (r *PostgresRepository) ListHostDeployments(ctx context.Context, policyID string) ([]Deployment, error) {
+	rows, err := r.pool.Query(ctx, `
+SELECT id::text, policy_id::text, host_id, host_name, status, message, deployed_at, updated_at
+FROM diting_enforcement_policy_deployments
+WHERE policy_id = $1
+ORDER BY updated_at DESC
+`, policyID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	deployments := []Deployment{}
+	for rows.Next() {
+		deployment, err := scanDeployment(rows)
+		if err != nil {
+			return nil, err
+		}
+		deployments = append(deployments, deployment)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(deployments) == 0 {
+		if _, err := r.Get(ctx, policyID); err != nil {
+			return nil, err
+		}
+	}
+	return deployments, nil
+}
+
 type policyScanner interface {
 	Scan(dest ...any) error
 }
@@ -168,6 +225,27 @@ func scanPolicy(scanner policyScanner) (Policy, error) {
 	policy.CreatedAt = createdAt
 	policy.UpdatedAt = updatedAt
 	return policy, nil
+}
+
+func scanDeployment(scanner policyScanner) (Deployment, error) {
+	var deployment Deployment
+	var updatedAt time.Time
+	var deployedAt *time.Time
+	if err := scanner.Scan(
+		&deployment.ID,
+		&deployment.PolicyID,
+		&deployment.HostID,
+		&deployment.HostName,
+		&deployment.Status,
+		&deployment.Message,
+		&deployedAt,
+		&updatedAt,
+	); err != nil {
+		return Deployment{}, err
+	}
+	deployment.DeployedAt = deployedAt
+	deployment.UpdatedAt = updatedAt
+	return deployment, nil
 }
 
 func mapNotFound(err error) error {

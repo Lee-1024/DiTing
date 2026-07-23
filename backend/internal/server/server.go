@@ -190,6 +190,16 @@ func NewRouter(repository audit.Repository, ruleRepository rule.Repository, stat
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
 	})))
+	mux.Handle("/api/v1/enforcement-policies/{id}/deployments", protect(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			enforcementHandler.ListDeployments(w, r)
+		case http.MethodPost:
+			enforcementHandler.UpsertDeployment(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})))
 	mux.Handle("/api/v1/host-assets", protect(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:

@@ -19,6 +19,17 @@ export interface EnforcementPolicy {
   updatedAt: string;
 }
 
+export interface EnforcementDeployment {
+  id: string;
+  policyId: string;
+  hostId: string;
+  hostName: string;
+  status: EnforcementDeploymentStatus;
+  message: string;
+  deployedAt?: string;
+  updatedAt: string;
+}
+
 export type EnforcementPolicyPayload = Omit<EnforcementPolicy, 'id' | 'createdAt' | 'updatedAt' | 'deployedAt'> & {
   deployedAt?: string;
 };

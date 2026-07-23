@@ -26,6 +26,17 @@ type Policy struct {
 	UpdatedAt         time.Time       `json:"updatedAt"`
 }
 
+type Deployment struct {
+	ID         string     `json:"id"`
+	PolicyID   string     `json:"policyId"`
+	HostID     string     `json:"hostId"`
+	HostName   string     `json:"hostName"`
+	Status     string     `json:"status"`
+	Message    string     `json:"message"`
+	DeployedAt *time.Time `json:"deployedAt,omitempty"`
+	UpdatedAt  time.Time  `json:"updatedAt"`
+}
+
 type Repository interface {
 	Create(ctx context.Context, policy Policy) (Policy, error)
 	List(ctx context.Context) ([]Policy, error)
@@ -34,18 +45,22 @@ type Repository interface {
 	Delete(ctx context.Context, id string) error
 	UpdateDeployment(ctx context.Context, id string, status string, message string) (Policy, error)
 	EmergencyDisable(ctx context.Context, message string) (int, error)
+	UpsertHostDeployment(ctx context.Context, deployment Deployment) (Deployment, error)
+	ListHostDeployments(ctx context.Context, policyID string) ([]Deployment, error)
 }
 
 var ErrNotFound = errors.New("enforcement policy not found")
 
 type MemoryRepository struct {
-	mu       sync.Mutex
-	policies []Policy
-	next     int
+	mu          sync.Mutex
+	policies    []Policy
+	deployments []Deployment
+	next        int
+	nextDeploy  int
 }
 
 func NewMemoryRepository() *MemoryRepository {
-	return &MemoryRepository{next: 1, policies: []Policy{}}
+	return &MemoryRepository{next: 1, nextDeploy: 1, policies: []Policy{}, deployments: []Deployment{}}
 }
 
 func (r *MemoryRepository) Create(_ context.Context, policy Policy) (Policy, error) {
@@ -156,6 +171,63 @@ func (r *MemoryRepository) EmergencyDisable(_ context.Context, message string) (
 		count++
 	}
 	return count, nil
+}
+
+func (r *MemoryRepository) UpsertHostDeployment(_ context.Context, deployment Deployment) (Deployment, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if !r.hasPolicy(deployment.PolicyID) {
+		return Deployment{}, ErrNotFound
+	}
+	now := time.Now().UTC()
+	deployment.Status = normalizeDeploymentStatus(deployment.Status)
+	for index, existing := range r.deployments {
+		if existing.PolicyID == deployment.PolicyID && existing.HostID == deployment.HostID {
+			deployment.ID = existing.ID
+			deployment.UpdatedAt = now
+			if deployment.Status == "deployed" {
+				deployment.DeployedAt = &now
+			} else {
+				deployment.DeployedAt = existing.DeployedAt
+			}
+			r.deployments[index] = deployment
+			return deployment, nil
+		}
+	}
+	deployment.ID = fmt.Sprintf("enforcement-deployment-%d", r.nextDeploy)
+	deployment.UpdatedAt = now
+	if deployment.Status == "deployed" {
+		deployment.DeployedAt = &now
+	}
+	r.nextDeploy++
+	r.deployments = append(r.deployments, deployment)
+	return deployment, nil
+}
+
+func (r *MemoryRepository) ListHostDeployments(_ context.Context, policyID string) ([]Deployment, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if !r.hasPolicy(policyID) {
+		return nil, ErrNotFound
+	}
+	result := []Deployment{}
+	for _, deployment := range r.deployments {
+		if deployment.PolicyID == policyID {
+			result = append(result, deployment)
+		}
+	}
+	return result, nil
+}
+
+func (r *MemoryRepository) hasPolicy(id string) bool {
+	for _, policy := range r.policies {
+		if policy.ID == id {
+			return true
+		}
+	}
+	return false
 }
 
 func normalize(policy Policy) Policy {

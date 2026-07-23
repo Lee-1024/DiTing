@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import type { EnforcementDeploymentStatus, EnforcementPolicy, EnforcementPolicyPayload } from '../types/enforcement';
+import type { EnforcementDeployment, EnforcementDeploymentStatus, EnforcementPolicy, EnforcementPolicyPayload } from '../types/enforcement';
 
 export async function listEnforcementPolicies(): Promise<EnforcementPolicy[]> {
   const response = await apiClient.get<EnforcementPolicy[]>('/enforcement-policies');
@@ -31,5 +31,18 @@ export async function updateEnforcementDeployment(
 
 export async function emergencyDisableEnforcementPolicies(): Promise<{ disabledCount: number; message: string }> {
   const response = await apiClient.post<{ disabledCount: number; message: string }>('/enforcement-policies/emergency-disable');
+  return response.data;
+}
+
+export async function listEnforcementDeployments(policyId: string): Promise<EnforcementDeployment[]> {
+  const response = await apiClient.get<EnforcementDeployment[]>(`/enforcement-policies/${policyId}/deployments`);
+  return response.data;
+}
+
+export async function upsertEnforcementDeployment(
+  policyId: string,
+  deployment: Pick<EnforcementDeployment, 'hostId' | 'hostName' | 'status' | 'message'>,
+): Promise<EnforcementDeployment> {
+  const response = await apiClient.post<EnforcementDeployment>(`/enforcement-policies/${policyId}/deployments`, deployment);
   return response.data;
 }
