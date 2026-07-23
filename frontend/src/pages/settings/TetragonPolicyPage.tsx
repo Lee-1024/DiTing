@@ -652,10 +652,20 @@ function deleteSelectors(paths: string[], processNames: string[], user: UserMatc
       - index: 0
         operator: Prefix
         values:
-            - "${escapeYaml(matchPath)}"${matchBinaries(processNames)}${matchUser(user)}${matchActions(mode)}`);
+            - "${escapeYaml(matchPath)}"${matchBinaries(processNames)}${matchUser(user)}${deleteMatchActions(mode)}`);
     }
   }
   return selectors.join('\n');
+}
+
+function deleteMatchActions(mode: PolicyMode) {
+  if (mode !== 'enforce') {
+    return '';
+  }
+  return `
+      matchActions:
+      - action: Override
+        argError: -1`;
 }
 
 function normalizePath(value: string) {
