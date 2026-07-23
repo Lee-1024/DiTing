@@ -269,7 +269,11 @@ export default function TetragonPolicyPage() {
             )}
             {(template === 'sensitive_file' || template === 'permission_change' || template === 'delete_behavior') && (
               <>
-                <Form.Item name="filePaths" label={template === 'sensitive_file' ? '敏感路径' : '监控路径'}>
+                <Form.Item
+                  name="filePaths"
+                  label={template === 'sensitive_file' ? '敏感路径' : '监控路径'}
+                  tooltip={template === 'delete_behavior' ? '删除保护建议填写目录。系统会同时保护该目录内删除行为，并保护该目录本身不被删除；单文件精确保护受 Tetragon dentry 匹配限制，按父目录范围处理。' : undefined}
+                >
                   <Select mode="tags" tokenSeparators={[',']} />
                 </Form.Item>
                 <Form.Item name="processNames" label="限定进程（可选）" tooltip="留空表示不限制进程；填写 vim、rm、chmod 等可只拦截指定进程访问这些路径。">
@@ -628,11 +632,13 @@ function deleteSelectors(paths: string[], processNames: string[], user: UserMatc
   const selectors: string[] = [];
   for (const path of paths.filter(Boolean)) {
     const normalized = normalizePath(path);
-    selectors.push(`    - matchArgs:
+    for (const matchPath of Array.from(new Set([normalized, parentPath(normalized)]))) {
+      selectors.push(`    - matchArgs:
       - index: 0
         operator: Prefix
         values:
-            - "${escapeYaml(normalized)}"${matchBinaries(processNames)}${matchUser(user)}${matchActions(mode)}`);
+            - "${escapeYaml(matchPath)}"${matchBinaries(processNames)}${matchUser(user)}${matchActions(mode)}`);
+    }
   }
   return selectors.join('\n');
 }
@@ -640,6 +646,15 @@ function deleteSelectors(paths: string[], processNames: string[], user: UserMatc
 function normalizePath(value: string) {
   const trimmed = value.trim().replace(/\/+$/g, '');
   return trimmed || '/';
+}
+
+function parentPath(value: string) {
+  const normalized = normalizePath(value);
+  const index = normalized.lastIndexOf('/');
+  if (index <= 0) {
+    return '/';
+  }
+  return normalized.slice(0, index);
 }
 
 function matchBinaries(processNames: string[]) {
