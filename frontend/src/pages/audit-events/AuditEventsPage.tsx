@@ -1,6 +1,6 @@
 import { Card, DatePicker, Empty, Form, Input, Select, Table, Tag, Typography } from 'antd';
 import dayjs from 'dayjs';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { exportAuditEvents, queryAuditEvents } from '../../api/audit';
 import CommandText from '../../components/CommandText';
 import FilterToolbar from '../../components/FilterToolbar';
@@ -13,6 +13,16 @@ import EventDetailDrawer from './EventDetailDrawer';
 
 const defaultRange = [dayjs().subtract(7, 'day'), dayjs()] as const;
 
+interface AuditEventGroup {
+  groupId: string;
+  representative: AuditEvent;
+  events: AuditEvent[];
+  eventTypes: string[];
+  filePaths: string[];
+  tags: string[];
+  maxSeverity: string;
+}
+
 export default function AuditEventsPage() {
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [loading, setLoading] = useState(false);
@@ -22,6 +32,7 @@ export default function AuditEventsPage() {
   const [pageSize, setPageSize] = useState(10);
   const [form] = Form.useForm();
   const requestSeq = useRef(0);
+  const groupedEvents = useMemo(() => groupAuditEvents(events), [events]);
 
   function buildQuery(nextPage = page, nextPageSize = pageSize, formValues = form.getFieldsValue()): AuditEventQuery {
     const values = formValues;
@@ -121,12 +132,34 @@ export default function AuditEventsPage() {
       </FilterToolbar>
       <Card className="data-card">
         <Table
-          rowKey="eventId"
+          rowKey="groupId"
           loading={loading}
-          dataSource={events}
+          dataSource={groupedEvents}
           locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无审计事件" /> }}
           scroll={{ x: 1540 }}
-          onRow={(record) => ({ onClick: () => setSelected(record) })}
+          onRow={(record) => ({ onClick: () => setSelected(record.representative) })}
+          expandable={{
+            expandedRowRender: (group) => (
+              <Table
+                rowKey="eventId"
+                size="small"
+                pagination={false}
+                dataSource={group.events}
+                onRow={(record) => ({ onClick: (event) => {
+                  event.stopPropagation();
+                  setSelected(record);
+                } })}
+                columns={[
+                  { title: '时间', dataIndex: 'eventTime', width: 180, render: (value) => formatLocalDateTime(value) },
+                  { title: '事件', dataIndex: 'eventType', width: 120, render: (value) => eventTypeLabel(value) },
+                  { title: '文件路径', dataIndex: 'filePath', width: 360, render: (value) => value || '-' },
+                  { title: '文件操作', dataIndex: 'fileOperation', width: 120, render: (value) => value || '-' },
+                  { title: '标签', dataIndex: 'tags', render: (tags: string[]) => tags?.length ? tags.map((tag) => <Tag key={tag}>{tag}</Tag>) : '-' },
+                ]}
+              />
+            ),
+            rowExpandable: (group) => group.events.length > 1,
+          }}
           pagination={{
             current: page,
             pageSize,
@@ -140,22 +173,73 @@ export default function AuditEventsPage() {
             },
           }}
           columns={[
-            { title: '时间', dataIndex: 'eventTime', width: 190, fixed: 'left', render: (value) => formatLocalDateTime(value) },
-            { title: '等级', dataIndex: 'severity', width: 100, render: (value) => <SeverityTag value={value} /> },
-            { title: '事件', dataIndex: 'eventType', width: 140, render: (value) => eventTypeLabel(value) },
-            { title: 'Namespace', dataIndex: 'namespace', width: 140 },
-            { title: 'Pod', dataIndex: 'podName', width: 180 },
-            { title: '登录用户', dataIndex: 'loginUsername', width: 120, render: (_, record) => record.loginUsername || record.username },
-            { title: '执行用户', dataIndex: 'username', width: 120 },
-            { title: '进程', dataIndex: 'processName', width: 140 },
-            { title: '文件路径', dataIndex: 'filePath', width: 220, render: (value) => value || '-' },
-            { title: '文件操作', dataIndex: 'fileOperation', width: 120, render: (value) => value || '-' },
+            { title: '时间', dataIndex: ['representative', 'eventTime'], width: 190, fixed: 'left', render: (value) => formatLocalDateTime(value) },
+            { title: '等级', dataIndex: 'maxSeverity', width: 100, render: (value) => <SeverityTag value={value} /> },
+            { title: '事件', dataIndex: 'eventTypes', width: 160, render: (values: string[]) => values.map((value) => <Tag key={value}>{eventTypeLabel(value)}</Tag>) },
+            { title: '明细数', dataIndex: ['events', 'length'], width: 90, render: (_, record) => record.events.length },
+            { title: 'Namespace', dataIndex: ['representative', 'namespace'], width: 140 },
+            { title: 'Pod', dataIndex: ['representative', 'podName'], width: 180 },
+            { title: '登录用户', dataIndex: ['representative', 'loginUsername'], width: 120, render: (_, record) => record.representative.loginUsername || record.representative.username },
+            { title: '执行用户', dataIndex: ['representative', 'username'], width: 120 },
+            { title: '进程', dataIndex: ['representative', 'processName'], width: 140 },
+            { title: '代表路径', dataIndex: 'filePaths', width: 260, render: (values: string[]) => values.length ? values.slice(0, 2).join('\n') : '-' },
             { title: '标签', dataIndex: 'tags', width: 180, render: (tags: string[]) => tags?.length ? tags.map((tag) => <Tag key={tag}>{tag}</Tag>) : '-' },
-            { title: '命令', dataIndex: 'cmdline', render: (value, record) => <CommandText value={value} onView={() => setSelected(record)} /> },
+            { title: '命令', dataIndex: ['representative', 'cmdline'], render: (value, record) => <CommandText value={value} onView={() => setSelected(record.representative)} /> },
           ]}
         />
       </Card>
-      <EventDetailDrawer event={selected} open={Boolean(selected)} onClose={() => setSelected(undefined)} />
+      <EventDetailDrawer event={selected} relatedEvents={findRelatedEvents(groupedEvents, selected)} open={Boolean(selected)} onClose={() => setSelected(undefined)} />
     </>
   );
+}
+
+function groupAuditEvents(events: AuditEvent[]): AuditEventGroup[] {
+  const groups = new Map<string, AuditEvent[]>();
+  for (const event of events) {
+    const key = operationGroupKey(event);
+    groups.set(key, [...(groups.get(key) ?? []), event]);
+  }
+  return Array.from(groups.entries()).map(([groupId, groupEvents]) => {
+    const sorted = [...groupEvents].sort((a, b) => new Date(b.eventTime).getTime() - new Date(a.eventTime).getTime());
+    const representative = sorted[0];
+    return {
+      groupId,
+      representative,
+      events: sorted,
+      eventTypes: uniqueValues(sorted.map((event) => event.eventType)),
+      filePaths: uniqueValues(sorted.map((event) => event.filePath).filter(Boolean) as string[]),
+      tags: uniqueValues(sorted.flatMap((event) => event.tags ?? [])),
+      maxSeverity: maxSeverity(sorted.map((event) => event.severity)),
+    };
+  });
+}
+
+function operationGroupKey(event: AuditEvent) {
+  const second = dayjs(event.eventTime).format('YYYY-MM-DD HH:mm:ss');
+  return [
+    second,
+    event.hostId || event.nodeName || event.hostName,
+    event.namespace,
+    event.podName,
+    event.loginUsername || event.username,
+    event.username,
+    event.processName,
+    event.cmdline,
+  ].join('|');
+}
+
+function uniqueValues(values: string[]) {
+  return Array.from(new Set(values.filter(Boolean)));
+}
+
+function maxSeverity(values: string[]) {
+  const order: Record<string, number> = { info: 1, low: 2, medium: 3, high: 4, critical: 5 };
+  return values.reduce((max, value) => (order[value] ?? 0) > (order[max] ?? 0) ? value : max, values[0] || 'info');
+}
+
+function findRelatedEvents(groups: AuditEventGroup[], selected?: AuditEvent) {
+  if (!selected) {
+    return [];
+  }
+  return groups.find((group) => group.events.some((event) => event.eventId === selected.eventId))?.events ?? [selected];
 }

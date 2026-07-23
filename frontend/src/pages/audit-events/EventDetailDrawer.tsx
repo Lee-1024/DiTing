@@ -10,18 +10,21 @@ import { formatLocalDateTime } from '../../utils/time';
 interface Props {
   event?: AuditEvent;
   eventId?: string;
+  relatedEvents?: AuditEvent[];
   open: boolean;
   onClose: () => void;
 }
 
-export default function EventDetailDrawer({ event, eventId, open, onClose }: Props) {
+export default function EventDetailDrawer({ event, eventId, relatedEvents = [], open, onClose }: Props) {
   const [detail, setDetail] = useState<AuditEvent>();
+  const [selectedInlineEvent, setSelectedInlineEvent] = useState<AuditEvent>();
   const [loading, setLoading] = useState(false);
-  const selectedEventId = eventId || event?.eventId;
+  const selectedEventId = eventId || selectedInlineEvent?.eventId || event?.eventId;
 
   useEffect(() => {
     if (!open || !selectedEventId) {
       setDetail(undefined);
+      setSelectedInlineEvent(undefined);
       return;
     }
     let ignore = false;
@@ -35,7 +38,7 @@ export default function EventDetailDrawer({ event, eventId, open, onClose }: Pro
       .catch(() => {
         if (!ignore) {
           message.error('事件详情加载失败');
-          setDetail(event);
+          setDetail(selectedInlineEvent || event);
         }
       })
       .finally(() => {
@@ -46,7 +49,7 @@ export default function EventDetailDrawer({ event, eventId, open, onClose }: Pro
     return () => {
       ignore = true;
     };
-  }, [event, open, selectedEventId]);
+  }, [event, open, selectedEventId, selectedInlineEvent]);
 
   const current = detail || event;
 
@@ -97,6 +100,25 @@ export default function EventDetailDrawer({ event, eventId, open, onClose }: Pro
               {current.ruleNames?.map((name) => <Tag key={name}>{name}</Tag>)}
             </Descriptions.Item>
           </Descriptions>
+          {relatedEvents.length > 1 ? (
+            <>
+              <Typography.Title level={5}>同次操作事件</Typography.Title>
+              <Table
+                rowKey="eventId"
+                size="small"
+                pagination={false}
+                dataSource={relatedEvents}
+                rowClassName={(record) => record.eventId === current.eventId ? 'ant-table-row-selected' : ''}
+                onRow={(record) => ({ onClick: () => setSelectedInlineEvent(record) })}
+                columns={[
+                  { title: '时间', dataIndex: 'eventTime', width: 170, render: (value) => formatLocalDateTime(value) },
+                  { title: '事件', dataIndex: 'eventType', width: 120, render: (value) => eventTypeLabel(value) },
+                  { title: '文件路径', dataIndex: 'filePath', render: (value) => value || '-' },
+                  { title: '操作', dataIndex: 'fileOperation', width: 100, render: (value) => value || '-' },
+                ]}
+              />
+            </>
+          ) : null}
           {current.ruleMatches?.length ? (
             <>
             <Typography.Title level={5}>命中条件</Typography.Title>
