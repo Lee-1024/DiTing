@@ -1,4 +1,4 @@
-import { Card, DatePicker, Empty, Form, Input, Select, Table, Typography } from 'antd';
+import { Card, DatePicker, Empty, Form, Input, Select, Table, Tag, Typography } from 'antd';
 import dayjs from 'dayjs';
 import { useEffect, useRef, useState } from 'react';
 import { exportAuditEvents, queryAuditEvents } from '../../api/audit';
@@ -37,6 +37,7 @@ export default function AuditEventsPage() {
       login_username: values.loginUsername,
       exec_username: values.execUsername,
       keyword: values.keyword,
+      tag: values.tag,
       page: nextPage,
       page_size: nextPageSize,
     };
@@ -114,6 +115,9 @@ export default function AuditEventsPage() {
         <Form.Item name="keyword" label="关键字">
           <Input className="filter-control-compact" placeholder="命令 / 用户 / 进程" allowClear />
         </Form.Item>
+        <Form.Item name="tag" label="标签">
+          <Input className="filter-control-compact" placeholder="delete-syscall-debug" allowClear />
+        </Form.Item>
       </FilterToolbar>
       <Card className="data-card">
         <Table
@@ -146,6 +150,7 @@ export default function AuditEventsPage() {
             { title: '进程', dataIndex: 'processName', width: 140 },
             { title: '文件路径', dataIndex: 'filePath', width: 220, render: (value) => value || '-' },
             { title: '文件操作', dataIndex: 'fileOperation', width: 120, render: (value) => value || '-' },
+            { title: '标签', dataIndex: 'tags', width: 180, render: (tags: string[]) => tags?.length ? tags.map((tag) => <Tag key={tag}>{tag}</Tag>) : '-' },
             { title: '命令', dataIndex: 'cmdline', render: (value, record) => <CommandText value={value} onView={() => setSelected(record)} /> },
           ]}
         />

@@ -180,6 +180,9 @@ func buildAuditWhere(query audit.Query) string {
 	if query.FilePath != "" {
 		conditions = append(conditions, "file_path = '"+escapeSQL(query.FilePath)+"'")
 	}
+	if query.Tag != "" {
+		conditions = append(conditions, "has(tags, '"+escapeSQL(query.Tag)+"')")
+	}
 	if query.DstIP != "" {
 		conditions = append(conditions, "dst_ip = '"+escapeSQL(query.DstIP)+"'")
 	}
@@ -243,6 +246,9 @@ func eventMatchesQuery(event audit.Event, query audit.Query) bool {
 	if query.FilePath != "" && event.FilePath != query.FilePath {
 		return false
 	}
+	if query.Tag != "" && !hasString(event.Tags, query.Tag) {
+		return false
+	}
 	if query.DstIP != "" && event.DstIP != query.DstIP {
 		return false
 	}
@@ -277,6 +283,15 @@ func eventMatchesQuery(event audit.Event, query audit.Query) bool {
 		}
 	}
 	return true
+}
+
+func hasString(values []string, expected string) bool {
+	for _, value := range values {
+		if value == expected {
+			return true
+		}
+	}
+	return false
 }
 
 func escapeSQL(value string) string {

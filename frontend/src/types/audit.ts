@@ -64,6 +64,7 @@ export interface AuditEventQuery {
   keyword?: string;
   cmdline?: string;
   file_path?: string;
+  tag?: string;
   dst_ip?: string;
   dst_port?: number;
   event_ids?: string;

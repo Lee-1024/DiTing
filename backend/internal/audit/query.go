@@ -23,6 +23,7 @@ type Query struct {
 	Keyword       string
 	Cmdline       string
 	FilePath      string
+	Tag           string
 	DstIP         string
 	DstPort       int
 	EventIDs      []string
@@ -50,6 +51,7 @@ func ParseQuery(r *http.Request) (Query, error) {
 		Keyword:       strings.TrimSpace(values.Get("keyword")),
 		Cmdline:       strings.TrimSpace(values.Get("cmdline")),
 		FilePath:      strings.TrimSpace(values.Get("file_path")),
+		Tag:           strings.TrimSpace(values.Get("tag")),
 		DstIP:         strings.TrimSpace(values.Get("dst_ip")),
 		DstPort:       parsePositiveInt(values.Get("dst_port"), 0),
 		EventIDs:      parseCSV(values.Get("event_ids")),

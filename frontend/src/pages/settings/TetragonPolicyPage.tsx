@@ -646,6 +646,7 @@ ${uidDataBlock(user)}
 }
 
 function deleteSyscallDebugBlock() {
+  const rmOnly = rmSelectorBlock();
   return `  kprobes:
   - call: "sys_unlink"
     syscall: true
@@ -656,6 +657,8 @@ function deleteSyscallDebugBlock() {
     tags:
     - "delete-behavior"
     - "delete-syscall-debug"
+    selectors:
+${rmOnly}
   - call: "sys_unlinkat"
     syscall: true
     return: false
@@ -665,6 +668,8 @@ function deleteSyscallDebugBlock() {
     tags:
     - "delete-behavior"
     - "delete-syscall-debug"
+    selectors:
+${rmOnly}
   - call: "sys_rmdir"
     syscall: true
     return: false
@@ -673,7 +678,16 @@ function deleteSyscallDebugBlock() {
       type: "string"
     tags:
     - "delete-behavior"
-    - "delete-syscall-debug"`;
+    - "delete-syscall-debug"
+    selectors:
+${rmOnly}`;
+}
+
+function rmSelectorBlock() {
+  return `    - matchBinaries:
+      - operator: Postfix
+        values:
+        - "rm"`;
 }
 
 function deleteSyscallBlock(paths: string[], processNames: string[], user: UserMatcher | null, mode: PolicyMode) {
