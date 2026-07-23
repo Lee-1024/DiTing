@@ -55,6 +55,7 @@ func main() {
 			apiWriter := collector.NewAPIWriter(cfg.Collector.IngestURL, cfg.Collector.Token)
 			hostMetadata := collector.ResolveHostMetadata(cfg.Collector.HostID, cfg.Collector.HostName)
 			slog.Info("collector host metadata resolved", "host_id", hostMetadata.ID, "host_name", hostMetadata.Name)
+			startEnforcementSyncIfEnabled(context.Background(), cfg, hostMetadata)
 			eventWriter := collector.EventWriter(newDedupingEventWriter(newAPIHeartbeatWriter(apiWriter, hostMetadata, inputMode), 5*time.Second))
 			if cfg.Collector.PasswdFile != "" {
 				resolver, err := collector.NewPasswdUserResolver(cfg.Collector.PasswdFile)
@@ -132,6 +133,7 @@ func main() {
 		}
 		hostMetadata := collector.ResolveHostMetadata(cfg.Collector.HostID, cfg.Collector.HostName)
 		slog.Info("collector host metadata resolved", "host_id", hostMetadata.ID, "host_name", hostMetadata.Name)
+		startEnforcementSyncIfEnabled(context.Background(), cfg, hostMetadata)
 		writer.SetHeartbeatRecorder(collectorHealthRepository, inputMode)
 		go collectorHeartbeatLoop(context.Background(), collectorHealthRepository, hostMetadata, inputMode, 30*time.Second)
 		eventWriter = collector.NewHostMetadataWriter(hostMetadata, eventWriter)
@@ -383,6 +385,34 @@ func ensurePostgresMigrations(ctx context.Context, pool postgres.Execer) error {
 	}
 	slog.Info("auto postgres file migrations completed")
 	return nil
+}
+
+func startEnforcementSyncIfEnabled(ctx context.Context, cfg config.Config, host collector.HostMetadata) {
+	if !cfg.Collector.EnforcementEnabled {
+		return
+	}
+	if strings.TrimSpace(cfg.Collector.IngestURL) == "" {
+		slog.Warn("enforcement sync disabled because collector ingest_url is empty")
+		return
+	}
+	policyDir := cfg.Collector.EnforcementPolicyDir
+	if strings.TrimSpace(policyDir) == "" {
+		policyDir = "/data/tetragon/policies"
+	}
+	intervalSeconds := cfg.Collector.EnforcementSyncIntervalSeconds
+	if intervalSeconds <= 0 {
+		intervalSeconds = 30
+	}
+	syncer := collector.NewEnforcementSyncer(
+		cfg.Collector.IngestURL,
+		cfg.Collector.Token,
+		host.ID,
+		host.Name,
+		policyDir,
+		cfg.Collector.TetragonRestartCommand,
+	)
+	slog.Info("collector enforcement sync starting", "policy_dir", policyDir, "interval_seconds", intervalSeconds)
+	go syncer.Run(ctx, time.Duration(intervalSeconds)*time.Second)
 }
 
 func resolveMigrationDir(kind string) (string, error) {

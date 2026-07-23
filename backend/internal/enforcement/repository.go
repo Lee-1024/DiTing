@@ -40,6 +40,7 @@ type Deployment struct {
 type Repository interface {
 	Create(ctx context.Context, policy Policy) (Policy, error)
 	List(ctx context.Context) ([]Policy, error)
+	ListForHost(ctx context.Context, hostID string) ([]Policy, error)
 	Get(ctx context.Context, id string) (Policy, error)
 	Update(ctx context.Context, id string, policy Policy) (Policy, error)
 	Delete(ctx context.Context, id string) error
@@ -83,6 +84,22 @@ func (r *MemoryRepository) List(_ context.Context) ([]Policy, error) {
 
 	result := make([]Policy, len(r.policies))
 	copy(result, r.policies)
+	return result, nil
+}
+
+func (r *MemoryRepository) ListForHost(_ context.Context, hostID string) ([]Policy, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	result := []Policy{}
+	for _, policy := range r.policies {
+		if !policy.Enabled || policy.Mode == "disabled" {
+			continue
+		}
+		if appliesToHost(policy.TargetHosts, hostID) {
+			result = append(result, policy)
+		}
+	}
 	return result, nil
 }
 
@@ -251,4 +268,16 @@ func normalizeDeploymentStatus(status string) string {
 	default:
 		return "draft"
 	}
+}
+
+func appliesToHost(targetHosts []string, hostID string) bool {
+	if len(targetHosts) == 0 {
+		return true
+	}
+	for _, target := range targetHosts {
+		if target == hostID {
+			return true
+		}
+	}
+	return false
 }

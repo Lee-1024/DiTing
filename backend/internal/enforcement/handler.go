@@ -51,6 +51,20 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, policies)
 }
 
+func (h *Handler) ListForCollector(w http.ResponseWriter, r *http.Request) {
+	hostID := r.URL.Query().Get("host_id")
+	if hostID == "" {
+		http.Error(w, "host_id is required", http.StatusBadRequest)
+		return
+	}
+	policies, err := h.repository.ListForHost(r.Context(), hostID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, policies)
+}
+
 func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	policy, err := h.repository.Get(r.Context(), r.PathValue("id"))
 	if err != nil {

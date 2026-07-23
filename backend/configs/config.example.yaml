@@ -33,3 +33,7 @@ collector:
   flush_interval_seconds: 1
   batch_size: 1000
   reconnect_interval_seconds: 5
+  enforcement_enabled: false
+  enforcement_policy_dir: /data/tetragon/policies
+  enforcement_sync_interval_seconds: 30
+  tetragon_restart_command: docker compose -f /data/tetragon/docker-compose.yaml restart tetragon

@@ -305,8 +305,8 @@ export default function TetragonPolicyPage() {
           type="warning"
           showIcon
           style={{ marginBottom: 16 }}
-          message="紧急停用只会更新 DiTing 中保存的策略状态"
-          description="当前版本仍需到对应主机移除或禁用已部署到 Tetragon 策略目录中的 YAML 文件，才能让已经加载的拦截策略停止生效。"
+          message="自动下发依赖 Collector 开启拦截策略同步"
+          description="开启后 Collector 会拉取适用于本机的启用策略，写入本机 Tetragon 策略目录并上报部署结果。紧急停用会让后续同步删除 DiTing 管理的策略文件。"
           action={(
             <Popconfirm title="确认紧急停用所有拦截策略？" onConfirm={() => void emergencyDisable()}>
               <Button danger>紧急停用全部</Button>

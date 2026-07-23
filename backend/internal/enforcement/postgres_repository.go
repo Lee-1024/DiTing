@@ -55,6 +55,34 @@ ORDER BY updated_at DESC
 	return policies, nil
 }
 
+func (r *PostgresRepository) ListForHost(ctx context.Context, hostID string) ([]Policy, error) {
+	rows, err := r.pool.Query(ctx, `
+SELECT id::text, name, description, template, mode, enabled, target_hosts, definition, yaml, deployment_status, deployment_message, deployed_at, created_at, updated_at
+FROM diting_enforcement_policies
+WHERE enabled = TRUE
+  AND mode <> 'disabled'
+  AND (cardinality(target_hosts) = 0 OR $1 = ANY(target_hosts))
+ORDER BY updated_at DESC
+`, hostID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	policies := []Policy{}
+	for rows.Next() {
+		policy, err := scanPolicy(rows)
+		if err != nil {
+			return nil, err
+		}
+		policies = append(policies, policy)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return policies, nil
+}
+
 func (r *PostgresRepository) Get(ctx context.Context, id string) (Policy, error) {
 	row := r.pool.QueryRow(ctx, `
 SELECT id::text, name, description, template, mode, enabled, target_hosts, definition, yaml, deployment_status, deployment_message, deployed_at, created_at, updated_at

@@ -110,6 +110,30 @@ func NewRouter(repository audit.Repository, ruleRepository rule.Repository, stat
 	mux.Handle("/api/v1/audit/events/{event_id}", protect(http.HandlerFunc(auditHandler.GetEvent)))
 	mux.HandleFunc("/api/v1/ingest/events", ingestHandler.IngestEvents)
 	mux.HandleFunc("/api/v1/ingest/heartbeat", collectorHealthHandler.Report)
+	mux.HandleFunc("/api/v1/ingest/enforcement-policies", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			if options.collectorToken != "" && r.Header.Get("Authorization") != "Bearer "+options.collectorToken {
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+			enforcementHandler.ListForCollector(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+	mux.HandleFunc("/api/v1/ingest/enforcement-policies/{id}/deployments", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			if options.collectorToken != "" && r.Header.Get("Authorization") != "Bearer "+options.collectorToken {
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+			enforcementHandler.UpsertDeployment(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
 	if riskStatusHandler != nil {
 		mux.Handle("/api/v1/risk-dispositions", protect(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			switch r.Method {

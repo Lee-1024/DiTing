@@ -143,3 +143,30 @@ func TestHandlerRecordsPolicyDeploymentsByHost(t *testing.T) {
 		t.Fatalf("unexpected deployments: %#v", deployments)
 	}
 }
+
+func TestHandlerListsPoliciesForCollectorHost(t *testing.T) {
+	repository := NewMemoryRepository()
+	_, _ = repository.Create(nil, Policy{Name: "通用策略", Template: "sensitive_file", Mode: "enforce", Enabled: true, YAML: "kind: TracingPolicy\nmetadata:\n  name: all"})
+	_, _ = repository.Create(nil, Policy{Name: "本机策略", Template: "delete_behavior", Mode: "enforce", Enabled: true, TargetHosts: []string{"host-1"}, YAML: "kind: TracingPolicy\nmetadata:\n  name: host-1"})
+	_, _ = repository.Create(nil, Policy{Name: "其他主机策略", Template: "delete_behavior", Mode: "enforce", Enabled: true, TargetHosts: []string{"host-2"}, YAML: "kind: TracingPolicy\nmetadata:\n  name: host-2"})
+	_, _ = repository.Create(nil, Policy{Name: "停用策略", Template: "delete_behavior", Mode: "disabled", Enabled: false, YAML: "kind: TracingPolicy\nmetadata:\n  name: disabled"})
+	handler := NewHandler(repository)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/ingest/enforcement-policies?host_id=host-1", nil)
+	resp := httptest.NewRecorder()
+
+	handler.ListForCollector(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", resp.Code, resp.Body.String())
+	}
+	var policies []Policy
+	if err := json.NewDecoder(resp.Body).Decode(&policies); err != nil {
+		t.Fatalf("decode policies: %v", err)
+	}
+	if len(policies) != 2 {
+		t.Fatalf("expected 2 policies, got %#v", policies)
+	}
+	if policies[0].YAML == "" || policies[1].YAML == "" {
+		t.Fatalf("expected yaml in collector policies: %#v", policies)
+	}
+}

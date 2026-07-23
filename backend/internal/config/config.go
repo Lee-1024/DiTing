@@ -43,18 +43,22 @@ type ClickHouseConfig struct {
 }
 
 type CollectorConfig struct {
-	InputMode                string
-	OutputMode               string
-	IngestURL                string
-	TetragonLogFile          string
-	TetragonGRPCAddr         string
-	PasswdFile               string
-	HostID                   string
-	HostName                 string
-	Token                    string
-	FlushIntervalSeconds     int
-	BatchSize                int
-	ReconnectIntervalSeconds int
+	InputMode                      string
+	OutputMode                     string
+	IngestURL                      string
+	TetragonLogFile                string
+	TetragonGRPCAddr               string
+	PasswdFile                     string
+	HostID                         string
+	HostName                       string
+	Token                          string
+	FlushIntervalSeconds           int
+	BatchSize                      int
+	ReconnectIntervalSeconds       int
+	EnforcementEnabled             bool
+	EnforcementPolicyDir           string
+	EnforcementSyncIntervalSeconds int
+	TetragonRestartCommand         string
 }
 
 func Load(path string) (Config, error) {
@@ -161,9 +165,26 @@ func assignValue(cfg *Config, section, key, value string) error {
 			cfg.Collector.BatchSize = mustInt(key, value)
 		case "reconnect_interval_seconds":
 			cfg.Collector.ReconnectIntervalSeconds = mustInt(key, value)
+		case "enforcement_enabled":
+			cfg.Collector.EnforcementEnabled = mustBool(value)
+		case "enforcement_policy_dir":
+			cfg.Collector.EnforcementPolicyDir = value
+		case "enforcement_sync_interval_seconds":
+			cfg.Collector.EnforcementSyncIntervalSeconds = mustInt(key, value)
+		case "tetragon_restart_command":
+			cfg.Collector.TetragonRestartCommand = value
 		}
 	}
 	return nil
+}
+
+func mustBool(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "true", "yes", "1", "on":
+		return true
+	default:
+		return false
+	}
 }
 
 func mustInt(key, value string) int {
