@@ -28,3 +28,8 @@ export async function updateEnforcementDeployment(
   const response = await apiClient.post<EnforcementPolicy>(`/enforcement-policies/${id}/deployment`, { status, message });
   return response.data;
 }
+
+export async function emergencyDisableEnforcementPolicies(): Promise<{ disabledCount: number; message: string }> {
+  const response = await apiClient.post<{ disabledCount: number; message: string }>('/enforcement-policies/emergency-disable');
+  return response.data;
+}

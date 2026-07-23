@@ -33,6 +33,7 @@ type Repository interface {
 	Update(ctx context.Context, id string, policy Policy) (Policy, error)
 	Delete(ctx context.Context, id string) error
 	UpdateDeployment(ctx context.Context, id string, status string, message string) (Policy, error)
+	EmergencyDisable(ctx context.Context, message string) (int, error)
 }
 
 var ErrNotFound = errors.New("enforcement policy not found")
@@ -134,6 +135,27 @@ func (r *MemoryRepository) UpdateDeployment(_ context.Context, id string, status
 		return policy, nil
 	}
 	return Policy{}, ErrNotFound
+}
+
+func (r *MemoryRepository) EmergencyDisable(_ context.Context, message string) (int, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	now := time.Now().UTC()
+	count := 0
+	for index, policy := range r.policies {
+		if !policy.Enabled && policy.Mode == "disabled" && policy.DeploymentStatus == "disabled" {
+			continue
+		}
+		policy.Enabled = false
+		policy.Mode = "disabled"
+		policy.DeploymentStatus = "disabled"
+		policy.DeploymentMessage = message
+		policy.UpdatedAt = now
+		r.policies[index] = policy
+		count++
+	}
+	return count, nil
 }
 
 func normalize(policy Policy) Policy {

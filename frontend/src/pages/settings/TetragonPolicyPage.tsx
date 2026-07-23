@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   createEnforcementPolicy,
   deleteEnforcementPolicy,
+  emergencyDisableEnforcementPolicies,
   listEnforcementPolicies,
   updateEnforcementDeployment,
   updateEnforcementPolicy,
@@ -164,6 +165,14 @@ export default function TetragonPolicyPage() {
     await loadPolicies();
   }
 
+  async function emergencyDisable() {
+    const result = await emergencyDisableEnforcementPolicies();
+    message.success(`已紧急停用 ${result.disabledCount} 条策略`);
+    setEditing(null);
+    form.setFieldsValue(defaultValues);
+    await loadPolicies();
+  }
+
   return (
     <>
       <Space className="page-heading">
@@ -266,6 +275,18 @@ export default function TetragonPolicyPage() {
         </Card>
       </div>
       <Card className="data-card" title="已保存拦截策略" style={{ marginTop: 16 }}>
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message="紧急停用只会更新 DiTing 中保存的策略状态"
+          description="当前版本仍需到对应主机移除或禁用已部署到 Tetragon 策略目录中的 YAML 文件，才能让已经加载的拦截策略停止生效。"
+          action={(
+            <Popconfirm title="确认紧急停用所有拦截策略？" onConfirm={() => void emergencyDisable()}>
+              <Button danger>紧急停用全部</Button>
+            </Popconfirm>
+          )}
+        />
         <Table
           rowKey="id"
           loading={loading}

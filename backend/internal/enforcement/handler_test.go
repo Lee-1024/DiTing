@@ -79,3 +79,33 @@ func TestHandlerUpdatesDeploymentStatus(t *testing.T) {
 		t.Fatalf("expected deployed status with deployedAt, got %#v", updated)
 	}
 }
+
+func TestHandlerDisablesAllEnabledPolicies(t *testing.T) {
+	repository := NewMemoryRepository()
+	_, err := repository.Create(nil, Policy{Name: "拦截删除", Template: "delete_behavior", Mode: "enforce", Enabled: true, YAML: "kind: TracingPolicy"})
+	if err != nil {
+		t.Fatalf("create enabled policy: %v", err)
+	}
+	_, err = repository.Create(nil, Policy{Name: "审计文件", Template: "sensitive_file", Mode: "audit", Enabled: true, YAML: "kind: TracingPolicy"})
+	if err != nil {
+		t.Fatalf("create audit policy: %v", err)
+	}
+	handler := NewHandler(repository)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/enforcement-policies/emergency-disable", nil)
+	resp := httptest.NewRecorder()
+
+	handler.EmergencyDisable(resp, req)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", resp.Code, resp.Body.String())
+	}
+	policies, err := repository.List(nil)
+	if err != nil {
+		t.Fatalf("list policies: %v", err)
+	}
+	for _, policy := range policies {
+		if policy.Enabled || policy.Mode != "disabled" || policy.DeploymentStatus != "disabled" {
+			t.Fatalf("expected policy disabled, got %#v", policy)
+		}
+	}
+}

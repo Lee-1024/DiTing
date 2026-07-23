@@ -15,6 +15,11 @@ type deploymentRequest struct {
 	Message string `json:"message"`
 }
 
+type emergencyDisableResponse struct {
+	DisabledCount int    `json:"disabledCount"`
+	Message       string `json:"message"`
+}
+
 func NewHandler(repository Repository) *Handler {
 	return &Handler{repository: repository}
 }
@@ -97,6 +102,16 @@ func (h *Handler) UpdateDeployment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, updated)
+}
+
+func (h *Handler) EmergencyDisable(w http.ResponseWriter, r *http.Request) {
+	message := "紧急停用所有拦截策略"
+	count, err := h.repository.EmergencyDisable(r.Context(), message)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, emergencyDisableResponse{DisabledCount: count, Message: message})
 }
 
 func validPolicy(policy Policy) bool {

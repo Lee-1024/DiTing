@@ -162,6 +162,14 @@ func NewRouter(repository audit.Repository, ruleRepository rule.Repository, stat
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
 	})))
+	mux.Handle("/api/v1/enforcement-policies/emergency-disable", protect(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			enforcementHandler.EmergencyDisable(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})))
 	mux.Handle("/api/v1/enforcement-policies/{id}", protect(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:

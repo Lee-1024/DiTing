@@ -121,6 +121,22 @@ RETURNING id::text, name, description, template, mode, enabled, target_hosts, de
 	return updated, nil
 }
 
+func (r *PostgresRepository) EmergencyDisable(ctx context.Context, message string) (int, error) {
+	commandTag, err := r.pool.Exec(ctx, `
+UPDATE diting_enforcement_policies
+SET enabled = FALSE,
+    mode = 'disabled',
+    deployment_status = 'disabled',
+    deployment_message = $1,
+    updated_at = NOW()
+WHERE enabled = TRUE OR mode <> 'disabled' OR deployment_status <> 'disabled'
+`, message)
+	if err != nil {
+		return 0, err
+	}
+	return int(commandTag.RowsAffected()), nil
+}
+
 type policyScanner interface {
 	Scan(dest ...any) error
 }
