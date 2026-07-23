@@ -191,8 +191,20 @@ func kprobeFileContext(event *tetragon.ProcessKprobe) (string, string) {
 		if sockaddr := arg.GetSockaddrunArg(); sockaddr != nil && sockaddr.GetPath() != "" {
 			return sockaddr.GetPath(), event.GetFunctionName()
 		}
+		if stringArg := arg.GetStringArg(); stringArg != "" && isFileSyscall(event.GetFunctionName()) {
+			return stringArg, event.GetFunctionName()
+		}
 	}
 	return "", ""
+}
+
+func isFileSyscall(functionName string) bool {
+	switch strings.TrimPrefix(functionName, "sys_") {
+	case "unlink", "unlinkat", "rmdir", "chmod", "fchmodat", "chown", "fchownat":
+		return true
+	default:
+		return false
+	}
 }
 
 func kprobeNetworkContext(event *tetragon.ProcessKprobe) (string, uint16, string) {

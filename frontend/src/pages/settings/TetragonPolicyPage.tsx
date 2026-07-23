@@ -16,7 +16,7 @@ import type { EnforcementDeployment, EnforcementDeploymentStatus, EnforcementPol
 type PolicyTemplate = 'dangerous_command' | 'sensitive_file' | 'permission_change' | 'delete_behavior' | 'suspicious_process';
 type PolicyMode = 'audit' | 'enforce' | 'disabled';
 type UserMatchMode = 'all' | 'include' | 'exclude_root';
-type DeleteMatchMode = 'debug' | 'directory';
+type DeleteMatchMode = 'debug' | 'syscall_debug' | 'directory';
 
 interface PolicyFormValues {
   template: PolicyTemplate;
@@ -277,7 +277,8 @@ export default function TetragonPolicyPage() {
                 {template === 'delete_behavior' && (
                   <Form.Item name="deleteMatchMode" label="删除匹配模式">
                     <Select options={[
-                      { value: 'debug', label: '调试：只采集删除事件' },
+                      { value: 'debug', label: '调试：采集 security 删除事件' },
+                      { value: 'syscall_debug', label: '调试：采集 syscall 删除参数' },
                       { value: 'directory', label: '目录保护：按目录范围拦截' },
                     ]} />
                   </Form.Item>
@@ -613,6 +614,9 @@ ${values}${matchBinaries(processNames)}${matchUser(user)}${matchActions(mode)}`;
 }
 
 function deleteBehaviorBlock(paths: string[], processNames: string[], user: UserMatcher | null, mode: PolicyMode, matchMode: DeleteMatchMode) {
+  if (matchMode === 'syscall_debug') {
+    return deleteSyscallDebugBlock();
+  }
   if (matchMode === 'directory') {
     return deleteSyscallBlock(paths, processNames, user, mode);
   }
@@ -639,6 +643,37 @@ ${uidDataBlock(user)}
     - "delete-behavior"
     - "file_access"
     - "delete-debug"`;
+}
+
+function deleteSyscallDebugBlock() {
+  return `  kprobes:
+  - call: "sys_unlink"
+    syscall: true
+    return: false
+    args:
+    - index: 0
+      type: "string"
+    tags:
+    - "delete-behavior"
+    - "delete-syscall-debug"
+  - call: "sys_unlinkat"
+    syscall: true
+    return: false
+    args:
+    - index: 1
+      type: "string"
+    tags:
+    - "delete-behavior"
+    - "delete-syscall-debug"
+  - call: "sys_rmdir"
+    syscall: true
+    return: false
+    args:
+    - index: 0
+      type: "string"
+    tags:
+    - "delete-behavior"
+    - "delete-syscall-debug"`;
 }
 
 function deleteSyscallBlock(paths: string[], processNames: string[], user: UserMatcher | null, mode: PolicyMode) {
