@@ -519,17 +519,17 @@ function policyTemplate(values: PolicyFormValues) {
         { syscall: 'fchmodat', argIndex: 1 },
         { syscall: 'chown', argIndex: 0 },
         { syscall: 'fchownat', argIndex: 1 },
-      ], 'file_access', values.filePaths ?? ['/'], values.processNames ?? [], userMatcher(values), values.mode, 'Prefix');
+      ], 'file_access', values.filePaths ?? ['/'], values.processNames ?? [], userMatcher(values), values.mode, 'Prefix', false);
     case 'delete_behavior':
       return syscallBlock('delete-behavior', [
         { syscall: 'unlink', argIndex: 0 },
         { syscall: 'unlinkat', argIndex: 1 },
         { syscall: 'rmdir', argIndex: 0 },
-      ], 'file_access', deletePathValues(values.filePaths ?? ['/']), values.processNames ?? [], userMatcher(values), values.mode, 'Prefix');
+      ], 'file_access', deletePathValues(values.filePaths ?? ['/']), values.processNames ?? [], userMatcher(values), values.mode, 'Prefix', false);
     case 'suspicious_process':
-      return syscallBlock('suspicious-process', [{ syscall: 'execve', argIndex: 0 }], 'process_exec', values.processNames ?? [], [], null, values.mode, 'Postfix');
+      return syscallBlock('suspicious-process', [{ syscall: 'execve', argIndex: 0 }], 'process_exec', values.processNames ?? [], [], null, values.mode, 'Postfix', false);
     default:
-      return syscallBlock('dangerous-command', [{ syscall: 'execve', argIndex: 0 }], 'process_exec', values.commands ?? [], [], null, 'audit', 'Postfix');
+      return syscallBlock('dangerous-command', [{ syscall: 'execve', argIndex: 0 }], 'process_exec', values.commands ?? [], [], null, 'audit', 'Postfix', false);
   }
 }
 
@@ -543,28 +543,36 @@ interface UserMatcher {
   values: string[];
 }
 
-function syscallBlock(name: string, syscalls: SyscallProbe[], returnArg: string, values: string[], processNames: string[], user: UserMatcher | null, mode: PolicyMode, operator: 'Prefix' | 'Postfix') {
+function syscallBlock(name: string, syscalls: SyscallProbe[], tag: string, values: string[], processNames: string[], user: UserMatcher | null, mode: PolicyMode, operator: 'Prefix' | 'Postfix', returnProbe: boolean) {
   const matchValues = (values.filter(Boolean).length ? values.filter(Boolean) : ['']).map((item) => `            - "${escapeYaml(item)}"`).join('\n');
   return `  kprobes:
 ${syscalls.map(({ syscall, argIndex }) => `  - call: "sys_${syscall}"
     syscall: true
-    return: true
+    return: ${returnProbe ? 'true' : 'false'}
     args:
     - index: ${argIndex}
       type: "string"
 ${uidDataBlock(user)}
-    returnArg:
-      index: 0
-      type: "int"
+${returnArgBlock(returnProbe)}
     tags:
     - "${name}"
-    - "${returnArg}"
+    - "${tag}"
     selectors:
     - matchArgs:
       - index: ${argIndex}
         operator: ${operator}
         values:
 ${matchValues}${matchBinaries(processNames)}${matchUser(user)}${matchActions(mode)}`).join('\n')}`;
+}
+
+function returnArgBlock(returnProbe: boolean) {
+  if (!returnProbe) {
+    return '';
+  }
+  return `    returnArg:
+      index: 0
+      type: "int"
+`;
 }
 
 function deletePathValues(paths: string[]) {
