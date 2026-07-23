@@ -604,8 +604,6 @@ function deleteBehaviorBlock(paths: string[], processNames: string[], user: User
     args:
     - index: 0
       type: "path"
-    - index: 1
-      type: "dentry"
 ${uidDataBlock(user)}
     tags:
     - "delete-behavior"
@@ -618,8 +616,6 @@ ${selectors}
     args:
     - index: 0
       type: "path"
-    - index: 1
-      type: "dentry"
 ${uidDataBlock(user)}
     tags:
     - "delete-behavior"
@@ -632,17 +628,6 @@ function deleteSelectors(paths: string[], processNames: string[], user: UserMatc
   const selectors: string[] = [];
   for (const path of paths.filter(Boolean)) {
     const normalized = normalizePath(path);
-    const parent = parentPath(normalized);
-    const base = baseName(normalized);
-    selectors.push(`    - matchArgs:
-      - index: 0
-        operator: Prefix
-        values:
-            - "${escapeYaml(parent)}"
-      - index: 1
-        operator: Equal
-        values:
-            - "${escapeYaml(base)}"${matchBinaries(processNames)}${matchUser(user)}${matchActions(mode)}`);
     selectors.push(`    - matchArgs:
       - index: 0
         operator: Prefix
@@ -655,21 +640,6 @@ function deleteSelectors(paths: string[], processNames: string[], user: UserMatc
 function normalizePath(value: string) {
   const trimmed = value.trim().replace(/\/+$/g, '');
   return trimmed || '/';
-}
-
-function parentPath(value: string) {
-  const normalized = normalizePath(value);
-  const index = normalized.lastIndexOf('/');
-  if (index <= 0) {
-    return '/';
-  }
-  return normalized.slice(0, index);
-}
-
-function baseName(value: string) {
-  const normalized = normalizePath(value);
-  const index = normalized.lastIndexOf('/');
-  return index >= 0 ? normalized.slice(index + 1) : normalized;
 }
 
 function matchBinaries(processNames: string[]) {
