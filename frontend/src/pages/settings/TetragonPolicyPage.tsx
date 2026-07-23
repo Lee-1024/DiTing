@@ -713,8 +713,7 @@ function deleteMatchActions(mode: PolicyMode) {
   }
   return `
       matchActions:
-      - action: Override
-        argError: -1`;
+      - action: Sigkill`;
 }
 
 function normalizePath(value: string) {
