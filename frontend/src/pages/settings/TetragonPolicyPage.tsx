@@ -521,11 +521,7 @@ function policyTemplate(values: PolicyFormValues) {
         { syscall: 'fchownat', argIndex: 1 },
       ], 'file_access', values.filePaths ?? ['/'], values.processNames ?? [], userMatcher(values), values.mode, 'Prefix', false);
     case 'delete_behavior':
-      return syscallBlock('delete-behavior', [
-        { syscall: 'unlink', argIndex: 0 },
-        { syscall: 'unlinkat', argIndex: 1 },
-        { syscall: 'rmdir', argIndex: 0 },
-      ], 'file_access', deletePathValues(values.filePaths ?? ['/']), values.processNames ?? [], userMatcher(values), values.mode, 'Prefix', false);
+      return deleteBehaviorBlock(values.filePaths ?? ['/'], values.processNames ?? [], userMatcher(values), values.mode);
     case 'suspicious_process':
       return syscallBlock('suspicious-process', [{ syscall: 'execve', argIndex: 0 }], 'process_exec', values.processNames ?? [], [], null, values.mode, 'Postfix', false);
     default:
@@ -575,19 +571,6 @@ function returnArgBlock(returnProbe: boolean) {
 `;
 }
 
-function deletePathValues(paths: string[]) {
-  const result: string[] = [];
-  for (const path of paths.filter(Boolean)) {
-    result.push(path);
-    const trimmed = path.replace(/\/+$/g, '');
-    const lastSlash = trimmed.lastIndexOf('/');
-    if (lastSlash >= 0 && lastSlash < trimmed.length - 1) {
-      result.push(trimmed.slice(lastSlash + 1));
-    }
-  }
-  return Array.from(new Set(result));
-}
-
 function kprobeBlock(name: string, call: string, tag: string, argType: string, paths: string[], processNames: string[], user: UserMatcher | null, mode: PolicyMode) {
   const values = (paths.length ? paths : ['/etc/passwd']).map((path) => `            - "${escapeYaml(path)}"`).join('\n');
   return `  kprobes:
@@ -610,6 +593,83 @@ ${uidDataBlock(user)}
         operator: Prefix
         values:
 ${values}${matchBinaries(processNames)}${matchUser(user)}${matchActions(mode)}`;
+}
+
+function deleteBehaviorBlock(paths: string[], processNames: string[], user: UserMatcher | null, mode: PolicyMode) {
+  const selectors = deleteSelectors(paths, processNames, user, mode);
+  return `  kprobes:
+  - call: "security_path_unlink"
+    syscall: false
+    return: false
+    args:
+    - index: 0
+      type: "path"
+    - index: 1
+      type: "dentry"
+${uidDataBlock(user)}
+    tags:
+    - "delete-behavior"
+    - "file_access"
+    selectors:
+${selectors}
+  - call: "security_path_rmdir"
+    syscall: false
+    return: false
+    args:
+    - index: 0
+      type: "path"
+    - index: 1
+      type: "dentry"
+${uidDataBlock(user)}
+    tags:
+    - "delete-behavior"
+    - "file_access"
+    selectors:
+${selectors}`;
+}
+
+function deleteSelectors(paths: string[], processNames: string[], user: UserMatcher | null, mode: PolicyMode) {
+  const selectors: string[] = [];
+  for (const path of paths.filter(Boolean)) {
+    const normalized = normalizePath(path);
+    const parent = parentPath(normalized);
+    const base = baseName(normalized);
+    selectors.push(`    - matchArgs:
+      - index: 0
+        operator: Prefix
+        values:
+            - "${escapeYaml(parent)}"
+      - index: 1
+        operator: Equal
+        values:
+            - "${escapeYaml(base)}"${matchBinaries(processNames)}${matchUser(user)}${matchActions(mode)}`);
+    selectors.push(`    - matchArgs:
+      - index: 0
+        operator: Prefix
+        values:
+            - "${escapeYaml(normalized)}"${matchBinaries(processNames)}${matchUser(user)}${matchActions(mode)}`);
+  }
+  return selectors.join('\n');
+}
+
+function normalizePath(value: string) {
+  const trimmed = value.trim().replace(/\/+$/g, '');
+  return trimmed || '/';
+}
+
+function parentPath(value: string) {
+  const normalized = normalizePath(value);
+  const index = normalized.lastIndexOf('/');
+  if (index <= 0) {
+    return '/';
+  }
+  return normalized.slice(0, index);
+}
+
+function baseName(value: string) {
+  const normalized = normalizePath(value);
+  const index = normalized.lastIndexOf('/');
+  return index >= 0 ? normalized.slice(index + 1) : normalized;
 }
 
 function matchBinaries(processNames: string[]) {
