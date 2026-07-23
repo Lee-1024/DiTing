@@ -715,7 +715,7 @@ ${uidDataBlock(user)}
     - "delete-behavior"
     - "file_access"
     selectors:
-${deleteSyscallSelectors(1, paths, processNames, user, mode)}
+${deleteSyscallSelectors(0, paths, processNames, user, mode)}
   - call: "sys_rmdir"
     syscall: true
     return: false
