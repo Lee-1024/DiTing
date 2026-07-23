@@ -525,7 +525,7 @@ function policyTemplate(values: PolicyFormValues) {
         { syscall: 'unlink', argIndex: 0 },
         { syscall: 'unlinkat', argIndex: 1 },
         { syscall: 'rmdir', argIndex: 0 },
-      ], 'file_access', values.filePaths ?? ['/'], values.processNames ?? [], userMatcher(values), values.mode, 'Prefix');
+      ], 'file_access', deletePathValues(values.filePaths ?? ['/']), values.processNames ?? [], userMatcher(values), values.mode, 'Prefix');
     case 'suspicious_process':
       return syscallBlock('suspicious-process', [{ syscall: 'execve', argIndex: 0 }], 'process_exec', values.processNames ?? [], [], null, values.mode, 'Postfix');
     default:
@@ -565,6 +565,19 @@ ${uidDataBlock(user)}
         operator: ${operator}
         values:
 ${matchValues}${matchBinaries(processNames)}${matchUser(user)}${matchActions(mode)}`).join('\n')}`;
+}
+
+function deletePathValues(paths: string[]) {
+  const result: string[] = [];
+  for (const path of paths.filter(Boolean)) {
+    result.push(path);
+    const trimmed = path.replace(/\/+$/g, '');
+    const lastSlash = trimmed.lastIndexOf('/');
+    if (lastSlash >= 0 && lastSlash < trimmed.length - 1) {
+      result.push(trimmed.slice(lastSlash + 1));
+    }
+  }
+  return Array.from(new Set(result));
 }
 
 function kprobeBlock(name: string, call: string, tag: string, argType: string, paths: string[], processNames: string[], user: UserMatcher | null, mode: PolicyMode) {
