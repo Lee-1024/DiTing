@@ -100,18 +100,19 @@ export default function CollectorDebugPage() {
           size="small"
           loading={loading}
           dataSource={events}
+          className="clickable-table"
           locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无采集事件" /> }}
           scroll={{ x: 1500 }}
           pagination={{ pageSize: 10, showSizeChanger: true, pageSizeOptions: [10, 20, 50] }}
-          onRow={(record) => ({ onClick: () => setSelected(record) })}
+          onRow={(record) => ({ onClick: () => setSelected(record), title: '点击查看采集事件详情' })}
           columns={[
             { title: '时间', dataIndex: 'eventTime', width: 190, fixed: 'left', render: (value) => formatLocalDateTime(value) },
             { title: '等级', dataIndex: 'severity', width: 90, render: (value) => <SeverityTag value={value} /> },
             { title: '事件', dataIndex: 'eventType', width: 120, render: (value) => eventTypeLabel(value) },
-            { title: '主机', dataIndex: 'hostName', width: 170, render: (_, record) => record.hostName || record.nodeName || record.hostId || '-' },
-            { title: '进程', dataIndex: 'processName', width: 130 },
+            { title: '主机', dataIndex: 'hostName', width: 190, ellipsis: true, render: (_, record) => record.hostName || record.nodeName || record.hostId || '-' },
+            { title: '进程', dataIndex: 'processName', width: 150, ellipsis: true },
             { title: '命令', dataIndex: 'cmdline', width: 260, render: (value) => <CommandText value={value} /> },
-            { title: '文件路径', dataIndex: 'filePath', width: 260, render: (value) => value || '-' },
+            { title: '文件路径', dataIndex: 'filePath', width: 320, ellipsis: true, render: (value) => value || '-' },
             { title: '文件操作', dataIndex: 'fileOperation', width: 100, render: (value) => value || '-' },
             { title: '目标地址', width: 180, render: (_, record) => record.dstIp ? `${record.dstIp}:${record.dstPort || ''}` : '-' },
             { title: '协议', dataIndex: 'protocol', width: 80, render: (value) => value || '-' },

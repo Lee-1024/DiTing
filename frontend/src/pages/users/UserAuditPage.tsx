@@ -212,8 +212,9 @@ export default function UserAuditPage() {
           rowKey="username"
           loading={loading}
           dataSource={items}
+          className="clickable-table"
           locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无用户审计数据" /> }}
-          onRow={(record) => ({ onClick: () => void openDetails(record) })}
+          onRow={(record) => ({ onClick: () => void openDetails(record), title: '点击查看用户审计详情' })}
           scroll={{ x: 960 }}
           pagination={{
             pageSize: tablePageSize,
@@ -224,9 +225,9 @@ export default function UserAuditPage() {
           }}
           columns={[
             { title: '用户', dataIndex: 'username', width: 160 },
-            { title: '命令数', dataIndex: 'commandCount', width: 110 },
-            { title: '活跃主机', dataIndex: 'activeHosts', width: 110 },
-            { title: '高危事件', dataIndex: 'highRiskEvents', width: 110 },
+            { title: '命令数', dataIndex: 'commandCount', width: 128, align: 'right', className: 'number-cell' },
+            { title: '活跃主机', dataIndex: 'activeHosts', width: 128, align: 'right', className: 'number-cell' },
+            { title: '高危事件', dataIndex: 'highRiskEvents', width: 128, align: 'right', className: 'number-cell danger-number' },
             { title: '首次活动', dataIndex: 'firstSeen', width: 190, render: (value) => formatLocalDateTime(value) },
             { title: '最近活动', dataIndex: 'lastSeen', width: 190, render: (value) => formatLocalDateTime(value) },
           ]}
@@ -254,9 +255,11 @@ export default function UserAuditPage() {
               size="small"
               loading={detailLoading}
               dataSource={hostDistribution}
+              className="clickable-table"
               locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无主机分布" /> }}
               pagination={false}
               onRow={(record) => ({
+                title: '点击按该主机筛选命令明细',
                 onClick: () => {
                   const nextFilters = { ...detailFilters, hostName: record.name };
                   setDetailFilters(nextFilters);
@@ -267,8 +270,8 @@ export default function UserAuditPage() {
               })}
               columns={[
                 { title: '主机', dataIndex: 'name' },
-                { title: '命令数', dataIndex: 'count', width: 100 },
-                { title: '高危事件', dataIndex: 'highRiskEvents', width: 100 },
+                { title: '命令数', dataIndex: 'count', width: 112, align: 'right', className: 'number-cell' },
+                { title: '高危事件', dataIndex: 'highRiskEvents', width: 112, align: 'right', className: 'number-cell danger-number' },
               ]}
             />
             <Typography.Title level={5}>TOP 命令</Typography.Title>
@@ -281,8 +284,8 @@ export default function UserAuditPage() {
               pagination={false}
               columns={[
                 { title: '命令', dataIndex: 'name', render: (value: string) => <CommandText value={value} /> },
-                { title: '次数', dataIndex: 'count', width: 100 },
-                { title: '高危事件', dataIndex: 'highRiskEvents', width: 100 },
+                { title: '次数', dataIndex: 'count', width: 112, align: 'right', className: 'number-cell' },
+                { title: '高危事件', dataIndex: 'highRiskEvents', width: 112, align: 'right', className: 'number-cell danger-number' },
               ]}
             />
             <Typography.Title level={5}>高危命令</Typography.Title>

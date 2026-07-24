@@ -1,5 +1,6 @@
-import { Button, Card, DatePicker, Descriptions, Drawer, Empty, Form, Input, Row, Col, Select, Space, Statistic, Table, Typography } from 'antd';
+import { Button, Card, DatePicker, Descriptions, Drawer, Empty, Form, Input, Row, Col, Modal, Select, Space, Statistic, Table, Tooltip, Typography } from 'antd';
 import dayjs from 'dayjs';
+import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 import { exportAuditEvents, queryAuditEvents } from '../../api/audit';
 import { exportHostAudits, getHostAudits, getHostBehavior, getHostUsers } from '../../api/stats';
@@ -250,8 +251,9 @@ export default function HostAuditPage() {
           rowKey={(record) => record.hostId || record.nodeName || record.hostName}
           loading={loading}
           dataSource={items}
+          className="clickable-table"
           locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无主机审计数据" /> }}
-          onRow={(record) => ({ onClick: () => void openDetails(record) })}
+          onRow={(record) => ({ onClick: () => void openDetails(record), title: '点击查看主机审计详情' })}
           scroll={{ x: 1120 }}
           pagination={{
             pageSize: tablePageSize,
@@ -272,9 +274,9 @@ export default function HostAuditPage() {
                 </Space>
               ),
             },
-            { title: '命令数', dataIndex: 'commandCount', width: 110 },
-            { title: '活跃用户', dataIndex: 'activeUsers', width: 110 },
-            { title: '高危事件', dataIndex: 'highRiskEvents', width: 110 },
+            { title: '命令数', dataIndex: 'commandCount', width: 128, align: 'right', className: 'number-cell' },
+            { title: '活跃用户', dataIndex: 'activeUsers', width: 128, align: 'right', className: 'number-cell' },
+            { title: '高危事件', dataIndex: 'highRiskEvents', width: 128, align: 'right', className: 'number-cell danger-number' },
             { title: '首次活动', dataIndex: 'firstSeen', width: 190, render: (value) => formatLocalDateTime(value) },
             { title: '最近活动', dataIndex: 'lastSeen', width: 190, render: (value) => formatLocalDateTime(value) },
           ]}
@@ -347,9 +349,11 @@ export default function HostAuditPage() {
               size="small"
               loading={detailLoading}
               dataSource={hostUsers}
+              className="clickable-table"
               locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无用户分布" /> }}
               pagination={false}
               onRow={(record) => ({
+                title: '点击按该用户筛选命令明细',
                 onClick: () => {
                   const nextFilters = { ...detailFilters, username: record.username };
                   setDetailFilters(nextFilters);
@@ -360,24 +364,29 @@ export default function HostAuditPage() {
               })}
               columns={[
                 { title: '用户', dataIndex: 'username', width: 160 },
-                { title: '命令数', dataIndex: 'commandCount', width: 100 },
-                { title: '高危事件', dataIndex: 'highRiskEvents', width: 100 },
+                { title: '命令数', dataIndex: 'commandCount', width: 112, align: 'right', className: 'number-cell' },
+                { title: '高危事件', dataIndex: 'highRiskEvents', width: 112, align: 'right', className: 'number-cell danger-number' },
                 { title: '首次活动', dataIndex: 'firstSeen', width: 180, render: (value) => formatLocalDateTime(value) },
                 { title: '最近活动', dataIndex: 'lastSeen', width: 180, render: (value) => formatLocalDateTime(value) },
               ]}
             />
-            <Typography.Title level={5}>主机行为画像</Typography.Title>
-            <Row gutter={[12, 12]}>
+            <div className="section-heading">
+              <Typography.Title level={5}>主机行为画像</Typography.Title>
+              <Typography.Text type="secondary">点击文件或网络目标查看明细</Typography.Text>
+            </div>
+            <Row gutter={[12, 12]} className="behavior-grid">
               <Col xs={24} lg={8}>
-                <Typography.Text strong>敏感文件访问 Top</Typography.Text>
+                <div className="behavior-panel-title">敏感文件访问 Top</div>
                 <Table
                   rowKey={(record) => record.name}
                   size="small"
                   loading={detailLoading}
                   dataSource={hostBehavior.filePaths}
+                  className="clickable-table behavior-table"
                   locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无文件访问" /> }}
                   pagination={false}
                   onRow={(record) => ({
+                    title: '点击查看文件访问明细',
                     onClick: () => {
                       if (selected) {
                         void loadFileEvents(selected, record);
@@ -388,15 +397,17 @@ export default function HostAuditPage() {
                 />
               </Col>
               <Col xs={24} lg={8}>
-                <Typography.Text strong>有效网络外联 Top</Typography.Text>
+                <div className="behavior-panel-title">有效网络外联 Top</div>
                 <Table
                   rowKey={(record) => record.name}
                   size="small"
                   loading={detailLoading}
                   dataSource={hostBehavior.network}
+                  className="clickable-table behavior-table"
                   locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无网络外联" /> }}
                   pagination={false}
                   onRow={(record) => ({
+                    title: '点击查看网络连接明细',
                     onClick: () => {
                       if (selected) {
                         void loadNetworkEvents(selected, record);
@@ -407,40 +418,19 @@ export default function HostAuditPage() {
                 />
               </Col>
               <Col xs={24} lg={8}>
-                <Typography.Text strong>事件类型</Typography.Text>
+                <div className="behavior-panel-title">事件类型</div>
                 <Table
                   rowKey={(record) => record.name}
                   size="small"
                   loading={detailLoading}
                   dataSource={hostBehavior.eventTypes}
+                  className="behavior-table"
                   locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无事件类型" /> }}
                   pagination={false}
                   columns={behaviorColumns('类型', (value) => eventTypeLabel(value))}
                 />
               </Col>
             </Row>
-            <Typography.Title level={5}>{selectedFileTarget ? `${selectedFileTarget.name} 文件访问明细` : '文件访问明细'}</Typography.Title>
-            <Table
-              rowKey="eventId"
-              size="small"
-              loading={fileLoading}
-              dataSource={fileEvents}
-              locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="点击敏感文件查看访问明细" /> }}
-              pagination={false}
-              scroll={{ x: 1200 }}
-              columns={fileColumns()}
-            />
-            <Typography.Title level={5}>{selectedNetworkTarget ? `${selectedNetworkTarget.name} 连接明细` : '网络连接明细'}</Typography.Title>
-            <Table
-              rowKey="eventId"
-              size="small"
-              loading={networkLoading}
-              dataSource={networkEvents}
-              locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="点击网络目标查看连接明细" /> }}
-              pagination={false}
-              scroll={{ x: 1140 }}
-              columns={networkColumns()}
-            />
             <Typography.Title level={5}>规则命中分布</Typography.Title>
             <Table
               rowKey={(record) => record.name}
@@ -509,6 +499,50 @@ export default function HostAuditPage() {
           columns={commandColumns()}
         />
       </Drawer>
+      <Modal
+        title={selectedFileTarget ? `${selectedFileTarget.name} 文件访问明细` : '文件访问明细'}
+        open={Boolean(selectedFileTarget)}
+        onCancel={() => {
+          setSelectedFileTarget(undefined);
+          setFileEvents([]);
+        }}
+        footer={null}
+        width="min(1180px, calc(100vw - 48px))"
+        className="detail-modal"
+      >
+        <Table
+          rowKey="eventId"
+          size="small"
+          loading={fileLoading}
+          dataSource={fileEvents}
+          locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无文件访问明细" /> }}
+          pagination={false}
+          scroll={{ x: 1200 }}
+          columns={fileColumns()}
+        />
+      </Modal>
+      <Modal
+        title={selectedNetworkTarget ? `${selectedNetworkTarget.name} 连接明细` : '网络连接明细'}
+        open={Boolean(selectedNetworkTarget)}
+        onCancel={() => {
+          setSelectedNetworkTarget(undefined);
+          setNetworkEvents([]);
+        }}
+        footer={null}
+        width="min(1120px, calc(100vw - 48px))"
+        className="detail-modal"
+      >
+        <Table
+          rowKey="eventId"
+          size="small"
+          loading={networkLoading}
+          dataSource={networkEvents}
+          locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无网络连接明细" /> }}
+          pagination={false}
+          scroll={{ x: 1140 }}
+          columns={networkColumns()}
+        />
+      </Modal>
     </>
   );
 }
@@ -535,15 +569,29 @@ function parseNetworkTarget(value: string) {
 // behaviorColumns 生成 behavior Columns 的展示内容。
 function behaviorColumns(title: string, renderName?: (value: string) => string) {
   return [
-    { title, dataIndex: 'name', ellipsis: true, render: (value: string) => renderName ? renderName(value) : value },
-    { title: '次数', dataIndex: 'count', width: 76 },
+    {
+      title,
+      dataIndex: 'name',
+      ellipsis: true,
+      render: (value: string) => {
+        const text = renderName ? renderName(value) : value;
+        return (
+          <Tooltip title={value}>
+            <Typography.Text className="ellipsis-text behavior-name">{text}</Typography.Text>
+          </Tooltip>
+        );
+      },
+    },
+    { title: '次数', dataIndex: 'count', width: 92, align: 'right', className: 'number-cell' },
     { title: '最近', dataIndex: 'lastSeen', width: 150, render: (value: string) => formatLocalDateTime(value) },
   ] as Array<{
     title: string;
     dataIndex: keyof BehaviorItem;
     width?: number;
     ellipsis?: boolean;
-    render?: (value: string) => string;
+    align?: 'right';
+    className?: string;
+    render?: (value: string) => ReactNode;
   }>;
 }
 

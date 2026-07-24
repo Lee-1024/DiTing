@@ -141,9 +141,10 @@ export default function AuditEventsPage() {
           rowKey="groupId"
           loading={loading}
           dataSource={groupedEvents}
+          className="clickable-table"
           locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无审计事件" /> }}
           scroll={{ x: 1540 }}
-          onRow={(record) => ({ onClick: () => setSelected(record.representative) })}
+          onRow={(record) => ({ onClick: () => setSelected(record.representative), title: '点击查看操作详情' })}
           expandable={{
             expandedRowRender: (group) => (
               <Table
@@ -151,14 +152,15 @@ export default function AuditEventsPage() {
                 size="small"
                 pagination={false}
                 dataSource={group.events}
+                className="clickable-table"
                 onRow={(record) => ({ onClick: (event) => {
                   event.stopPropagation();
                   setSelected(record);
-                } })}
+                }, title: '点击查看明细事件' })}
                 columns={[
                   { title: '时间', dataIndex: 'eventTime', width: 180, render: (value) => formatLocalDateTime(value) },
                   { title: '事件', dataIndex: 'eventType', width: 120, render: (value) => eventTypeLabel(value) },
-                  { title: '文件路径', dataIndex: 'filePath', width: 360, render: (value) => value || '-' },
+                  { title: '文件路径', dataIndex: 'filePath', width: 420, ellipsis: true, render: (value) => value || '-' },
                   { title: '文件操作', dataIndex: 'fileOperation', width: 120, render: (value) => value || '-' },
                   { title: '标签', dataIndex: 'tags', render: (tags: string[]) => tags?.length ? tags.map((tag) => <Tag key={tag}>{tag}</Tag>) : '-' },
                 ]}
@@ -182,13 +184,13 @@ export default function AuditEventsPage() {
             { title: '时间', dataIndex: ['representative', 'eventTime'], width: 190, fixed: 'left', render: (value) => formatLocalDateTime(value) },
             { title: '等级', dataIndex: 'maxSeverity', width: 100, render: (value) => <SeverityTag value={value} /> },
             { title: '事件', dataIndex: 'eventTypes', width: 160, render: (values: string[]) => values.map((value) => <Tag key={value}>{eventTypeLabel(value)}</Tag>) },
-            { title: '明细数', dataIndex: ['events', 'length'], width: 90, render: (_, record) => record.events.length },
-            { title: 'Namespace', dataIndex: ['representative', 'namespace'], width: 140 },
-            { title: 'Pod', dataIndex: ['representative', 'podName'], width: 180 },
+            { title: '明细数', dataIndex: ['events', 'length'], width: 104, align: 'right', className: 'number-cell', render: (_, record) => record.events.length },
+            { title: 'Namespace', dataIndex: ['representative', 'namespace'], width: 160, ellipsis: true },
+            { title: 'Pod', dataIndex: ['representative', 'podName'], width: 200, ellipsis: true },
             { title: '登录用户', dataIndex: ['representative', 'loginUsername'], width: 120, render: (_, record) => record.representative.loginUsername || record.representative.username },
             { title: '执行用户', dataIndex: ['representative', 'username'], width: 120 },
             { title: '进程', dataIndex: ['representative', 'processName'], width: 140 },
-            { title: '代表路径', dataIndex: 'filePaths', width: 260, render: (values: string[]) => values.length ? values.slice(0, 2).join('\n') : '-' },
+            { title: '代表路径', dataIndex: 'filePaths', width: 320, render: (values: string[]) => values.length ? <span className="stacked-text">{values.slice(0, 2).join('\n')}</span> : '-' },
             { title: '标签', dataIndex: 'tags', width: 180, render: (tags: string[]) => tags?.length ? tags.map((tag) => <Tag key={tag}>{tag}</Tag>) : '-' },
             { title: '命令', dataIndex: ['representative', 'cmdline'], render: (value, record) => <CommandText value={value} onView={() => setSelected(record.representative)} /> },
           ]}

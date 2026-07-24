@@ -77,9 +77,9 @@ export default function RuleHitsPage() {
           }}
           columns={[
             { title: '规则', dataIndex: 'ruleName' },
-            { title: '命中次数', dataIndex: 'hitCount', width: 110 },
-            { title: '涉及主机', dataIndex: 'activeHosts', width: 110 },
-            { title: '涉及用户', dataIndex: 'activeUsers', width: 110 },
+            { title: '命中次数', dataIndex: 'hitCount', width: 128, align: 'right', className: 'number-cell' },
+            { title: '涉及主机', dataIndex: 'activeHosts', width: 128, align: 'right', className: 'number-cell' },
+            { title: '涉及用户', dataIndex: 'activeUsers', width: 128, align: 'right', className: 'number-cell' },
             { title: '首次命中', dataIndex: 'firstSeen', width: 190, render: (value) => formatLocalDateTime(value) },
             { title: '最近命中', dataIndex: 'lastSeen', width: 190, render: (value) => formatLocalDateTime(value) },
           ]}

@@ -115,8 +115,8 @@ export default function OperationLogsPage() {
             { title: '时间', dataIndex: 'createdAt', width: 190, fixed: 'left', render: (value) => formatLocalDateTime(value) },
             { title: '用户', dataIndex: 'username', width: 120 },
             { title: '方法', dataIndex: 'method', width: 90, render: (value) => <Tag>{value}</Tag> },
-            { title: '路径', dataIndex: 'path', width: 360 },
-            { title: '状态码', dataIndex: 'status', width: 100, render: (value) => <Tag color={value >= 400 ? 'red' : 'green'}>{value}</Tag> },
+            { title: '路径', dataIndex: 'path', width: 420, ellipsis: true },
+            { title: '状态码', dataIndex: 'status', width: 116, align: 'right', className: 'number-cell', render: (value) => <Tag color={value >= 400 ? 'red' : 'green'}>{value}</Tag> },
             { title: 'IP', dataIndex: 'ip', width: 180 },
             { title: 'User-Agent', dataIndex: 'userAgent', ellipsis: true },
           ]}

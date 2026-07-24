@@ -196,8 +196,9 @@ export default function CommandStatsPage() {
           rowKey={(record) => `${record.processName}-${record.cmdline}-${record.username}`}
           loading={loading}
           dataSource={items}
+          className="clickable-table"
           locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无命令统计" /> }}
-          onRow={(record) => ({ onClick: () => void openDetails(record) })}
+          onRow={(record) => ({ onClick: () => void openDetails(record), title: '点击查看命令执行明细' })}
           scroll={{ x: 1220 }}
           pagination={{
             pageSize: tablePageSize,
@@ -212,8 +213,8 @@ export default function CommandStatsPage() {
             { title: '登录用户', dataIndex: 'loginUsername', width: 120, render: (_, record) => record.loginUsername || record.username },
             { title: '执行用户', dataIndex: 'username', width: 120 },
             { title: '最近主机', dataIndex: 'hostName', width: 170, render: (_, record) => record.hostName || record.nodeName || record.hostId || '-' },
-            { title: '涉及主机', dataIndex: 'hostCount', width: 100 },
-            { title: '次数', dataIndex: 'count', width: 90 },
+            { title: '涉及主机', dataIndex: 'hostCount', width: 116, align: 'right', className: 'number-cell' },
+            { title: '次数', dataIndex: 'count', width: 104, align: 'right', className: 'number-cell' },
             { title: '首次执行', dataIndex: 'firstSeen', width: 190, render: (value) => formatLocalDateTime(value) },
             { title: '最近执行', dataIndex: 'lastSeen', width: 190, render: (value) => formatLocalDateTime(value) },
           ]}

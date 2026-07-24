@@ -111,12 +111,13 @@ export default function EventDetailDrawer({ event, eventId, relatedEvents = [], 
                 size="small"
                 pagination={false}
                 dataSource={relatedEvents}
+                className="clickable-table"
                 rowClassName={(record) => record.eventId === current.eventId ? 'ant-table-row-selected' : ''}
-                onRow={(record) => ({ onClick: () => setSelectedInlineEvent(record) })}
+                onRow={(record) => ({ onClick: () => setSelectedInlineEvent(record), title: '点击切换到该事件详情' })}
                 columns={[
                   { title: '时间', dataIndex: 'eventTime', width: 170, render: (value) => formatLocalDateTime(value) },
                   { title: '事件', dataIndex: 'eventType', width: 120, render: (value) => eventTypeLabel(value) },
-                  { title: '文件路径', dataIndex: 'filePath', render: (value) => value || '-' },
+                  { title: '文件路径', dataIndex: 'filePath', ellipsis: true, render: (value) => value || '-' },
                   { title: '操作', dataIndex: 'fileOperation', width: 100, render: (value) => value || '-' },
                 ]}
               />

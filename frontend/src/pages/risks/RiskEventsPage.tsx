@@ -235,9 +235,10 @@ export default function RiskEventsPage() {
           rowKey="eventId"
           loading={loading}
           dataSource={visibleEvents}
+          className="clickable-table"
           locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无风险事件" /> }}
           scroll={{ x: 1400 }}
-          onRow={(record) => ({ onClick: () => setSelected(record) })}
+          onRow={(record) => ({ onClick: () => setSelected(record), title: '点击查看风险事件详情' })}
           pagination={{
             current: page,
             pageSize,
@@ -252,14 +253,14 @@ export default function RiskEventsPage() {
           }}
           columns={[
             { title: '时间', dataIndex: 'eventTime', width: 170, fixed: 'left', render: (value) => formatLocalDateTime(value) },
-            { title: '等级', dataIndex: 'severity', width: 86, render: (value) => <SeverityTag value={value} /> },
-            { title: '类型', dataIndex: 'eventType', width: 104, render: (value) => eventTypeLabel(value) || '-' },
-            { title: '登录用户', dataIndex: 'loginUsername', width: 96, render: (_, record) => record.loginUsername || record.username },
-            { title: '执行用户', dataIndex: 'username', width: 96 },
-            { title: '节点', dataIndex: 'nodeName', width: 120, render: (_, record) => record.nodeName || record.hostName },
-            { title: '进程', dataIndex: 'processName', width: 110 },
+            { title: '等级', dataIndex: 'severity', width: 96, render: (value) => <SeverityTag value={value} /> },
+            { title: '类型', dataIndex: 'eventType', width: 124, render: (value) => eventTypeLabel(value) || '-' },
+            { title: '登录用户', dataIndex: 'loginUsername', width: 112, render: (_, record) => record.loginUsername || record.username },
+            { title: '执行用户', dataIndex: 'username', width: 112 },
+            { title: '节点', dataIndex: 'nodeName', width: 150, ellipsis: true, render: (_, record) => record.nodeName || record.hostName },
+            { title: '进程', dataIndex: 'processName', width: 130, ellipsis: true },
             { title: '进程链路', width: 220, render: (_, record) => <ProcessChain event={record} compact /> },
-            { title: '风险对象', width: 210, render: (_, record) => riskTarget(record) },
+            { title: '风险对象', width: 260, render: (_, record) => riskTarget(record) },
             { title: '命令', dataIndex: 'cmdline', render: (value, record) => <CommandText value={value} onView={() => setSelected(record)} /> },
             {
               title: '命中规则',
@@ -269,7 +270,7 @@ export default function RiskEventsPage() {
             },
             {
               title: '处置状态',
-              width: 112,
+              width: 128,
               render: (_, record) => <DispositionTag disposition={dispositionFor(record)} />,
             },
             {

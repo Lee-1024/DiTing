@@ -194,7 +194,7 @@ export default function RulesPage() {
             { title: '名称', dataIndex: 'name', width: 180 },
             { title: '事件类型', dataIndex: 'eventType', width: 120, render: (value) => optionLabel(eventTypeOptions, value) },
             { title: '等级', dataIndex: 'severity', width: 90, render: (value) => <Tag>{optionLabel(severityOptions, value)}</Tag> },
-            { title: '分数', dataIndex: 'riskScore', width: 80 },
+            { title: '分数', dataIndex: 'riskScore', width: 96, align: 'right', className: 'number-cell' },
             { title: '匹配条件', dataIndex: 'matchExpr', render: (value: RuleExpression) => expressionSummary(value) },
             { title: '启用', dataIndex: 'enabled', width: 90, render: (value, record) => <Switch checked={value} onChange={(checked) => void toggleEnabled(record, checked)} /> },
             { title: '标签', dataIndex: 'tags', width: 180, render: (tags: string[]) => tags?.map((tag) => <Tag key={tag}>{tag}</Tag>) },
