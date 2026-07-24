@@ -1,12 +1,15 @@
-import { Card, DatePicker, Empty, Form, Input, Select, Table, Tag, Typography } from 'antd';
+import { Button, Card, DatePicker, Empty, Form, Input, Select, Table, Tag, Typography } from 'antd';
 import dayjs from 'dayjs';
+import type { CSSProperties } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { exportAuditEvents, queryAuditEvents } from '../../api/audit';
 import CommandText from '../../components/CommandText';
 import FilterToolbar from '../../components/FilterToolbar';
 import SeverityTag from '../../components/SeverityTag';
 import type { AuditEvent, AuditEventQuery } from '../../types/audit';
 import { downloadBlob } from '../../utils/download';
+import { compactNumber } from '../../utils/format';
 import { eventTypeLabel, eventTypeOptions, severityOptions } from '../../utils/labels';
 import { formatLocalDateTime } from '../../utils/time';
 import EventDetailDrawer from './EventDetailDrawer';
@@ -99,10 +102,42 @@ export default function AuditEventsPage() {
     void load();
   }, []);
 
+  const riskyEvents = events.filter((item) => item.severity === 'high' || item.severity === 'critical').length;
+  const criticalEvents = events.filter((item) => item.severity === 'critical').length;
+  const activeHosts = uniqueValues(events.map((item) => item.hostName || item.nodeName || item.hostId || '').filter(Boolean)).length;
+  const latestEvent = groupedEvents[0]?.representative;
+
   return (
     <>
       <div className="page-heading">
-        <Typography.Title level={3} className="page-title">操作日志</Typography.Title>
+        <div>
+          <span className="page-kicker">AUDIT EVENT STREAM</span>
+          <Typography.Title level={3} className="page-title">操作日志调查</Typography.Title>
+        </div>
+      </div>
+      <div className="audit-hero">
+        <section className="audit-summary">
+          <div className="ops-kicker">Audit Event Correlation</div>
+          <Typography.Title level={2} className="investigation-title">按同次操作聚合事件，快速还原执行上下文</Typography.Title>
+          <Typography.Text className="investigation-desc">
+            文件、进程、网络事件会被折叠成同一次操作队列；展开分组或点击行可进入统一调查抽屉。
+          </Typography.Text>
+          <div className="ops-hero-actions">
+            <Link to="/audit/risks"><Button type="primary">查看风险队列</Button></Link>
+            <Link to="/audit/commands"><Button ghost>进入命令审计</Button></Link>
+          </div>
+        </section>
+        <aside className="investigation-latest">
+          <Typography.Text type="secondary">最近操作</Typography.Text>
+          <div className="latest-risk-title">{latestEvent ? eventTypeLabel(latestEvent.eventType) : '-'}</div>
+          <div className="latest-risk-desc">{latestEvent ? latestEvent.cmdline || latestEvent.filePath || latestEvent.processName || '-' : '暂无审计事件'}</div>
+        </aside>
+      </div>
+      <div className="metric-grid risk-metric-grid">
+        <AuditMetric label="操作分组" value={groupedEvents.length} hint={`共 ${compactNumber(total)} 条匹配结果`} />
+        <AuditMetric label="原始事件" value={events.length} hint="当前页事件数" />
+        <AuditMetric label="高危/严重" value={riskyEvents} hint={`${criticalEvents} 条严重事件`} tone="danger" />
+        <AuditMetric label="活跃主机" value={activeHosts} hint="当前页涉及主机" tone="success" />
       </div>
       <FilterToolbar form={form} initialValues={{ timeRange: defaultRange }} onSearch={submit} onReset={() => void resetAndLoad()} onExport={() => void exportCSV()}>
         <Form.Item name="timeRange" label="时间" className="filter-field-time">
@@ -198,6 +233,18 @@ export default function AuditEventsPage() {
       </Card>
       <EventDetailDrawer event={selected} relatedEvents={findRelatedEvents(groupedEvents, selected)} open={Boolean(selected)} onClose={() => setSelected(undefined)} />
     </>
+  );
+}
+
+// AuditMetric 渲染审计事件指标。
+function AuditMetric({ label, value, hint, tone }: { label: string; value: number; hint: string; tone?: 'danger' | 'success' }) {
+  const color = tone === 'danger' ? '#dc2626' : tone === 'success' ? '#16a34a' : '#2563eb';
+  return (
+    <div className="metric-card" style={{ '--metric-color': color } as CSSProperties}>
+      <div className="metric-label">{label}</div>
+      <div className="metric-value">{compactNumber(value)}</div>
+      <div className="metric-hint">{hint}</div>
+    </div>
   );
 }
 

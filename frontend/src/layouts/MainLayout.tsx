@@ -171,7 +171,10 @@ export default function MainLayout() {
       </Sider>
       <Layout>
         <Header className="app-header">
-          <Typography.Text strong>操作日志审计平台</Typography.Text>
+          <div className="app-header-title">
+            <Typography.Text strong>安全运营中心</Typography.Text>
+            <Typography.Text type="secondary">DiTing Audit Platform</Typography.Text>
+          </div>
           <Space className="header-actions">
             <Dropdown dropdownRender={() => alertDropdown} trigger={['click']} placement="bottomRight">
               <Badge count={alerts.length} size="small" showZero>

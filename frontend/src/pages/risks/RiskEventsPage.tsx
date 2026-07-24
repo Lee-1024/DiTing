@@ -1,5 +1,6 @@
 import { Button, Card, DatePicker, Empty, Form, Input, Modal, Select, Space, Table, Tag, Typography, message } from 'antd';
 import dayjs from 'dayjs';
+import type { CSSProperties } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { exportAuditEvents, queryAuditEvents } from '../../api/audit';
 import { getRiskDispositions, listRiskDispositions, updateRiskDisposition } from '../../api/riskDispositions';
@@ -180,10 +181,38 @@ export default function RiskEventsPage() {
     void load();
   }, []);
 
+  const openCount = visibleEvents.filter((item) => dispositionFor(item).status === 'open').length;
+  const criticalCount = visibleEvents.filter((item) => item.severity === 'critical').length;
+  const highCount = visibleEvents.filter((item) => item.severity === 'high').length;
+  const latestEvent = visibleEvents[0];
+
   return (
     <>
       <div className="page-heading">
-        <Typography.Title level={3} className="page-title">风险事件</Typography.Title>
+        <div>
+          <span className="page-kicker">INVESTIGATION QUEUE</span>
+          <Typography.Title level={3} className="page-title">风险事件调查</Typography.Title>
+        </div>
+      </div>
+      <div className="investigation-hero">
+        <section className="investigation-summary">
+          <div className="ops-kicker">Risk Operations</div>
+          <Typography.Title level={2} className="investigation-title">按处置状态、风险等级和上下文快速收敛事件</Typography.Title>
+          <Typography.Text className="investigation-desc">
+            默认聚焦待处理风险；点击任意事件进入调查抽屉，按概览、进程、规则、关联事件和原始数据分层排查。
+          </Typography.Text>
+        </section>
+        <aside className="investigation-latest">
+          <Typography.Text type="secondary">最近风险</Typography.Text>
+          <div className="latest-risk-title">{latestEvent ? eventTypeLabel(latestEvent.eventType) : '-'}</div>
+          <div className="latest-risk-desc">{latestEvent ? latestEvent.cmdline || latestEvent.filePath || latestEvent.dstIp || '-' : '暂无风险事件'}</div>
+        </aside>
+      </div>
+      <div className="metric-grid risk-metric-grid">
+        <RiskMetric label="当前队列" value={visibleEvents.length} hint={`共 ${total} 条匹配结果`} />
+        <RiskMetric label="待处理" value={openCount} hint="需要确认或关闭" tone="danger" />
+        <RiskMetric label="Critical" value={criticalCount} hint="最高优先级" tone="danger" />
+        <RiskMetric label="High" value={highCount} hint="高优先级" tone="warning" />
       </div>
       <FilterToolbar form={form} initialValues={{ timeRange: defaultRange, severity: 'medium,high,critical', dispositionStatus: 'open' }} onSearch={submit} onReset={() => void resetAndLoad()} onExport={() => void exportCSV()}>
         <Form.Item name="timeRange" label="时间" className="filter-field-time">
@@ -325,6 +354,18 @@ export default function RiskEventsPage() {
         </Form>
       </Modal>
     </>
+  );
+}
+
+// RiskMetric 渲染风险队列指标。
+function RiskMetric({ label, value, hint, tone }: { label: string; value: number; hint: string; tone?: 'danger' | 'warning' }) {
+  const color = tone === 'danger' ? '#dc2626' : tone === 'warning' ? '#d97706' : '#2563eb';
+  return (
+    <div className="metric-card" style={{ '--metric-color': color } as CSSProperties}>
+      <div className="metric-label">{label}</div>
+      <div className="metric-value">{value}</div>
+      <div className="metric-hint">{hint}</div>
+    </div>
   );
 }
 

@@ -28,6 +28,7 @@ pnpm-debug.log*
 *.local
 backend/configs/config.yaml
 backend/configs/*.local.yaml
+.codex
 
 # Go
 *.exe
