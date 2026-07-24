@@ -137,49 +137,49 @@ body {
 }
 
 .filter-card .ant-card-body {
-  padding: 16px;
+  padding: 16px 18px;
 }
 
 .filter-form {
-  display: block;
+  margin: 0;
 }
 
-.filter-fields {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(252px, 252px));
-  align-items: end;
-  gap: 14px 16px;
-  justify-content: start;
+.filter-form .ant-pro-query-filter-row {
+  row-gap: 14px !important;
+}
+
+.filter-form .ant-col,
+.filter-form .ant-form-item {
   min-width: 0;
 }
 
-.filter-fields .ant-form-item {
+.filter-form .ant-form-item {
   margin-bottom: 0;
 }
 
-.filter-fields .ant-form-item-label {
+.filter-form .ant-form-item-label {
   padding-bottom: 5px;
   font-weight: 800;
 }
 
-.filter-fields .ant-form-item-label > label {
+.filter-form .ant-form-item-label > label {
   color: #243044;
   font-size: 13px;
   font-weight: 800;
   line-height: 20px;
 }
 
-.filter-fields .ant-picker,
-.filter-fields .ant-input,
-.filter-fields .ant-select,
-.filter-fields .ant-input-number {
+.filter-form .ant-picker,
+.filter-form .ant-input,
+.filter-form .ant-select,
+.filter-form .ant-input-number {
   width: 100%;
 }
 
-.filter-fields .ant-picker,
-.filter-fields .ant-input,
-.filter-fields .ant-select-selector,
-.filter-fields .ant-input-number {
+.filter-form .ant-picker,
+.filter-form .ant-input,
+.filter-form .ant-select-selector,
+.filter-form .ant-input-number {
   min-height: 40px;
   border-color: rgba(148, 163, 184, 0.34) !important;
   background: rgba(255, 255, 255, 0.96) !important;
@@ -187,31 +187,31 @@ body {
   transition: border-color var(--dt-motion-fast), box-shadow var(--dt-motion-fast), background var(--dt-motion-fast);
 }
 
-.filter-fields .ant-picker:hover,
-.filter-fields .ant-input:hover,
-.filter-fields .ant-select-selector:hover,
-.filter-fields .ant-input-number:hover {
+.filter-form .ant-picker:hover,
+.filter-form .ant-input:hover,
+.filter-form .ant-select-selector:hover,
+.filter-form .ant-input-number:hover {
   border-color: rgba(8, 145, 178, 0.62) !important;
 }
 
-.filter-fields .ant-picker-focused,
-.filter-fields .ant-input:focus,
-.filter-fields .ant-select-focused .ant-select-selector,
-.filter-fields .ant-input-number-focused {
+.filter-form .ant-picker-focused,
+.filter-form .ant-input:focus,
+.filter-form .ant-select-focused .ant-select-selector,
+.filter-form .ant-input-number-focused {
   border-color: #2563eb !important;
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12) !important;
 }
 
-.filter-fields .ant-select-selection-overflow {
+.filter-form .ant-select-selection-overflow {
   flex-wrap: nowrap;
   overflow: hidden;
 }
 
-.filter-fields .ant-select-selection-overflow-item {
+.filter-form .ant-select-selection-overflow-item {
   max-width: 100%;
 }
 
-.filter-fields .ant-select-selection-item {
+.filter-form .ant-select-selection-item {
   max-width: 132px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -222,52 +222,29 @@ body {
   width: 100% !important;
 }
 
-.filter-fields .ant-segmented {
+.filter-form .ant-segmented {
   max-width: 100%;
   width: fit-content;
 }
 
 .filter-field-time {
-  grid-column: span 2;
-  min-width: 520px;
+  min-width: 0;
 }
 
-.filter-fields .filter-field-time .ant-picker {
+.filter-form .filter-field-time .ant-picker {
   width: 100% !important;
 }
 
 .filter-actions {
-  display: grid;
-  grid-column: span 2;
-  justify-content: start;
-  align-self: end;
-  min-width: 520px;
-  padding: 0;
-  margin-bottom: 0;
-}
-
-.filter-actions-label {
-  display: block;
-  margin-bottom: 5px;
-  color: var(--dt-color-muted) !important;
-  font-size: 13px;
-  font-weight: 800;
-  line-height: 22px;
-  visibility: hidden;
-}
-
-.filter-actions .ant-form-item-control-input-content {
-  display: grid;
-  justify-content: flex-start;
-  white-space: nowrap;
-}
-
-.filter-actions .ant-space {
-  flex-wrap: nowrap;
-  justify-content: flex-start;
+  display: flex;
+  justify-content: flex-end;
+  width: 100%;
+  padding-top: 25px;
 }
 
 .action-cluster {
+  display: flex;
+  width: 100%;
   max-width: 100%;
 }
 
@@ -313,19 +290,13 @@ body {
 @media (max-width: 900px) {
   .filter-field-time {
     min-width: 0;
-    grid-column: span 1;
   }
 
   .filter-actions {
-    grid-column: span 1;
-    min-width: 0;
     justify-content: start;
+    padding-top: 0;
   }
 
-  .filter-actions,
-  .filter-actions .ant-form-item-control-input-content {
-    justify-content: flex-start;
-  }
 }
 
 .data-card .ant-card-body {
@@ -1139,19 +1110,17 @@ body {
   }
 
   .filter-form,
-  .filter-fields {
-    display: grid;
-    grid-template-columns: 1fr;
+  .filter-form .ant-row {
     width: 100%;
   }
 
   .filter-control-compact,
   .filter-field-time,
   .filter-field-time .ant-picker,
-  .filter-fields .ant-form-item,
-  .filter-fields .ant-select,
-  .filter-fields .ant-input,
-  .filter-fields .ant-input-number {
+  .filter-form .ant-form-item,
+  .filter-form .ant-select,
+  .filter-form .ant-input,
+  .filter-form .ant-input-number {
     width: 100% !important;
     min-width: 0;
   }
