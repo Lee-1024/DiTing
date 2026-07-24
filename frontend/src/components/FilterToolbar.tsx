@@ -1,7 +1,8 @@
 import { DownloadOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
-import { Button, Card, Form, Space, Typography } from 'antd';
+import { Card, Form, Typography } from 'antd';
 import type { FormInstance } from 'antd';
 import type { ReactNode } from 'react';
+import ActionCluster from './ActionCluster';
 
 interface FilterToolbarProps {
   form: FormInstance;
@@ -26,15 +27,19 @@ export default function FilterToolbar({
   return (
     <Card className="filter-card">
       <Form form={form} className="filter-form" layout="vertical" initialValues={initialValues} onFinish={onSearch}>
-        <div className="filter-fields">{children}</div>
-        <Form.Item className="filter-actions">
-          <Typography.Text className="filter-actions-label">操作</Typography.Text>
-          <Space size={8} wrap={false}>
-            <Button type="primary" icon={<SearchOutlined />} htmlType="submit">查询</Button>
-            <Button icon={<ReloadOutlined />} onClick={onReset}>重置</Button>
-            {onExport && <Button icon={<DownloadOutlined />} onClick={onExport}>{exportText}</Button>}
-          </Space>
-        </Form.Item>
+        <div className="filter-fields">
+          {children}
+          <Form.Item className="filter-actions">
+            <Typography.Text className="filter-actions-label">操作</Typography.Text>
+            <ActionCluster
+              actions={[
+                { key: 'search', label: '查询', icon: <SearchOutlined />, type: 'primary', htmlType: 'submit' },
+                { key: 'reset', label: '重置', icon: <ReloadOutlined />, onClick: onReset },
+                ...(onExport ? [{ key: 'export', label: exportText, icon: <DownloadOutlined />, onClick: onExport }] : []),
+              ]}
+            />
+          </Form.Item>
+        </div>
       </Form>
     </Card>
   );

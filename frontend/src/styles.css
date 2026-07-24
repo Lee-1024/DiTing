@@ -128,28 +128,27 @@ body {
 
 .filter-card {
   margin-bottom: 12px;
-  border: 1px solid rgba(125, 211, 252, 0.22);
+  border: 1px solid rgba(37, 99, 235, 0.12);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.9);
-  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.06);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 251, 255, 0.92)),
+    linear-gradient(90deg, rgba(8, 145, 178, 0.08), transparent 42%);
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.07);
 }
 
 .filter-card .ant-card-body {
-  padding: 14px 16px;
+  padding: 16px;
 }
 
 .filter-form {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: flex-end;
-  gap: 14px;
+  display: block;
 }
 
 .filter-fields {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 260px));
+  grid-template-columns: repeat(auto-fill, minmax(252px, 252px));
   align-items: end;
-  gap: 12px 16px;
+  gap: 14px 16px;
   justify-content: start;
   min-width: 0;
 }
@@ -167,6 +166,7 @@ body {
   color: #243044;
   font-size: 13px;
   font-weight: 800;
+  line-height: 20px;
 }
 
 .filter-fields .ant-picker,
@@ -182,7 +182,40 @@ body {
 .filter-fields .ant-input-number {
   min-height: 40px;
   border-color: rgba(148, 163, 184, 0.34) !important;
-  background: rgba(255, 255, 255, 0.92) !important;
+  background: rgba(255, 255, 255, 0.96) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+  transition: border-color var(--dt-motion-fast), box-shadow var(--dt-motion-fast), background var(--dt-motion-fast);
+}
+
+.filter-fields .ant-picker:hover,
+.filter-fields .ant-input:hover,
+.filter-fields .ant-select-selector:hover,
+.filter-fields .ant-input-number:hover {
+  border-color: rgba(8, 145, 178, 0.62) !important;
+}
+
+.filter-fields .ant-picker-focused,
+.filter-fields .ant-input:focus,
+.filter-fields .ant-select-focused .ant-select-selector,
+.filter-fields .ant-input-number-focused {
+  border-color: #2563eb !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12) !important;
+}
+
+.filter-fields .ant-select-selection-overflow {
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
+.filter-fields .ant-select-selection-overflow-item {
+  max-width: 100%;
+}
+
+.filter-fields .ant-select-selection-item {
+  max-width: 132px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .filter-control-compact {
@@ -196,7 +229,7 @@ body {
 
 .filter-field-time {
   grid-column: span 2;
-  min-width: 536px;
+  min-width: 520px;
 }
 
 .filter-fields .filter-field-time .ant-picker {
@@ -205,11 +238,11 @@ body {
 
 .filter-actions {
   display: grid;
-  justify-content: end;
-  align-self: stretch;
-  min-width: 244px;
-  padding: 0 0 0 14px;
-  border-left: 1px solid rgba(148, 163, 184, 0.18);
+  grid-column: span 2;
+  justify-content: start;
+  align-self: end;
+  min-width: 520px;
+  padding: 0;
   margin-bottom: 0;
 }
 
@@ -225,18 +258,44 @@ body {
 
 .filter-actions .ant-form-item-control-input-content {
   display: grid;
-  justify-content: flex-end;
+  justify-content: flex-start;
   white-space: nowrap;
 }
 
 .filter-actions .ant-space {
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  flex-wrap: nowrap;
+  justify-content: flex-start;
 }
 
-.filter-actions .ant-btn {
+.action-cluster {
+  max-width: 100%;
+}
+
+.action-cluster .ant-space-item {
+  min-width: 0;
+}
+
+.filter-actions .ant-btn,
+.action-cluster .ant-btn {
   min-width: 92px;
   height: 40px;
+  font-weight: 700;
+}
+
+.action-cluster .ant-btn:not(.ant-btn-primary):not(.ant-btn-dangerous) {
+  background: rgba(255, 255, 255, 0.84);
+  border-color: rgba(148, 163, 184, 0.42);
+  color: #172033;
+}
+
+.action-cluster .ant-btn:not(.ant-btn-primary):not(.ant-btn-dangerous):hover {
+  border-color: rgba(8, 145, 178, 0.64);
+  color: #075985;
+  background: #f0f9ff;
+}
+
+.action-cluster .ant-btn-primary {
+  border-color: transparent;
 }
 
 .live-filter-card .ant-card-body {
@@ -253,18 +312,13 @@ body {
 
 @media (max-width: 900px) {
   .filter-field-time {
-    min-width: 100%;
+    min-width: 0;
     grid-column: span 1;
   }
 
-  .filter-form {
-    grid-template-columns: 1fr;
-  }
-
   .filter-actions {
+    grid-column: span 1;
     min-width: 0;
-    padding-left: 0;
-    border-left: 0;
     justify-content: start;
   }
 
@@ -1100,6 +1154,11 @@ body {
   .filter-fields .ant-input-number {
     width: 100% !important;
     min-width: 0;
+  }
+
+  .filter-actions .ant-space,
+  .action-cluster {
+    flex-wrap: wrap;
   }
 
   .ops-command-center,

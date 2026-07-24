@@ -1,9 +1,10 @@
-import { ReloadOutlined } from '@ant-design/icons';
+import { ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 import { Button, Card, DatePicker, Empty, Form, Input, Select, Space, Switch, Table, Typography } from 'antd';
 import dayjs from 'dayjs';
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { queryAuditEvents } from '../../api/audit';
+import ActionCluster from '../../components/ActionCluster';
 import CommandText from '../../components/CommandText';
 import { InsightHero, LatestPanel, MetricCard } from '../../components/InsightHeader';
 import SeverityTag from '../../components/SeverityTag';
@@ -116,23 +117,23 @@ export default function CollectorDebugPage() {
       <Card className="data-card live-filter-card">
         <Form form={form} className="filter-form inline-filter-form" layout="vertical" initialValues={{ timeRange: defaultRange, eventType: undefined }}>
           <div className="filter-fields">
-          <Form.Item name="timeRange" label="时间" className="filter-field-time">
-            <DatePicker.RangePicker showTime />
-          </Form.Item>
-          <Form.Item name="eventType" label="事件">
-            <Select allowClear options={eventTypeOptions} />
-          </Form.Item>
-          <Form.Item name="hostName" label="主机">
-            <Input allowClear placeholder="主机名 / Host ID" />
-          </Form.Item>
-          <Form.Item name="keyword" label="关键字">
-            <Input allowClear placeholder="命令 / 文件 / IP" />
-          </Form.Item>
+            <Form.Item name="timeRange" label="时间" className="filter-field-time">
+              <DatePicker.RangePicker showTime />
+            </Form.Item>
+            <Form.Item name="eventType" label="事件">
+              <Select allowClear options={eventTypeOptions} />
+            </Form.Item>
+            <Form.Item name="hostName" label="主机">
+              <Input allowClear placeholder="主机名 / Host ID" />
+            </Form.Item>
+            <Form.Item name="keyword" label="关键字">
+              <Input allowClear placeholder="命令 / 文件 / IP" />
+            </Form.Item>
+            <Form.Item className="filter-actions">
+              <Typography.Text className="filter-actions-label">操作</Typography.Text>
+              <ActionCluster actions={[{ key: 'search', label: '查询', icon: <SearchOutlined />, type: 'primary', onClick: () => void load() }]} />
+            </Form.Item>
           </div>
-          <Form.Item className="filter-actions">
-            <Typography.Text className="filter-actions-label">操作</Typography.Text>
-            <Button type="primary" onClick={() => void load()}>查询</Button>
-          </Form.Item>
         </Form>
         <Table
           rowKey="eventId"

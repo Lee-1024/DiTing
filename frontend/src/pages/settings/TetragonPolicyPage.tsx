@@ -12,6 +12,7 @@ import {
   updateEnforcementPolicy,
   upsertEnforcementDeployment,
 } from '../../api/enforcement';
+import ActionCluster from '../../components/ActionCluster';
 import { InsightHero, MetricCard, SummaryPanel } from '../../components/InsightHeader';
 import type { EnforcementDeployment, EnforcementDeploymentStatus, EnforcementPolicy, EnforcementPolicyPayload } from '../../types/enforcement';
 
@@ -238,10 +239,15 @@ export default function TetragonPolicyPage() {
       <Space className="page-heading">
         <Typography.Title level={3} className="page-title">拦截策略</Typography.Title>
         <div className="page-heading-actions">
-        <Button type="primary" loading={saving} onClick={() => void savePolicy()}>{editing ? '保存修改' : '保存策略'}</Button>
-        {editing && <Button onClick={() => { setEditing(null); form.setFieldsValue(defaultValues); }}>取消编辑</Button>}
-        <Button icon={<CopyOutlined />} onClick={() => void copyYaml()}>复制 YAML</Button>
-        <Button icon={<DownloadOutlined />} onClick={downloadYaml}>下载 YAML</Button>
+          <ActionCluster
+            maxVisible={2}
+            actions={[
+              { key: 'save', label: editing ? '保存修改' : '保存策略', type: 'primary', loading: saving, onClick: () => void savePolicy() },
+              ...(editing ? [{ key: 'cancel', label: '取消编辑', onClick: () => { setEditing(null); form.setFieldsValue(defaultValues); } }] : []),
+              { key: 'copy', label: '复制 YAML', icon: <CopyOutlined />, onClick: () => void copyYaml() },
+              { key: 'download', label: '下载 YAML', icon: <DownloadOutlined />, onClick: downloadYaml },
+            ]}
+          />
         </div>
       </Space>
       <section className="system-hero">
