@@ -60,10 +60,12 @@ type MemoryRepository struct {
 	nextDeploy  int
 }
 
+// NewMemoryRepository 创建并初始化 New Memory Repository 实例。
 func NewMemoryRepository() *MemoryRepository {
 	return &MemoryRepository{next: 1, nextDeploy: 1, policies: []Policy{}, deployments: []Deployment{}}
 }
 
+// Create 创建新的 Create。
 func (r *MemoryRepository) Create(_ context.Context, policy Policy) (Policy, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -78,6 +80,7 @@ func (r *MemoryRepository) Create(_ context.Context, policy Policy) (Policy, err
 	return policy, nil
 }
 
+// List 查询并返回 List 列表。
 func (r *MemoryRepository) List(_ context.Context) ([]Policy, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -87,6 +90,7 @@ func (r *MemoryRepository) List(_ context.Context) ([]Policy, error) {
 	return result, nil
 }
 
+// ListForHost 查询并返回 List For Host 列表。
 func (r *MemoryRepository) ListForHost(_ context.Context, hostID string) ([]Policy, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -103,6 +107,7 @@ func (r *MemoryRepository) ListForHost(_ context.Context, hostID string) ([]Poli
 	return result, nil
 }
 
+// Get 查询并返回指定的 Get。
 func (r *MemoryRepository) Get(_ context.Context, id string) (Policy, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -115,6 +120,7 @@ func (r *MemoryRepository) Get(_ context.Context, id string) (Policy, error) {
 	return Policy{}, ErrNotFound
 }
 
+// Update 更新指定的 Update。
 func (r *MemoryRepository) Update(_ context.Context, id string, next Policy) (Policy, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -134,6 +140,7 @@ func (r *MemoryRepository) Update(_ context.Context, id string, next Policy) (Po
 	return Policy{}, ErrNotFound
 }
 
+// Delete 删除指定的 Delete。
 func (r *MemoryRepository) Delete(_ context.Context, id string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -148,6 +155,7 @@ func (r *MemoryRepository) Delete(_ context.Context, id string) error {
 	return ErrNotFound
 }
 
+// UpdateDeployment 更新指定的 Update Deployment。
 func (r *MemoryRepository) UpdateDeployment(_ context.Context, id string, status string, message string) (Policy, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -169,6 +177,7 @@ func (r *MemoryRepository) UpdateDeployment(_ context.Context, id string, status
 	return Policy{}, ErrNotFound
 }
 
+// EmergencyDisable 处理 Emergency Disable 相关逻辑。
 func (r *MemoryRepository) EmergencyDisable(_ context.Context, message string) (int, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -190,6 +199,7 @@ func (r *MemoryRepository) EmergencyDisable(_ context.Context, message string) (
 	return count, nil
 }
 
+// UpsertHostDeployment 处理 Upsert Host Deployment 相关逻辑。
 func (r *MemoryRepository) UpsertHostDeployment(_ context.Context, deployment Deployment) (Deployment, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -222,6 +232,7 @@ func (r *MemoryRepository) UpsertHostDeployment(_ context.Context, deployment De
 	return deployment, nil
 }
 
+// ListHostDeployments 查询并返回 List Host Deployments 列表。
 func (r *MemoryRepository) ListHostDeployments(_ context.Context, policyID string) ([]Deployment, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -238,6 +249,7 @@ func (r *MemoryRepository) ListHostDeployments(_ context.Context, policyID strin
 	return result, nil
 }
 
+// hasPolicy 判断 has Policy 是否符合条件。
 func (r *MemoryRepository) hasPolicy(id string) bool {
 	for _, policy := range r.policies {
 		if policy.ID == id {
@@ -247,6 +259,7 @@ func (r *MemoryRepository) hasPolicy(id string) bool {
 	return false
 }
 
+// normalize 规范化 normalize 的默认值和边界值。
 func normalize(policy Policy) Policy {
 	if policy.Mode == "" {
 		policy.Mode = "audit"
@@ -261,6 +274,7 @@ func normalize(policy Policy) Policy {
 	return policy
 }
 
+// normalizeDeploymentStatus 规范化 normalize Deployment Status 的默认值和边界值。
 func normalizeDeploymentStatus(status string) string {
 	switch status {
 	case "draft", "deployed", "failed", "disabled":
@@ -270,6 +284,7 @@ func normalizeDeploymentStatus(status string) string {
 	}
 }
 
+// appliesToHost 处理 applies To Host 相关逻辑。
 func appliesToHost(targetHosts []string, hostID string) bool {
 	if len(targetHosts) == 0 {
 		return true

@@ -45,6 +45,7 @@ export const ruleOperatorOptions = [
   { value: 'regex', label: '正则匹配' },
 ];
 
+// optionLabel 处理 option Label 相关逻辑。
 export function optionLabel(options: Array<{ value: string; label: string }>, value?: string) {
   if (!value) {
     return '';
@@ -52,18 +53,22 @@ export function optionLabel(options: Array<{ value: string; label: string }>, va
   return options.find((option) => option.value === value)?.label ?? value;
 }
 
+// severityLabel 处理 severity Label 相关逻辑。
 export function severityLabel(value?: string) {
   return optionLabel(severityOptions, value);
 }
 
+// eventTypeLabel 处理 event Type Label 相关逻辑。
 export function eventTypeLabel(value?: string) {
   return optionLabel(eventTypeOptions, value);
 }
 
+// ruleFieldLabel 处理 rule Field Label 相关逻辑。
 export function ruleFieldLabel(value?: string) {
   return optionLabel(ruleFieldOptions, value);
 }
 
+// ruleOperatorLabel 处理 rule Operator Label 相关逻辑。
 export function ruleOperatorLabel(value?: string) {
   return optionLabel(ruleOperatorOptions, value);
 }

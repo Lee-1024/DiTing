@@ -18,6 +18,7 @@ import TetragonPolicyPage from '../pages/settings/TetragonPolicyPage';
 import LoginPage from '../pages/login/LoginPage';
 import { getToken } from '../stores/auth';
 
+// RequireAuth 渲染 Require Auth 组件。
 function RequireAuth({ children }: { children: JSX.Element }) {
   return getToken() ? children : <Navigate to="/login" replace />;
 }

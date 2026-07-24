@@ -15,10 +15,12 @@ type Handler struct {
 	service *Service
 }
 
+// NewHandler 创建并初始化 New Handler 实例。
 func NewHandler(service *Service) *Handler {
 	return &Handler{service: service}
 }
 
+// Login 处理 Login 相关逻辑。
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	var request struct {
 		Username string `json:"username"`
@@ -37,6 +39,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(result)
 }
 
+// Me 处理 Me 相关逻辑。
 func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 	claims, ok := ClaimsFromContext(r.Context())
 	if !ok {
@@ -47,6 +50,7 @@ func (h *Handler) Me(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(claims)
 }
 
+// ChangePassword 处理 Change Password 相关逻辑。
 func (h *Handler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	claims, ok := ClaimsFromContext(r.Context())
 	if !ok {
@@ -72,6 +76,7 @@ func (h *Handler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// Middleware 处理 Middleware 相关逻辑。
 func Middleware(service *Service) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -90,11 +95,13 @@ func Middleware(service *Service) func(http.Handler) http.Handler {
 	}
 }
 
+// ClaimsFromContext 处理 Claims From Context 相关逻辑。
 func ClaimsFromContext(ctx context.Context) (Claims, bool) {
 	claims, ok := ctx.Value(claimsContextKey).(Claims)
 	return claims, ok
 }
 
+// ContextWithClaims 处理 Context With Claims 相关逻辑。
 func ContextWithClaims(ctx context.Context, claims Claims) context.Context {
 	return context.WithValue(ctx, claimsContextKey, claims)
 }

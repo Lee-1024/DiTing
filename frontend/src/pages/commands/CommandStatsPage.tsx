@@ -13,10 +13,12 @@ import { formatLocalDateTime } from '../../utils/time';
 
 const defaultRange = [dayjs().subtract(7, 'day'), dayjs()] as const;
 
+// commandName 生成 command Name 的展示内容。
 function commandName(item: CommandItem) {
   return item.processName || item.cmdline?.split(/\s+/)[0] || '-';
 }
 
+// CommandStatsPage 生成 Command Stats Page 的展示内容。
 export default function CommandStatsPage() {
   const [items, setItems] = useState<CommandItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -30,6 +32,7 @@ export default function CommandStatsPage() {
   const [tablePageSize, setTablePageSize] = useState(10);
   const [form] = Form.useForm();
 
+  // buildQuery 构建 build Query 所需的数据结构。
   function buildQuery(): CommandStatsQuery {
     const values = form.getFieldsValue();
     const range = values.timeRange ?? defaultRange;
@@ -43,6 +46,7 @@ export default function CommandStatsPage() {
     };
   }
 
+  // load 加载页面所需数据。
   async function load() {
     setLoading(true);
     try {
@@ -52,17 +56,20 @@ export default function CommandStatsPage() {
     }
   }
 
+  // resetAndLoad 重置 reset And Load 状态。
   async function resetAndLoad() {
     form.resetFields();
     await Promise.resolve();
     await load();
   }
 
+  // exportCSV 导出或下载 export CSV 数据。
   async function exportCSV() {
     const blob = await exportCommandStats(buildQuery());
     downloadBlob(blob, 'command-stats.csv');
   }
 
+  // openDetails 打开对应的弹窗或详情视图。
   async function openDetails(item: CommandItem) {
     const values = form.getFieldsValue();
     const range = values.timeRange ?? defaultRange;
@@ -98,6 +105,7 @@ export default function CommandStatsPage() {
     }
   }
 
+  // loadDetailEvents 加载页面所需数据。
   async function loadDetailEvents(item: CommandItem, nextPage = detailPage, nextPageSize = detailPageSize) {
     const values = form.getFieldsValue();
     const range = values.timeRange ?? defaultRange;
@@ -121,6 +129,7 @@ export default function CommandStatsPage() {
     }
   }
 
+  // exportDetails 导出或下载 export Details 数据。
   async function exportDetails() {
     if (!selected) {
       return;
@@ -137,6 +146,7 @@ export default function CommandStatsPage() {
     downloadBlob(blob, `${selected.processName || 'command'}-details.csv`);
   }
 
+  // closeDetails 关闭当前弹窗或详情视图。
   function closeDetails() {
     setSelected(undefined);
     setExecutions([]);
@@ -145,6 +155,7 @@ export default function CommandStatsPage() {
     setDetailTotal(0);
   }
 
+  // detailColumns 处理 detail Columns 相关逻辑。
   function detailColumns() {
     return [
       { title: '时间', dataIndex: 'eventTime', width: 190, render: (value: string) => formatLocalDateTime(value) },

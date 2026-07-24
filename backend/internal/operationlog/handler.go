@@ -13,10 +13,12 @@ type Handler struct {
 	repository Repository
 }
 
+// NewHandler 创建并初始化 New Handler 实例。
 func NewHandler(repository Repository) *Handler {
 	return &Handler{repository: repository}
 }
 
+// List 查询并返回 List 列表。
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	query, err := ParseQuery(r)
 	if err != nil {
@@ -41,6 +43,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// ParseQuery 解析 Parse Query 并返回结构化结果。
 func ParseQuery(r *http.Request) (Query, error) {
 	values := r.URL.Query()
 	now := time.Now().UTC()
@@ -80,6 +83,7 @@ func ParseQuery(r *http.Request) (Query, error) {
 	return query, nil
 }
 
+// parsePositiveInt 解析 parse Positive Int 并返回结构化结果。
 func parsePositiveInt(raw string, fallback int) int {
 	if raw == "" {
 		return fallback

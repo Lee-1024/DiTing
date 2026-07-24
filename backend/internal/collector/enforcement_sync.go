@@ -31,6 +31,7 @@ type EnforcementSyncer struct {
 	runCommand     func(context.Context, string) error
 }
 
+// NewEnforcementSyncer 创建并初始化 New Enforcement Syncer 实例。
 func NewEnforcementSyncer(ingestURL string, token string, hostID string, hostName string, policyDir string, restartCommand string) *EnforcementSyncer {
 	return &EnforcementSyncer{
 		baseURL:        enforcementBaseURL(ingestURL),
@@ -44,6 +45,7 @@ func NewEnforcementSyncer(ingestURL string, token string, hostID string, hostNam
 	}
 }
 
+// SyncOnce 处理 Sync Once 相关逻辑。
 func (s *EnforcementSyncer) SyncOnce(ctx context.Context) error {
 	if s.hostID == "" {
 		return fmt.Errorf("host id is required")
@@ -75,6 +77,7 @@ func (s *EnforcementSyncer) SyncOnce(ctx context.Context) error {
 	return nil
 }
 
+// Run 运行 Run 的主流程。
 func (s *EnforcementSyncer) Run(ctx context.Context, interval time.Duration) {
 	if interval <= 0 {
 		interval = 30 * time.Second
@@ -91,6 +94,7 @@ func (s *EnforcementSyncer) Run(ctx context.Context, interval time.Duration) {
 	}
 }
 
+// fetchPolicies 处理 fetch Policies 相关逻辑。
 func (s *EnforcementSyncer) fetchPolicies(ctx context.Context) ([]EnforcementPolicy, error) {
 	url := fmt.Sprintf("%s/ingest/enforcement-policies?host_id=%s", s.baseURL, s.hostID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -115,6 +119,7 @@ func (s *EnforcementSyncer) fetchPolicies(ctx context.Context) ([]EnforcementPol
 	return policies, nil
 }
 
+// applyPolicies 处理 apply Policies 相关逻辑。
 func (s *EnforcementSyncer) applyPolicies(policies []EnforcementPolicy) (bool, error) {
 	if err := os.MkdirAll(s.policyDir, 0o755); err != nil {
 		return false, err
@@ -151,6 +156,7 @@ func (s *EnforcementSyncer) applyPolicies(policies []EnforcementPolicy) (bool, e
 	return changed, nil
 }
 
+// reportDeployment 处理 report Deployment 相关逻辑。
 func (s *EnforcementSyncer) reportDeployment(ctx context.Context, policyID string, status string, message string) error {
 	payload := map[string]string{
 		"hostId":   s.hostID,
@@ -183,6 +189,7 @@ func (s *EnforcementSyncer) reportDeployment(ctx context.Context, policyID strin
 	return nil
 }
 
+// enforcementBaseURL 处理 enforcement Base URL 相关逻辑。
 func enforcementBaseURL(ingestURL string) string {
 	trimmed := strings.TrimRight(strings.TrimSpace(ingestURL), "/")
 	if strings.HasSuffix(trimmed, "/ingest/events") {
@@ -194,6 +201,7 @@ func enforcementBaseURL(ingestURL string) string {
 	return trimmed
 }
 
+// sanitizePolicyFileName 处理 sanitize Policy File Name 相关逻辑。
 func sanitizePolicyFileName(value string) string {
 	name := strings.ToLower(value)
 	var builder strings.Builder
@@ -219,6 +227,7 @@ func sanitizePolicyFileName(value string) string {
 	return result
 }
 
+// policyFileName 处理 policy File Name 相关逻辑。
 func policyFileName(policy EnforcementPolicy) string {
 	name := sanitizePolicyFileName(policy.Name)
 	id := sanitizePolicyFileName(policy.ID)
@@ -228,6 +237,7 @@ func policyFileName(policy EnforcementPolicy) string {
 	return name + "-" + strings.TrimPrefix(id, "diting-") + ".yaml"
 }
 
+// runShellCommand 运行 run Shell Command 的主流程。
 func runShellCommand(ctx context.Context, command string) error {
 	cmd := exec.CommandContext(ctx, "sh", "-c", command)
 	output, err := cmd.CombinedOutput()

@@ -40,6 +40,7 @@ type APIHeartbeat struct {
 	DroppedEvents  uint64     `json:"droppedEvents"`
 }
 
+// NewAPIWriter 创建并初始化 New APIWriter 实例。
 func NewAPIWriter(url string, token string) *APIWriter {
 	return &APIWriter{
 		url:           strings.TrimSpace(url),
@@ -51,6 +52,7 @@ func NewAPIWriter(url string, token string) *APIWriter {
 	}
 }
 
+// SetRetryPolicy 设置 Set Retry Policy。
 func (w *APIWriter) SetRetryPolicy(maxAttempts int, retryInterval time.Duration) {
 	if maxAttempts <= 0 {
 		maxAttempts = 1
@@ -62,6 +64,7 @@ func (w *APIWriter) SetRetryPolicy(maxAttempts int, retryInterval time.Duration)
 	w.retryInterval = retryInterval
 }
 
+// SetBufferLimit 设置 Set Buffer Limit。
 func (w *APIWriter) SetBufferLimit(limit int) {
 	if limit < 0 {
 		limit = 0
@@ -72,18 +75,21 @@ func (w *APIWriter) SetBufferLimit(limit int) {
 	w.trimBufferLocked()
 }
 
+// BufferedEvents 处理 Buffered Events 相关逻辑。
 func (w *APIWriter) BufferedEvents() int {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	return len(w.buffer)
 }
 
+// DroppedEvents 处理 Dropped Events 相关逻辑。
 func (w *APIWriter) DroppedEvents() uint64 {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	return w.droppedEvents
 }
 
+// BufferedEventIDs 处理 Buffered Event IDs 相关逻辑。
 func (w *APIWriter) BufferedEventIDs() []string {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -94,12 +100,14 @@ func (w *APIWriter) BufferedEventIDs() []string {
 	return ids
 }
 
+// LastWriteBuffered 处理 Last Write Buffered 相关逻辑。
 func (w *APIWriter) LastWriteBuffered() bool {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	return w.lastBuffered
 }
 
+// Write 写入 Write 数据。
 func (w *APIWriter) Write(ctx context.Context, events []audit.Event) error {
 	if len(events) == 0 {
 		return nil
@@ -121,12 +129,14 @@ func (w *APIWriter) Write(ctx context.Context, events []audit.Event) error {
 	return nil
 }
 
+// setLastBuffered 设置 set Last Buffered。
 func (w *APIWriter) setLastBuffered(value bool) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.lastBuffered = value
 }
 
+// WriteHeartbeat 写入 Write Heartbeat 数据。
 func (w *APIWriter) WriteHeartbeat(ctx context.Context, heartbeat APIHeartbeat) error {
 	if heartbeat.LastSeenAt.IsZero() {
 		heartbeat.LastSeenAt = time.Now().UTC()
@@ -134,6 +144,7 @@ func (w *APIWriter) WriteHeartbeat(ctx context.Context, heartbeat APIHeartbeat) 
 	return w.postJSON(ctx, heartbeatURL(w.url), heartbeat)
 }
 
+// postJSON 处理 post JSON 相关逻辑。
 func (w *APIWriter) postJSON(ctx context.Context, url string, payload any) error {
 	body, err := json.Marshal(payload)
 	if err != nil {
@@ -159,6 +170,7 @@ func (w *APIWriter) postJSON(ctx context.Context, url string, payload any) error
 	return lastErr
 }
 
+// heartbeatURL 处理 heartbeat URL 相关逻辑。
 func heartbeatURL(eventsURL string) string {
 	trimmed := strings.TrimSpace(eventsURL)
 	if strings.HasSuffix(trimmed, "/events") {
@@ -167,6 +179,7 @@ func heartbeatURL(eventsURL string) string {
 	return strings.TrimRight(trimmed, "/") + "/heartbeat"
 }
 
+// flushBuffered 处理 flush Buffered 相关逻辑。
 func (w *APIWriter) flushBuffered(ctx context.Context) error {
 	for {
 		batch := w.nextBufferedBatch()
@@ -180,6 +193,7 @@ func (w *APIWriter) flushBuffered(ctx context.Context) error {
 	}
 }
 
+// nextBufferedBatch 处理 next Buffered Batch 相关逻辑。
 func (w *APIWriter) nextBufferedBatch() []audit.Event {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -191,6 +205,7 @@ func (w *APIWriter) nextBufferedBatch() []audit.Event {
 	return batch
 }
 
+// removeBuffered 删除指定的 remove Buffered。
 func (w *APIWriter) removeBuffered(count int) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -201,6 +216,7 @@ func (w *APIWriter) removeBuffered(count int) {
 	w.buffer = append([]audit.Event{}, w.buffer[count:]...)
 }
 
+// enqueueEvents 处理 enqueue Events 相关逻辑。
 func (w *APIWriter) enqueueEvents(events []audit.Event) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -212,6 +228,7 @@ func (w *APIWriter) enqueueEvents(events []audit.Event) {
 	w.trimBufferLocked()
 }
 
+// trimBufferLocked 处理 trim Buffer Locked 相关逻辑。
 func (w *APIWriter) trimBufferLocked() {
 	for len(w.buffer) > w.bufferLimit {
 		index := lowestPriorityEventIndex(w.buffer)
@@ -220,6 +237,7 @@ func (w *APIWriter) trimBufferLocked() {
 	}
 }
 
+// lowestPriorityEventIndex 处理 lowest Priority Event Index 相关逻辑。
 func lowestPriorityEventIndex(events []audit.Event) int {
 	index := 0
 	priority := severityPriority(events[0].Severity)
@@ -233,6 +251,7 @@ func lowestPriorityEventIndex(events []audit.Event) int {
 	return index
 }
 
+// severityPriority 处理 severity Priority 相关逻辑。
 func severityPriority(severity string) int {
 	switch strings.ToLower(strings.TrimSpace(severity)) {
 	case "critical":
@@ -248,6 +267,7 @@ func severityPriority(severity string) int {
 	}
 }
 
+// doPostJSON 处理 do Post JSON 相关逻辑。
 func (w *APIWriter) doPostJSON(ctx context.Context, url string, body []byte) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
@@ -272,10 +292,12 @@ type apiStatusError struct {
 	statusCode int
 }
 
+// Error 处理 Error 相关逻辑。
 func (e apiStatusError) Error() string {
 	return fmt.Sprintf("ingest api status %d", e.statusCode)
 }
 
+// isRetriableAPIError 判断 is Retriable APIError 是否符合条件。
 func isRetriableAPIError(err error) bool {
 	if statusErr, ok := err.(apiStatusError); ok {
 		return statusErr.statusCode == http.StatusTooManyRequests || statusErr.statusCode >= 500
@@ -283,6 +305,7 @@ func isRetriableAPIError(err error) bool {
 	return true
 }
 
+// sleepWithContext 处理 sleep With Context 相关逻辑。
 func sleepWithContext(ctx context.Context, interval time.Duration) error {
 	if interval <= 0 {
 		return nil

@@ -9,6 +9,7 @@ const severityColor: Record<string, string> = {
   info: 'default',
 };
 
+// SeverityTag 渲染 Severity Tag 组件。
 export default function SeverityTag({ value }: { value?: string }) {
   const severity = value || 'info';
   return <Tag color={severityColor[severity] || 'default'}>{severityLabel(severity)}</Tag>;

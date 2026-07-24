@@ -20,6 +20,7 @@ type Repository interface {
 	SaveCollectorFilter(ctx context.Context, config CollectorFilterConfig) error
 }
 
+// DefaultCollectorFilterConfig 处理 Default Collector Filter Config 相关逻辑。
 func DefaultCollectorFilterConfig() CollectorFilterConfig {
 	return CollectorFilterConfig{
 		Enabled:        false,
@@ -33,10 +34,12 @@ type MemoryRepository struct {
 	hasFilter       bool
 }
 
+// NewMemoryRepository 创建并初始化 New Memory Repository 实例。
 func NewMemoryRepository() *MemoryRepository {
 	return &MemoryRepository{}
 }
 
+// GetCollectorFilter 查询并返回指定的 Get Collector Filter。
 func (r *MemoryRepository) GetCollectorFilter(_ context.Context) (CollectorFilterConfig, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -46,6 +49,7 @@ func (r *MemoryRepository) GetCollectorFilter(_ context.Context) (CollectorFilte
 	return normalizeCollectorFilterConfig(r.collectorFilter), nil
 }
 
+// SaveCollectorFilter 处理 Save Collector Filter 相关逻辑。
 func (r *MemoryRepository) SaveCollectorFilter(_ context.Context, config CollectorFilterConfig) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -54,6 +58,7 @@ func (r *MemoryRepository) SaveCollectorFilter(_ context.Context, config Collect
 	return nil
 }
 
+// normalizeCollectorFilterConfig 规范化 normalize Collector Filter Config 的默认值和边界值。
 func normalizeCollectorFilterConfig(config CollectorFilterConfig) CollectorFilterConfig {
 	if len(config.KeepSeverities) == 0 {
 		config.KeepSeverities = []string{"high", "critical"}

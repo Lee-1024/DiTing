@@ -11,6 +11,7 @@ import (
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
+// ParseTetragonGRPCEvent 解析 Parse Tetragon GRPCEvent 并返回结构化结果。
 func ParseTetragonGRPCEvent(response *tetragon.GetEventsResponse) (audit.Event, error) {
 	data, err := protojson.Marshal(response)
 	if err != nil {
@@ -28,6 +29,7 @@ func ParseTetragonGRPCEvent(response *tetragon.GetEventsResponse) (audit.Event, 
 	return audit.Event{}, ErrUnsupportedEvent
 }
 
+// parseGRPCProcessExec 解析 parse GRPCProcess Exec 并返回结构化结果。
 func parseGRPCProcessExec(response *tetragon.GetEventsResponse, event *tetragon.ProcessExec, data []byte) audit.Event {
 	eventTime := grpcEventTime(response)
 	process := event.GetProcess()
@@ -68,6 +70,7 @@ func parseGRPCProcessExec(response *tetragon.GetEventsResponse, event *tetragon.
 	}
 }
 
+// parseGRPCProcessExit 解析 parse GRPCProcess Exit 并返回结构化结果。
 func parseGRPCProcessExit(response *tetragon.GetEventsResponse, event *tetragon.ProcessExit, data []byte) audit.Event {
 	eventTime := grpcEventTime(response)
 	if event.GetTime() != nil {
@@ -104,6 +107,7 @@ func parseGRPCProcessExit(response *tetragon.GetEventsResponse, event *tetragon.
 	}
 }
 
+// parseGRPCProcessKprobe 解析 parse GRPCProcess Kprobe 并返回结构化结果。
 func parseGRPCProcessKprobe(response *tetragon.GetEventsResponse, event *tetragon.ProcessKprobe, data []byte) audit.Event {
 	eventTime := grpcEventTime(response)
 	process := event.GetProcess()
@@ -159,6 +163,7 @@ func parseGRPCProcessKprobe(response *tetragon.GetEventsResponse, event *tetrago
 	}
 }
 
+// grpcEventTime 处理 grpc Event Time 相关逻辑。
 func grpcEventTime(response *tetragon.GetEventsResponse) time.Time {
 	if response.GetTime() != nil {
 		return response.GetTime().AsTime()
@@ -166,6 +171,7 @@ func grpcEventTime(response *tetragon.GetEventsResponse) time.Time {
 	return time.Now().UTC()
 }
 
+// uint32Value 处理 uint32 Value 相关逻辑。
 func uint32Value(value *wrapperspb.UInt32Value) uint32 {
 	if value == nil {
 		return 0
@@ -173,6 +179,7 @@ func uint32Value(value *wrapperspb.UInt32Value) uint32 {
 	return value.Value
 }
 
+// imageName 处理 image Name 相关逻辑。
 func imageName(container *tetragon.Container) string {
 	if container.GetImage() == nil {
 		return ""
@@ -180,6 +187,7 @@ func imageName(container *tetragon.Container) string {
 	return container.GetImage().GetName()
 }
 
+// kprobeFileContext 处理 kprobe File Context 相关逻辑。
 func kprobeFileContext(event *tetragon.ProcessKprobe) (string, string) {
 	for _, arg := range append(event.GetArgs(), event.GetData()...) {
 		if path := arg.GetPathArg(); path != nil && path.GetPath() != "" {
@@ -198,6 +206,7 @@ func kprobeFileContext(event *tetragon.ProcessKprobe) (string, string) {
 	return "", ""
 }
 
+// isFileSyscall 判断 is File Syscall 是否符合条件。
 func isFileSyscall(functionName string) bool {
 	switch strings.TrimPrefix(functionName, "sys_") {
 	case "unlink", "unlinkat", "rmdir", "chmod", "fchmodat", "chown", "fchownat":
@@ -207,6 +216,7 @@ func isFileSyscall(functionName string) bool {
 	}
 }
 
+// kprobeNetworkContext 处理 kprobe Network Context 相关逻辑。
 func kprobeNetworkContext(event *tetragon.ProcessKprobe) (string, uint16, string) {
 	for _, arg := range append(event.GetArgs(), event.GetData()...) {
 		sockaddr := arg.GetSockaddrArg()
@@ -226,6 +236,7 @@ func kprobeNetworkContext(event *tetragon.ProcessKprobe) (string, uint16, string
 	return "", 0, ""
 }
 
+// firstNonEmpty 处理 first Non Empty 相关逻辑。
 func firstNonEmpty(values ...string) string {
 	for _, value := range values {
 		if value != "" {

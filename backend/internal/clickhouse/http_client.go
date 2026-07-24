@@ -26,6 +26,7 @@ type HTTPClient struct {
 	client *http.Client
 }
 
+// NewHTTPClient 创建并初始化 New HTTPClient 实例。
 func NewHTTPClient(config HTTPConfig) *HTTPClient {
 	return &HTTPClient{
 		config: config,
@@ -33,6 +34,7 @@ func NewHTTPClient(config HTTPConfig) *HTTPClient {
 	}
 }
 
+// HTTPURLFromAddress 处理 HTTPURLFrom Address 相关逻辑。
 func HTTPURLFromAddress(addr string) string {
 	if strings.HasPrefix(addr, "http://") || strings.HasPrefix(addr, "https://") {
 		return addr
@@ -44,6 +46,7 @@ func HTTPURLFromAddress(addr string) string {
 	return "http://" + host + ":8123"
 }
 
+// WriteEvents 写入 Write Events 数据。
 func (c *HTTPClient) WriteEvents(ctx context.Context, events []audit.Event) error {
 	if len(events) == 0 {
 		return nil
@@ -69,10 +72,12 @@ func (c *HTTPClient) WriteEvents(ctx context.Context, events []audit.Event) erro
 	return nil
 }
 
+// Execute 处理 Execute 相关逻辑。
 func (c *HTTPClient) Execute(ctx context.Context, query string) error {
 	return c.do(ctx, query)
 }
 
+// ExecuteStatements 处理 Execute Statements 相关逻辑。
 func (c *HTTPClient) ExecuteStatements(ctx context.Context, sql string) error {
 	for _, statement := range splitStatements(sql) {
 		if strings.TrimSpace(statement) == "" {
@@ -85,6 +90,7 @@ func (c *HTTPClient) ExecuteStatements(ctx context.Context, sql string) error {
 	return nil
 }
 
+// splitStatements 处理 split Statements 相关逻辑。
 func splitStatements(sql string) []string {
 	parts := strings.Split(sql, ";")
 	statements := make([]string, 0, len(parts))
@@ -97,6 +103,7 @@ func splitStatements(sql string) []string {
 	return statements
 }
 
+// do 处理 do 相关逻辑。
 func (c *HTTPClient) do(ctx context.Context, query string) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.config.URL, strings.NewReader(query))
 	if err != nil {
@@ -119,6 +126,7 @@ func (c *HTTPClient) do(ctx context.Context, query string) error {
 	return nil
 }
 
+// Query 处理 Query 相关逻辑。
 func (c *HTTPClient) Query(ctx context.Context, query string) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.config.URL, strings.NewReader(query))
 	if err != nil {
@@ -193,6 +201,7 @@ type clickHouseRow struct {
 	RawEvent          string   `json:"raw_event"`
 }
 
+// toClickHouseRow 处理 to Click House Row 相关逻辑。
 func toClickHouseRow(event audit.Event) clickHouseRow {
 	eventDate := event.EventDate
 	if eventDate.IsZero() {
@@ -216,6 +225,7 @@ func toClickHouseRow(event audit.Event) clickHouseRow {
 	}
 }
 
+// formatDateTime64 格式化 format Date Time64 以便展示或写入。
 func formatDateTime64(value time.Time) string {
 	if value.IsZero() {
 		value = time.Unix(0, 0).UTC()
@@ -223,6 +233,7 @@ func formatDateTime64(value time.Time) string {
 	return value.UTC().Format("2006-01-02 15:04:05.000")
 }
 
+// nonNilStrings 处理 non Nil Strings 相关逻辑。
 func nonNilStrings(values []string) []string {
 	if values == nil {
 		return []string{}

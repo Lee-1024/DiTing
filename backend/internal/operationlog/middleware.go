@@ -9,6 +9,7 @@ import (
 	"diting/backend/internal/auth"
 )
 
+// Middleware 处理 Middleware 相关逻辑。
 func Middleware(repository Repository) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -36,6 +37,7 @@ func Middleware(repository Repository) func(http.Handler) http.Handler {
 	}
 }
 
+// clientIP 处理 client IP 相关逻辑。
 func clientIP(r *http.Request) string {
 	if forwardedFor := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); forwardedFor != "" {
 		if first, _, ok := strings.Cut(forwardedFor, ","); ok {
@@ -58,6 +60,7 @@ type statusRecorder struct {
 	status int
 }
 
+// WriteHeader 写入 Write Header 数据。
 func (r *statusRecorder) WriteHeader(statusCode int) {
 	r.status = statusCode
 	r.ResponseWriter.WriteHeader(statusCode)

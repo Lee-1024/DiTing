@@ -54,6 +54,7 @@ type Service struct {
 
 var ErrInvalidCredentials = errors.New("invalid username or password")
 
+// NewService 创建并初始化 New Service 实例。
 func NewService(repository UserRepository, config Config) *Service {
 	if config.ExpiresHours <= 0 {
 		config.ExpiresHours = 24
@@ -61,6 +62,7 @@ func NewService(repository UserRepository, config Config) *Service {
 	return &Service{repository: repository, config: config}
 }
 
+// Login 处理 Login 相关逻辑。
 func (s *Service) Login(ctx context.Context, username, password string) (LoginResult, error) {
 	user, err := s.repository.FindByUsername(ctx, username)
 	if err != nil {
@@ -84,6 +86,7 @@ func (s *Service) Login(ctx context.Context, username, password string) (LoginRe
 	return LoginResult{Token: token, User: user}, nil
 }
 
+// ChangePassword 处理 Change Password 相关逻辑。
 func (s *Service) ChangePassword(ctx context.Context, username, oldPassword, newPassword string) error {
 	user, err := s.repository.FindByUsername(ctx, username)
 	if err != nil {
@@ -95,6 +98,7 @@ func (s *Service) ChangePassword(ctx context.Context, username, oldPassword, new
 	return s.repository.UpdatePassword(ctx, user.ID, HashPassword(newPassword, randomSalt()))
 }
 
+// SignToken 处理 Sign Token 相关逻辑。
 func (s *Service) SignToken(claims Claims) (string, error) {
 	header := map[string]string{"alg": "HS256", "typ": "JWT"}
 	headerJSON, err := json.Marshal(header)
@@ -110,6 +114,7 @@ func (s *Service) SignToken(claims Claims) (string, error) {
 	return unsigned + "." + signature, nil
 }
 
+// VerifyToken 处理 Verify Token 相关逻辑。
 func (s *Service) VerifyToken(token string) (Claims, error) {
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {
@@ -134,17 +139,20 @@ func (s *Service) VerifyToken(token string) (Claims, error) {
 	return claims, nil
 }
 
+// sign 处理 sign 相关逻辑。
 func sign(value, secret string) string {
 	mac := hmac.New(sha256.New, []byte(secret))
 	_, _ = mac.Write([]byte(value))
 	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 }
 
+// HashPassword 判断 Hash Password 是否符合条件。
 func HashPassword(password, salt string) string {
 	sum := sha256.Sum256([]byte(salt + ":" + password))
 	return fmt.Sprintf("sha256$%s$%s", salt, hex.EncodeToString(sum[:]))
 }
 
+// VerifyPassword 处理 Verify Password 相关逻辑。
 func VerifyPassword(password, hash string) bool {
 	parts := strings.Split(hash, "$")
 	if len(parts) != 3 || parts[0] != "sha256" {
@@ -153,6 +161,7 @@ func VerifyPassword(password, hash string) bool {
 	return hmac.Equal([]byte(HashPassword(password, parts[1])), []byte(hash))
 }
 
+// randomSalt 处理 random Salt 相关逻辑。
 func randomSalt() string {
 	var data [16]byte
 	if _, err := io.ReadFull(rand.Reader, data[:]); err != nil {

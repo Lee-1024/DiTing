@@ -16,6 +16,7 @@ interface Props {
   onClose: () => void;
 }
 
+// EventDetailDrawer 渲染 Event Detail Drawer 组件。
 export default function EventDetailDrawer({ event, eventId, relatedEvents = [], open, onClose }: Props) {
   const [detail, setDetail] = useState<AuditEvent>();
   const [selectedInlineEvent, setSelectedInlineEvent] = useState<AuditEvent>();
@@ -147,6 +148,7 @@ export default function EventDetailDrawer({ event, eventId, relatedEvents = [], 
   );
 }
 
+// formatAddress 格式化 format Address 以便界面展示。
 function formatAddress(ip?: string, port?: number) {
   if (!ip) {
     return '-';

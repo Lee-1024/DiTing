@@ -6,6 +6,7 @@ interface Props {
   compact?: boolean;
 }
 
+// ProcessChain 处理 Process Chain 相关逻辑。
 export default function ProcessChain({ event, compact = false }: Props) {
   const nodes = chainNodes(event);
   if (nodes.length === 0) {
@@ -33,6 +34,7 @@ export default function ProcessChain({ event, compact = false }: Props) {
   );
 }
 
+// chainNodes 处理 chain Nodes 相关逻辑。
 function chainNodes(event: AuditEvent) {
   const nodes: Array<{ role: string; name: string; command?: string }> = [];
   if (event.parentProcessName || event.parentCmdline) {
@@ -52,6 +54,7 @@ function chainNodes(event: AuditEvent) {
   return nodes;
 }
 
+// commandName 生成 command Name 的展示内容。
 function commandName(command?: string) {
   return command?.trim().split(/\s+/)[0];
 }

@@ -12,6 +12,7 @@ import EventDetailDrawer from '../audit-events/EventDetailDrawer';
 
 const defaultRange = [dayjs().subtract(1, 'hour'), dayjs()] as const;
 
+// CollectorDebugPage 渲染 Collector Debug Page 组件。
 export default function CollectorDebugPage() {
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [loading, setLoading] = useState(false);
@@ -21,6 +22,7 @@ export default function CollectorDebugPage() {
   const [form] = Form.useForm();
   const requestSeq = useRef(0);
 
+  // buildQuery 构建 build Query 所需的数据结构。
   function buildQuery(values = form.getFieldsValue()): AuditEventQuery {
     const range = values.timeRange ?? defaultRange;
     return {
@@ -34,6 +36,7 @@ export default function CollectorDebugPage() {
     };
   }
 
+  // load 加载页面所需数据。
   async function load(values = form.getFieldsValue()) {
     const seq = requestSeq.current + 1;
     requestSeq.current = seq;

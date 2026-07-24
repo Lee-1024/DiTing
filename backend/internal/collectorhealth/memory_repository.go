@@ -11,10 +11,12 @@ type MemoryRepository struct {
 	items map[string]Heartbeat
 }
 
+// NewMemoryRepository 创建并初始化 New Memory Repository 实例。
 func NewMemoryRepository() *MemoryRepository {
 	return &MemoryRepository{items: map[string]Heartbeat{}}
 }
 
+// List 查询并返回 List 列表。
 func (r *MemoryRepository) List(_ context.Context, now time.Time) ([]Heartbeat, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -25,6 +27,7 @@ func (r *MemoryRepository) List(_ context.Context, now time.Time) ([]Heartbeat, 
 	return result, nil
 }
 
+// Upsert 处理 Upsert 相关逻辑。
 func (r *MemoryRepository) Upsert(_ context.Context, update HeartbeatUpdate) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()

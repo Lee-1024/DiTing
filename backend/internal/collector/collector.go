@@ -22,6 +22,7 @@ type FileCollector struct {
 	writer    EventWriter
 }
 
+// NewFileCollector 创建并初始化 New File Collector 实例。
 func NewFileCollector(path string, batchSize int, writer EventWriter) *FileCollector {
 	if batchSize <= 0 {
 		batchSize = 1000
@@ -29,6 +30,7 @@ func NewFileCollector(path string, batchSize int, writer EventWriter) *FileColle
 	return &FileCollector{path: path, batchSize: batchSize, writer: writer}
 }
 
+// RunOnce 运行 Run Once 的主流程。
 func (c *FileCollector) RunOnce(ctx context.Context) error {
 	slog.Info("collector run-once starting", "path", c.path, "batch_size", c.batchSize)
 	file, err := os.Open(c.path)
@@ -77,6 +79,7 @@ func (c *FileCollector) RunOnce(ctx context.Context) error {
 	return nil
 }
 
+// Tail 处理 Tail 相关逻辑。
 func (c *FileCollector) Tail(ctx context.Context, interval time.Duration) error {
 	if interval <= 0 {
 		interval = time.Second
@@ -129,6 +132,7 @@ func (c *FileCollector) Tail(ctx context.Context, interval time.Duration) error 
 	}
 }
 
+// openForTail 处理 open For Tail 相关逻辑。
 func (c *FileCollector) openForTail(seekEnd bool) (*os.File, os.FileInfo, error) {
 	file, err := os.Open(c.path)
 	if err != nil {
@@ -148,6 +152,7 @@ func (c *FileCollector) openForTail(seekEnd bool) (*os.File, os.FileInfo, error)
 	return file, info, nil
 }
 
+// reopenIfChanged 处理 reopen If Changed 相关逻辑。
 func (c *FileCollector) reopenIfChanged(file *os.File, info os.FileInfo) (*os.File, os.FileInfo, error) {
 	current, err := os.Stat(c.path)
 	if err != nil {
@@ -165,6 +170,7 @@ func (c *FileCollector) reopenIfChanged(file *os.File, info os.FileInfo) (*os.Fi
 	return c.openForTail(false)
 }
 
+// readAvailable 读取 read Available 数据。
 func (c *FileCollector) readAvailable(ctx context.Context, file *os.File, partial []byte) ([]audit.Event, []byte, error) {
 	buffer := make([]byte, 32*1024)
 	var events []audit.Event

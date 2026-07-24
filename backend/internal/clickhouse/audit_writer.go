@@ -19,10 +19,12 @@ type AuditWriter struct {
 	preparer BatchPreparer
 }
 
+// NewAuditWriter 创建并初始化 New Audit Writer 实例。
 func NewAuditWriter(preparer BatchPreparer) *AuditWriter {
 	return &AuditWriter{preparer: preparer}
 }
 
+// Write 写入 Write 数据。
 func (w *AuditWriter) Write(ctx context.Context, events []audit.Event) error {
 	if len(events) == 0 {
 		return nil

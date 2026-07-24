@@ -11,10 +11,12 @@ type Handler struct {
 	repository Repository
 }
 
+// NewHandler 创建并初始化 New Handler 实例。
 func NewHandler(repository Repository) *Handler {
 	return &Handler{repository: repository}
 }
 
+// ListUsers 查询并返回 List Users 列表。
 func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	users, err := h.repository.ListUsers(r.Context())
 	if err != nil {
@@ -25,6 +27,7 @@ func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(users)
 }
 
+// CreateUser 创建新的 Create User。
 func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	var request CreateUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
@@ -45,6 +48,7 @@ func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(created)
 }
 
+// UpdateUser 更新指定的 Update User。
 func (h *Handler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	var request UpdateUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
@@ -64,6 +68,7 @@ func (h *Handler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(updated)
 }
 
+// ResetPassword 重置 Reset Password。
 func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	var request ResetPasswordRequest
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
@@ -81,6 +86,7 @@ func (h *Handler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// DeleteUser 删除指定的 Delete User。
 func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	if err := h.repository.DeleteUser(r.Context(), r.PathValue("id")); err != nil {
 		writeUserAdminError(w, err)
@@ -89,6 +95,7 @@ func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// ListRoles 查询并返回 List Roles 列表。
 func (h *Handler) ListRoles(w http.ResponseWriter, r *http.Request) {
 	roles, err := h.repository.ListRoles(r.Context())
 	if err != nil {
@@ -99,6 +106,7 @@ func (h *Handler) ListRoles(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(roles)
 }
 
+// validateCreateUser 校验 validate Create User 是否满足要求。
 func validateCreateUser(request CreateUserRequest) error {
 	if strings.TrimSpace(request.Username) == "" || strings.TrimSpace(request.DisplayName) == "" {
 		return ErrInvalidRequest
@@ -112,6 +120,7 @@ func validateCreateUser(request CreateUserRequest) error {
 	return nil
 }
 
+// validateUpdateUser 校验 validate Update User 是否满足要求。
 func validateUpdateUser(request UpdateUserRequest) error {
 	if strings.TrimSpace(request.DisplayName) == "" || !validStatus(request.Status) {
 		return ErrInvalidRequest
@@ -119,10 +128,12 @@ func validateUpdateUser(request UpdateUserRequest) error {
 	return nil
 }
 
+// validStatus 校验 valid Status 是否满足要求。
 func validStatus(value string) bool {
 	return value == "" || value == "active" || value == "disabled"
 }
 
+// writeUserAdminError 写入 write User Admin Error 数据。
 func writeUserAdminError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, ErrInvalidRequest):

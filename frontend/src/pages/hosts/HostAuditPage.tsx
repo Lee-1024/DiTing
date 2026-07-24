@@ -22,6 +22,7 @@ interface DetailFilters {
   severity?: string;
 }
 
+// HostAuditPage 渲染 Host Audit Page 组件。
 export default function HostAuditPage() {
   const [items, setItems] = useState<HostAuditItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -45,6 +46,7 @@ export default function HostAuditPage() {
   const [tablePageSize, setTablePageSize] = useState(10);
   const [form] = Form.useForm();
 
+  // buildQuery 构建 build Query 所需的数据结构。
   function buildQuery(): HostAuditQuery {
     const values = form.getFieldsValue();
     const range = values.timeRange ?? defaultRange;
@@ -56,6 +58,7 @@ export default function HostAuditPage() {
     };
   }
 
+  // load 加载页面所需数据。
   async function load() {
     setLoading(true);
     try {
@@ -66,17 +69,20 @@ export default function HostAuditPage() {
     }
   }
 
+  // resetAndLoad 重置 reset And Load 状态。
   async function resetAndLoad() {
     form.resetFields();
     await Promise.resolve();
     await load();
   }
 
+  // exportHosts 导出或下载 export Hosts 数据。
   async function exportHosts() {
     const blob = await exportHostAudits(buildQuery());
     downloadBlob(blob, 'host-audits.csv');
   }
 
+  // openDetails 打开对应的弹窗或详情视图。
   async function openDetails(item: HostAuditItem) {
     const values = form.getFieldsValue();
     const range = values.timeRange ?? defaultRange;
@@ -131,6 +137,7 @@ export default function HostAuditPage() {
     }
   }
 
+  // loadDetailEvents 加载页面所需数据。
   async function loadDetailEvents(item: HostAuditItem, filters: DetailFilters, nextPage = detailPage, nextPageSize = detailPageSize) {
     const values = form.getFieldsValue();
     const range = values.timeRange ?? defaultRange;
@@ -156,6 +163,7 @@ export default function HostAuditPage() {
     }
   }
 
+  // loadNetworkEvents 加载页面所需数据。
   async function loadNetworkEvents(item: HostAuditItem, target: BehaviorItem) {
     const values = form.getFieldsValue();
     const range = values.timeRange ?? defaultRange;
@@ -179,6 +187,7 @@ export default function HostAuditPage() {
     }
   }
 
+  // loadFileEvents 加载页面所需数据。
   async function loadFileEvents(item: HostAuditItem, target: BehaviorItem) {
     const values = form.getFieldsValue();
     const range = values.timeRange ?? defaultRange;
@@ -200,6 +209,7 @@ export default function HostAuditPage() {
     }
   }
 
+  // exportDetailEvents 导出或下载 export Detail Events 数据。
   async function exportDetailEvents() {
     if (!selected) {
       return;
@@ -503,6 +513,7 @@ export default function HostAuditPage() {
   );
 }
 
+// parseNetworkTarget 解析 parse Network Target 并返回结构化结果。
 function parseNetworkTarget(value: string) {
   if (value.startsWith('[')) {
     const end = value.indexOf(']');
@@ -521,6 +532,7 @@ function parseNetworkTarget(value: string) {
   return { ip: value };
 }
 
+// behaviorColumns 生成 behavior Columns 的展示内容。
 function behaviorColumns(title: string, renderName?: (value: string) => string) {
   return [
     { title, dataIndex: 'name', ellipsis: true, render: (value: string) => renderName ? renderName(value) : value },
@@ -535,6 +547,7 @@ function behaviorColumns(title: string, renderName?: (value: string) => string) 
   }>;
 }
 
+// networkColumns 生成 network Columns 的展示内容。
 function networkColumns() {
   return [
     { title: '时间', dataIndex: 'eventTime', width: 170, render: (value: string) => formatLocalDateTime(value) },
@@ -549,6 +562,7 @@ function networkColumns() {
   ];
 }
 
+// fileColumns 生成 file Columns 的展示内容。
 function fileColumns() {
   return [
     { title: '时间', dataIndex: 'eventTime', width: 170, render: (value: string) => formatLocalDateTime(value) },
@@ -563,6 +577,7 @@ function fileColumns() {
   ];
 }
 
+// riskTimelineColumns 生成 risk Timeline Columns 的展示内容。
 function riskTimelineColumns() {
   return [
     { title: '时间', dataIndex: 'eventTime', width: 170, render: (value: string) => formatLocalDateTime(value) },
@@ -577,6 +592,7 @@ function riskTimelineColumns() {
   ];
 }
 
+// riskTarget 生成 risk Target 的展示内容。
 function riskTarget(record: AuditEvent) {
   if (record.eventType === 'file_access' && record.filePath) {
     return `${record.fileOperation || '访问'} ${record.filePath}`;
@@ -587,6 +603,7 @@ function riskTarget(record: AuditEvent) {
   return <CommandText value={record.cmdline || record.processName || '-'} />;
 }
 
+// formatNetworkTarget 格式化 format Network Target 以便界面展示。
 function formatNetworkTarget(record: AuditEvent) {
   if (!record.dstIp) {
     return '-';
@@ -595,6 +612,7 @@ function formatNetworkTarget(record: AuditEvent) {
   return record.dstPort ? `${ip}:${record.dstPort}` : ip;
 }
 
+// commandColumns 生成 command Columns 的展示内容。
 function commandColumns() {
   return [
     { title: '时间', dataIndex: 'eventTime', width: 190, render: (value: string) => formatLocalDateTime(value) },

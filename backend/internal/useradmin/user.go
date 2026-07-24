@@ -73,6 +73,7 @@ type MemoryRepository struct {
 	nextUserID int
 }
 
+// NewMemoryRepository 创建并初始化 New Memory Repository 实例。
 func NewMemoryRepository() *MemoryRepository {
 	now := time.Now().UTC()
 	return &MemoryRepository{
@@ -88,6 +89,7 @@ func NewMemoryRepository() *MemoryRepository {
 	}
 }
 
+// ListUsers 查询并返回 List Users 列表。
 func (r *MemoryRepository) ListUsers(_ context.Context) ([]User, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -96,6 +98,7 @@ func (r *MemoryRepository) ListUsers(_ context.Context) ([]User, error) {
 	return result, nil
 }
 
+// CreateUser 创建新的 Create User。
 func (r *MemoryRepository) CreateUser(_ context.Context, request CreateUserRequest) (User, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -122,6 +125,7 @@ func (r *MemoryRepository) CreateUser(_ context.Context, request CreateUserReque
 	return user, nil
 }
 
+// UpdateUser 更新指定的 Update User。
 func (r *MemoryRepository) UpdateUser(_ context.Context, id string, request UpdateUserRequest) (User, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -146,6 +150,7 @@ func (r *MemoryRepository) UpdateUser(_ context.Context, id string, request Upda
 	return User{}, ErrNotFound
 }
 
+// ResetPassword 重置 Reset Password。
 func (r *MemoryRepository) ResetPassword(_ context.Context, id string, password string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -158,6 +163,7 @@ func (r *MemoryRepository) ResetPassword(_ context.Context, id string, password 
 	return ErrNotFound
 }
 
+// DeleteUser 删除指定的 Delete User。
 func (r *MemoryRepository) DeleteUser(_ context.Context, id string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -175,6 +181,7 @@ func (r *MemoryRepository) DeleteUser(_ context.Context, id string) error {
 	return ErrNotFound
 }
 
+// ListRoles 查询并返回 List Roles 列表。
 func (r *MemoryRepository) ListRoles(_ context.Context) ([]Role, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -183,6 +190,7 @@ func (r *MemoryRepository) ListRoles(_ context.Context) ([]Role, error) {
 	return result, nil
 }
 
+// usernameExists 处理 username Exists 相关逻辑。
 func (r *MemoryRepository) usernameExists(username string) bool {
 	for _, user := range r.users {
 		if user.Username == username {
@@ -192,6 +200,7 @@ func (r *MemoryRepository) usernameExists(username string) bool {
 	return false
 }
 
+// rolesExist 处理 roles Exist 相关逻辑。
 func (r *MemoryRepository) rolesExist(roles []string) bool {
 	for _, roleName := range normalizeRoles(roles) {
 		found := false
@@ -208,6 +217,7 @@ func (r *MemoryRepository) rolesExist(roles []string) bool {
 	return true
 }
 
+// removesLastAdmin 删除指定的 removes Last Admin。
 func (r *MemoryRepository) removesLastAdmin(user User, nextRoles []string, nextStatus string) bool {
 	if !hasRole(user.Roles, "admin") || user.Status != "active" {
 		return false
@@ -218,10 +228,12 @@ func (r *MemoryRepository) removesLastAdmin(user User, nextRoles []string, nextS
 	return r.activeAdminCount() == 1
 }
 
+// isLastActiveAdmin 判断 is Last Active Admin 是否符合条件。
 func (r *MemoryRepository) isLastActiveAdmin(user User) bool {
 	return user.Status == "active" && hasRole(user.Roles, "admin") && r.activeAdminCount() == 1
 }
 
+// activeAdminCount 处理 active Admin Count 相关逻辑。
 func (r *MemoryRepository) activeAdminCount() int {
 	count := 0
 	for _, user := range r.users {
@@ -232,6 +244,7 @@ func (r *MemoryRepository) activeAdminCount() int {
 	return count
 }
 
+// normalizeStatus 规范化 normalize Status 的默认值和边界值。
 func normalizeStatus(value string) string {
 	if value == "disabled" {
 		return "disabled"
@@ -239,6 +252,7 @@ func normalizeStatus(value string) string {
 	return "active"
 }
 
+// normalizeRoles 规范化 normalize Roles 的默认值和边界值。
 func normalizeRoles(roles []string) []string {
 	if len(roles) == 0 {
 		return []string{"admin"}
@@ -255,6 +269,7 @@ func normalizeRoles(roles []string) []string {
 	return result
 }
 
+// hasRole 判断 has Role 是否符合条件。
 func hasRole(roles []string, target string) bool {
 	for _, role := range roles {
 		if role == target {

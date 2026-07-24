@@ -8,6 +8,7 @@ import { formatLocalDateTime } from '../../utils/time';
 
 const defaultRange = [dayjs().subtract(7, 'day'), dayjs()] as const;
 
+// OperationLogsPage 渲染 Operation Logs Page 组件。
 export default function OperationLogsPage() {
   const [items, setItems] = useState<OperationLog[]>([]);
   const [loading, setLoading] = useState(false);
@@ -17,6 +18,7 @@ export default function OperationLogsPage() {
   const [form] = Form.useForm();
   const requestSeq = useRef(0);
 
+  // buildQuery 构建 build Query 所需的数据结构。
   function buildQuery(nextPage = page, nextPageSize = pageSize, formValues = form.getFieldsValue()): OperationLogQuery {
     const range = formValues.timeRange ?? defaultRange;
     return {
@@ -31,6 +33,7 @@ export default function OperationLogsPage() {
     };
   }
 
+  // load 加载页面所需数据。
   async function load(nextPage = page, nextPageSize = pageSize, formValues = form.getFieldsValue()) {
     const seq = requestSeq.current + 1;
     requestSeq.current = seq;
@@ -51,10 +54,12 @@ export default function OperationLogsPage() {
     }
   }
 
+  // submit 提交当前表单或操作。
   function submit() {
     void load(1, pageSize, form.getFieldsValue());
   }
 
+  // resetAndLoad 重置 reset And Load 状态。
   async function resetAndLoad() {
     form.resetFields();
     await Promise.resolve();

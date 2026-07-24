@@ -11,10 +11,12 @@ type PostgresRepository struct {
 	pool *pgxpool.Pool
 }
 
+// NewPostgresRepository 创建并初始化 New Postgres Repository 实例。
 func NewPostgresRepository(pool *pgxpool.Pool) *PostgresRepository {
 	return &PostgresRepository{pool: pool}
 }
 
+// List 查询并返回 List 列表。
 func (r *PostgresRepository) List(ctx context.Context, now time.Time) ([]Heartbeat, error) {
 	rows, err := r.pool.Query(ctx, `
 SELECT host_id, host_name, input_mode, last_error, last_seen_at, last_event_time, last_write_at, events_written, buffered_events, dropped_events, updated_at
@@ -40,6 +42,7 @@ ORDER BY last_seen_at DESC
 	return items, nil
 }
 
+// Upsert 处理 Upsert 相关逻辑。
 func (r *PostgresRepository) Upsert(ctx context.Context, update HeartbeatUpdate) error {
 	if update.HostID == "" {
 		return nil
@@ -68,6 +71,7 @@ SET host_name = EXCLUDED.host_name,
 	return err
 }
 
+// inputMode 处理 input Mode 相关逻辑。
 func inputMode(value string) string {
 	if value == "" {
 		return "file"

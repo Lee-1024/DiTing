@@ -7,9 +7,11 @@ interface CommandTextProps {
   onView?: () => void;
 }
 
+// CommandText 生成 Command Text 的展示内容。
 export default function CommandText({ value, width = 420, onView }: CommandTextProps) {
   const text = value || '';
 
+  // copy 复制 copy 到剪贴板。
   async function copy() {
     if (!text) {
       return;

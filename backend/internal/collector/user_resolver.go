@@ -21,6 +21,7 @@ type PasswdUserResolver struct {
 	users map[uint32]string
 }
 
+// NewPasswdUserResolver 创建并初始化 New Passwd User Resolver 实例。
 func NewPasswdUserResolver(path string) (*PasswdUserResolver, error) {
 	file, err := os.Open(path)
 	if err != nil {
@@ -52,6 +53,7 @@ func NewPasswdUserResolver(path string) (*PasswdUserResolver, error) {
 	return resolver, nil
 }
 
+// Username 处理 Username 相关逻辑。
 func (r *PasswdUserResolver) Username(uid uint32) string {
 	if r == nil {
 		return ""
@@ -64,10 +66,12 @@ type IdentityWriter struct {
 	next     EventWriter
 }
 
+// NewIdentityWriter 创建并初始化 New Identity Writer 实例。
 func NewIdentityWriter(resolver UserResolver, next EventWriter) *IdentityWriter {
 	return &IdentityWriter{resolver: resolver, next: next}
 }
 
+// Write 写入 Write 数据。
 func (w *IdentityWriter) Write(ctx context.Context, events []audit.Event) error {
 	enriched := make([]audit.Event, len(events))
 	unresolvedUsername := 0
@@ -87,6 +91,7 @@ func (w *IdentityWriter) Write(ctx context.Context, events []audit.Event) error 
 	return w.next.Write(ctx, enriched)
 }
 
+// enrich 处理 enrich 相关逻辑。
 func (w *IdentityWriter) enrich(event audit.Event) audit.Event {
 	if w.resolver == nil {
 		return event

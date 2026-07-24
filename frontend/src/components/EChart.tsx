@@ -6,6 +6,7 @@ interface Props {
   height?: number;
 }
 
+// EChart 渲染 EChart 组件。
 export default function EChart({ option, height = 280 }: Props) {
   const ref = useRef<HTMLDivElement>(null);
 
@@ -15,6 +16,7 @@ export default function EChart({ option, height = 280 }: Props) {
     }
     const chart = echarts.init(ref.current);
     chart.setOption(option);
+    // resize 处理 resize 相关逻辑。
     const resize = () => chart.resize();
     window.addEventListener('resize', resize);
     return () => {

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { createHostAsset, deleteHostAsset, listHostAssets, updateHostAsset } from '../../api/hostAssets';
 import type { HostAsset, HostAssetPayload } from '../../types/hostAsset';
 
+// HostAssetsPage 渲染 Host Assets Page 组件。
 export default function HostAssetsPage() {
   const [assets, setAssets] = useState<HostAsset[]>([]);
   const [loading, setLoading] = useState(false);
@@ -13,6 +14,7 @@ export default function HostAssetsPage() {
   const [tablePageSize, setTablePageSize] = useState(10);
   const [form] = Form.useForm();
 
+  // load 加载页面所需数据。
   async function load() {
     setLoading(true);
     try {
@@ -26,6 +28,7 @@ export default function HostAssetsPage() {
     void load();
   }, []);
 
+  // openCreate 打开对应的弹窗或详情视图。
   function openCreate() {
     setEditing(undefined);
     form.setFieldsValue({
@@ -40,12 +43,14 @@ export default function HostAssetsPage() {
     setOpen(true);
   }
 
+  // openEdit 打开对应的弹窗或详情视图。
   function openEdit(asset: HostAsset) {
     setEditing(asset);
     form.setFieldsValue(asset);
     setOpen(true);
   }
 
+  // toPayload 转换 to Payload 的数据结构。
   function toPayload(values: Record<string, unknown>): HostAssetPayload {
     return {
       hostId: String(values.hostId ?? ''),
@@ -60,6 +65,7 @@ export default function HostAssetsPage() {
     };
   }
 
+  // submit 提交当前表单或操作。
   async function submit() {
     const values = await form.validateFields();
     setSaving(true);
@@ -79,6 +85,7 @@ export default function HostAssetsPage() {
     }
   }
 
+  // remove 删除指定的 remove。
   async function remove(asset: HostAsset) {
     await deleteHostAsset(asset.id);
     message.success('主机资产已删除');

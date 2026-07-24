@@ -11,10 +11,12 @@ type PostgresRepository struct {
 	pool *pgxpool.Pool
 }
 
+// NewPostgresRepository 创建并初始化 New Postgres Repository 实例。
 func NewPostgresRepository(pool *pgxpool.Pool) *PostgresRepository {
 	return &PostgresRepository{pool: pool}
 }
 
+// List 查询并返回 List 列表。
 func (r *PostgresRepository) List(ctx context.Context, status string, limit int) ([]Disposition, error) {
 	if limit <= 0 || limit > 500 {
 		limit = 500
@@ -48,6 +50,7 @@ LIMIT $2
 	return items, nil
 }
 
+// ListByEventIDs 查询并返回 List By Event IDs 列表。
 func (r *PostgresRepository) ListByEventIDs(ctx context.Context, eventIDs []string) (map[string]Disposition, error) {
 	result := map[string]Disposition{}
 	if len(eventIDs) == 0 {
@@ -75,6 +78,7 @@ WHERE event_id = ANY($1)
 	return result, nil
 }
 
+// ListByFingerprints 查询并返回 List By Fingerprints 列表。
 func (r *PostgresRepository) ListByFingerprints(ctx context.Context, fingerprints []string) (map[string]Disposition, error) {
 	result := map[string]Disposition{}
 	if len(fingerprints) == 0 {
@@ -107,6 +111,7 @@ ORDER BY updated_at DESC
 	return result, nil
 }
 
+// Upsert 处理 Upsert 相关逻辑。
 func (r *PostgresRepository) Upsert(ctx context.Context, disposition Disposition) (Disposition, error) {
 	status, err := NormalizeStatus(disposition.Status)
 	if err != nil {
@@ -138,6 +143,7 @@ type dispositionScanner interface {
 	Scan(dest ...any) error
 }
 
+// scanDisposition 从查询结果中扫描并组装 scan Disposition。
 func scanDisposition(scanner dispositionScanner) (Disposition, error) {
 	var disposition Disposition
 	var handledAt *time.Time
@@ -156,6 +162,7 @@ func scanDisposition(scanner dispositionScanner) (Disposition, error) {
 	return disposition, nil
 }
 
+// scanDispositionWithScope 从查询结果中扫描并组装 scan Disposition With Scope。
 func scanDispositionWithScope(scanner dispositionScanner) (Disposition, error) {
 	var disposition Disposition
 	var handledAt *time.Time

@@ -52,14 +52,17 @@ type Handler struct {
 	token      string
 }
 
+// NewHandler 创建并初始化 New Handler 实例。
 func NewHandler(repository Repository) *Handler {
 	return &Handler{repository: repository}
 }
 
+// NewHandlerWithToken 创建并初始化 New Handler With Token 实例。
 func NewHandlerWithToken(repository Repository, token string) *Handler {
 	return &Handler{repository: repository, token: strings.TrimSpace(token)}
 }
 
+// List 查询并返回 List 列表。
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	items, err := h.repository.List(r.Context(), time.Now().UTC())
 	if err != nil {
@@ -70,6 +73,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(items)
 }
 
+// Report 处理 Report 相关逻辑。
 func (h *Handler) Report(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -129,6 +133,7 @@ func (h *Handler) Report(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]bool{"accepted": true})
 }
 
+// bearerToken 处理 bearer Token 相关逻辑。
 func bearerToken(header string) string {
 	const prefix = "Bearer "
 	if !strings.HasPrefix(header, prefix) {
@@ -137,6 +142,7 @@ func bearerToken(header string) string {
 	return strings.TrimSpace(strings.TrimPrefix(header, prefix))
 }
 
+// Status 处理 Status 相关逻辑。
 func Status(lastSeenAt time.Time, now time.Time) string {
 	if lastSeenAt.IsZero() || now.Sub(lastSeenAt) > 2*time.Minute {
 		return "offline"
@@ -144,6 +150,7 @@ func Status(lastSeenAt time.Time, now time.Time) string {
 	return "online"
 }
 
+// Enrich 处理 Enrich 相关逻辑。
 func Enrich(item Heartbeat, now time.Time) Heartbeat {
 	item.Status = Status(item.LastSeenAt, now)
 	if item.InputMode == "" {
@@ -191,6 +198,7 @@ func Enrich(item Heartbeat, now time.Time) Heartbeat {
 	return item
 }
 
+// lagSeconds 处理 lag Seconds 相关逻辑。
 func lagSeconds(value time.Time, now time.Time) int64 {
 	if value.IsZero() || now.Before(value) {
 		return 0

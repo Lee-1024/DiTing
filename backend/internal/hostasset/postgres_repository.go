@@ -13,10 +13,12 @@ type PostgresRepository struct {
 	pool *pgxpool.Pool
 }
 
+// NewPostgresRepository 创建并初始化 New Postgres Repository 实例。
 func NewPostgresRepository(pool *pgxpool.Pool) *PostgresRepository {
 	return &PostgresRepository{pool: pool}
 }
 
+// Create 创建新的 Create。
 func (r *PostgresRepository) Create(ctx context.Context, asset HostAsset) (HostAsset, error) {
 	asset = normalizeAsset(asset)
 	row := r.pool.QueryRow(ctx, `
@@ -27,6 +29,7 @@ RETURNING id::text, host_id, host_name, node_name, display_name, host_ip, enviro
 	return scanAsset(row)
 }
 
+// List 查询并返回 List 列表。
 func (r *PostgresRepository) List(ctx context.Context) ([]HostAsset, error) {
 	rows, err := r.pool.Query(ctx, `
 SELECT id::text, host_id, host_name, node_name, display_name, host_ip, environment, owner, department, description, created_at, updated_at
@@ -52,6 +55,7 @@ ORDER BY updated_at DESC
 	return assets, nil
 }
 
+// Get 查询并返回指定的 Get。
 func (r *PostgresRepository) Get(ctx context.Context, id string) (HostAsset, error) {
 	row := r.pool.QueryRow(ctx, `
 SELECT id::text, host_id, host_name, node_name, display_name, host_ip, environment, owner, department, description, created_at, updated_at
@@ -65,6 +69,7 @@ WHERE id = $1
 	return asset, nil
 }
 
+// Update 更新指定的 Update。
 func (r *PostgresRepository) Update(ctx context.Context, id string, asset HostAsset) (HostAsset, error) {
 	asset = normalizeAsset(asset)
 	row := r.pool.QueryRow(ctx, `
@@ -89,6 +94,7 @@ RETURNING id::text, host_id, host_name, node_name, display_name, host_ip, enviro
 	return updated, nil
 }
 
+// Delete 删除指定的 Delete。
 func (r *PostgresRepository) Delete(ctx context.Context, id string) error {
 	commandTag, err := r.pool.Exec(ctx, `DELETE FROM diting_host_assets WHERE id = $1`, id)
 	if err != nil {
@@ -104,6 +110,7 @@ type assetScanner interface {
 	Scan(dest ...any) error
 }
 
+// scanAsset 从查询结果中扫描并组装 scan Asset。
 func scanAsset(scanner assetScanner) (HostAsset, error) {
 	var asset HostAsset
 	var createdAt time.Time
@@ -129,6 +136,7 @@ func scanAsset(scanner assetScanner) (HostAsset, error) {
 	return asset, nil
 }
 
+// mapNotFound 映射 map Not Found 的错误或数据结构。
 func mapNotFound(err error) error {
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrNotFound

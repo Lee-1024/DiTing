@@ -45,6 +45,7 @@ const defaultValues: PolicyFormValues = {
   targetHosts: [],
 };
 
+// TetragonPolicyPage 渲染 Tetragon Policy Page 组件。
 export default function TetragonPolicyPage() {
   const [form] = Form.useForm<PolicyFormValues>();
   const [policies, setPolicies] = useState<EnforcementPolicy[]>([]);
@@ -89,6 +90,7 @@ export default function TetragonPolicyPage() {
     }
   }, [form, mode, template]);
 
+  // loadPolicies 加载页面所需数据。
   async function loadPolicies() {
     setLoading(true);
     try {
@@ -100,6 +102,7 @@ export default function TetragonPolicyPage() {
     }
   }
 
+  // loadDeploymentSummaries 加载页面所需数据。
   async function loadDeploymentSummaries(nextPolicies: EnforcementPolicy[]) {
     const entries = await Promise.all(
       nextPolicies.map(async (item) => [item.id, await listEnforcementDeployments(item.id)] as const),
@@ -107,15 +110,18 @@ export default function TetragonPolicyPage() {
     setDeployments(Object.fromEntries(entries));
   }
 
+  // copyYaml 复制 copy Yaml 到剪贴板。
   async function copyYaml() {
     await navigator.clipboard.writeText(yaml);
     message.success('策略 YAML 已复制');
   }
 
+  // downloadYaml 导出或下载 download Yaml 数据。
   function downloadYaml() {
     downloadContent(name || 'diting-tetragon-policy', yaml);
   }
 
+  // downloadContent 导出或下载 download Content 数据。
   function downloadContent(fileName: string, content: string) {
     const blob = new Blob([content], { type: 'text/yaml;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -126,6 +132,7 @@ export default function TetragonPolicyPage() {
     URL.revokeObjectURL(url);
   }
 
+  // savePolicy 保存或更新 save Policy。
   async function savePolicy() {
     const values = await form.validateFields();
     const payload: EnforcementPolicyPayload = {
@@ -157,6 +164,7 @@ export default function TetragonPolicyPage() {
     }
   }
 
+  // editPolicy 处理 edit Policy 相关逻辑。
   function editPolicy(policy: EnforcementPolicy) {
     setEditing(policy);
     const definition = policy.definition as Partial<PolicyFormValues> | undefined;
@@ -172,23 +180,27 @@ export default function TetragonPolicyPage() {
     });
   }
 
+  // removePolicy 删除指定的 remove Policy。
   async function removePolicy(id: string) {
     await deleteEnforcementPolicy(id);
     message.success('拦截策略已删除');
     await loadPolicies();
   }
 
+  // markDeployment 处理 mark Deployment 相关逻辑。
   async function markDeployment(id: string, status: EnforcementDeploymentStatus, deploymentMessage: string) {
     await updateEnforcementDeployment(id, status, deploymentMessage);
     message.success('部署状态已更新');
     await loadPolicies();
   }
 
+  // loadDeployments 加载页面所需数据。
   async function loadDeployments(policyId: string) {
     const next = await listEnforcementDeployments(policyId);
     setDeployments((current) => ({ ...current, [policyId]: next }));
   }
 
+  // saveHostDeployment 保存或更新 save Host Deployment。
   async function saveHostDeployment(policyId: string) {
     const formValue = deploymentForms[policyId] ?? {};
     if (!formValue.hostId || !formValue.status) {
@@ -206,6 +218,7 @@ export default function TetragonPolicyPage() {
     await loadDeployments(policyId);
   }
 
+  // emergencyDisable 处理 emergency Disable 相关逻辑。
   async function emergencyDisable() {
     const result = await emergencyDisableEnforcementPolicies();
     message.success(`已紧急停用 ${result.disabledCount} 条策略`);
@@ -436,6 +449,7 @@ export default function TetragonPolicyPage() {
   );
 }
 
+// defaultPolicyName 处理 default Policy Name 相关逻辑。
 function defaultPolicyName(template: PolicyTemplate) {
   switch (template) {
     case 'sensitive_file':
@@ -451,6 +465,7 @@ function defaultPolicyName(template: PolicyTemplate) {
   }
 }
 
+// templateLabel 生成 template Label 的展示内容。
 function templateLabel(value: string) {
   switch (value) {
     case 'sensitive_file':
@@ -466,6 +481,7 @@ function templateLabel(value: string) {
   }
 }
 
+// modeTag 生成 mode Tag 的展示内容。
 function modeTag(value: string) {
   switch (value) {
     case 'enforce':
@@ -477,6 +493,7 @@ function modeTag(value: string) {
   }
 }
 
+// deploymentTag 生成 deployment Tag 的展示内容。
 function deploymentTag(value: string) {
   switch (value) {
     case 'deployed':
@@ -490,6 +507,7 @@ function deploymentTag(value: string) {
   }
 }
 
+// deploymentSummary 生成 deployment Summary 的展示内容。
 function deploymentSummary(policy: EnforcementPolicy, deployments: EnforcementDeployment[]) {
   if (!policy.enabled || policy.mode === 'disabled') {
     return <Tag>策略停用</Tag>;
@@ -510,10 +528,12 @@ function deploymentSummary(policy: EnforcementPolicy, deployments: EnforcementDe
   );
 }
 
+// formatTime 格式化 format Time 以便界面展示。
 function formatTime(value: string) {
   return value ? new Date(value).toLocaleString() : '-';
 }
 
+// generatePolicy 处理 generate Policy 相关逻辑。
 function generatePolicy(values: PolicyFormValues) {
   const name = sanitizeName(values.name || 'diting-tetragon-policy');
   if (values.mode === 'disabled' || values.enabled === false) {
@@ -528,6 +548,7 @@ spec:
 ${template}`;
 }
 
+// policyTemplate 处理 policy Template 相关逻辑。
 function policyTemplate(values: PolicyFormValues) {
   switch (values.template) {
     case 'sensitive_file':
@@ -558,7 +579,9 @@ interface UserMatcher {
   values: string[];
 }
 
+// syscallBlock 处理 syscall Block 相关逻辑。
 function syscallBlock(name: string, syscalls: SyscallProbe[], tag: string, values: string[], processNames: string[], user: UserMatcher | null, mode: PolicyMode, operator: 'Prefix' | 'Postfix', returnProbe: boolean) {
+  // matchValues 处理 match Values 相关逻辑。
   const matchValues = (values.filter(Boolean).length ? values.filter(Boolean) : ['']).map((item) => `            - "${escapeYaml(item)}"`).join('\n');
   return `  kprobes:
 ${syscalls.map(({ syscall, argIndex }) => `  - call: "sys_${syscall}"
@@ -580,6 +603,7 @@ ${returnArgBlock(returnProbe)}
 ${matchValues}${matchBinaries(processNames)}${matchUser(user)}${matchActions(mode)}`).join('\n')}`;
 }
 
+// returnArgBlock 处理 return Arg Block 相关逻辑。
 function returnArgBlock(returnProbe: boolean) {
   if (!returnProbe) {
     return '';
@@ -590,7 +614,9 @@ function returnArgBlock(returnProbe: boolean) {
 `;
 }
 
+// kprobeBlock 处理 kprobe Block 相关逻辑。
 function kprobeBlock(name: string, call: string, tag: string, argType: string, paths: string[], processNames: string[], user: UserMatcher | null, mode: PolicyMode) {
+  // values 处理 values 相关逻辑。
   const values = (paths.length ? paths : ['/etc/passwd']).map((path) => `            - "${escapeYaml(path)}"`).join('\n');
   return `  kprobes:
   - call: "${call}"
@@ -614,7 +640,9 @@ ${uidDataBlock(user)}
 ${values}${matchBinaries(processNames)}${matchUser(user)}${matchActions(mode)}`;
 }
 
+// deleteBehaviorBlock 删除指定的 delete Behavior Block。
 function deleteBehaviorBlock(paths: string[], processNames: string[], user: UserMatcher | null) {
+  // values 处理 values 相关逻辑。
   const values = (paths.filter(Boolean).length ? paths.filter(Boolean) : ['/']).map((path) => `            - "${escapeYaml(path)}"`).join('\n');
   return `  kprobes:
   - call: "security_path_unlink"
@@ -651,6 +679,7 @@ ${uidDataBlock(user)}
 ${values}${matchBinaries(processNames)}${matchUser(user)}`;
 }
 
+// matchBinaries 处理 match Binaries 相关逻辑。
 function matchBinaries(processNames: string[]) {
   const values = processNames.filter(Boolean);
   if (values.length === 0) {
@@ -663,6 +692,7 @@ function matchBinaries(processNames: string[]) {
 ${values.map((item) => `        - "${escapeYaml(item)}"`).join('\n')}`;
 }
 
+// uidDataBlock 处理 uid Data Block 相关逻辑。
 function uidDataBlock(user: UserMatcher | null) {
   if (!user) {
     return '';
@@ -674,6 +704,7 @@ function uidDataBlock(user: UserMatcher | null) {
       resolve: "cred.uid.val"`;
 }
 
+// matchUser 处理 match User 相关逻辑。
 function matchUser(user: UserMatcher | null) {
   if (!user) {
     return '';
@@ -686,6 +717,7 @@ function matchUser(user: UserMatcher | null) {
 ${user.values.map((item) => `        - "${escapeYaml(item)}"`).join('\n')}`;
 }
 
+// userMatcher 封装 user Matcher 相关的状态和行为。
 function userMatcher(values: PolicyFormValues): UserMatcher | null {
   if (values.userMatchMode === 'exclude_root') {
     return { operator: 'NotEqual', values: ['0'] };
@@ -697,10 +729,12 @@ function userMatcher(values: PolicyFormValues): UserMatcher | null {
   return null;
 }
 
+// isUserId 处理 is User Id 相关逻辑。
 function isUserId(value: string) {
   return /^\d+$/.test(value.trim());
 }
 
+// matchActions 处理 match Actions 相关逻辑。
 function matchActions(mode: PolicyMode) {
   if (mode !== 'enforce') {
     return '';
@@ -710,10 +744,12 @@ function matchActions(mode: PolicyMode) {
       - action: Sigkill`;
 }
 
+// sanitizeName 处理 sanitize Name 相关逻辑。
 function sanitizeName(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '') || 'diting-tetragon-policy';
 }
 
+// escapeYaml 处理 escape Yaml 相关逻辑。
 function escapeYaml(value: string) {
   return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 }

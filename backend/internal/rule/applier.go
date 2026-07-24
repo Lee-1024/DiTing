@@ -2,6 +2,7 @@ package rule
 
 import "diting/backend/internal/audit"
 
+// ApplyRules 处理 Apply Rules 相关逻辑。
 func ApplyRules(event audit.Event, rules []Rule) audit.Event {
 	for _, candidate := range rules {
 		if !candidate.Enabled {
@@ -33,6 +34,7 @@ func ApplyRules(event audit.Event, rules []Rule) audit.Event {
 	return event
 }
 
+// appendUnique 处理 append Unique 相关逻辑。
 func appendUnique(values []string, value string) []string {
 	if value == "" {
 		return values

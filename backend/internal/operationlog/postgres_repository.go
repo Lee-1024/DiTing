@@ -12,10 +12,12 @@ type PostgresRepository struct {
 	pool *pgxpool.Pool
 }
 
+// NewPostgresRepository 创建并初始化 New Postgres Repository 实例。
 func NewPostgresRepository(pool *pgxpool.Pool) *PostgresRepository {
 	return &PostgresRepository{pool: pool}
 }
 
+// Create 创建新的 Create。
 func (r *PostgresRepository) Create(ctx context.Context, entry Entry) error {
 	_, err := r.pool.Exec(ctx, `
 INSERT INTO diting_operation_logs (id, user_id, username, method, path, status, ip, user_agent, created_at)
@@ -24,6 +26,7 @@ VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, NOW())
 	return err
 }
 
+// List 查询并返回 List 列表。
 func (r *PostgresRepository) List(ctx context.Context, query Query) ([]Entry, int, error) {
 	where, args := buildWhere(query)
 	limit := query.PageSize
@@ -67,6 +70,7 @@ LIMIT $%d OFFSET $%d
 	return items, total, nil
 }
 
+// buildWhere 构建 build Where 所需的数据或表达式。
 func buildWhere(query Query) (string, []any) {
 	conditions := []string{"created_at >= $1", "created_at <= $2"}
 	args := []any{query.StartTime, query.EndTime}

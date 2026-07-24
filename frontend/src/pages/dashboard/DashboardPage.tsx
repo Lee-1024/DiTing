@@ -14,6 +14,7 @@ const emptyOverview: OverviewStats = {
   activeRules: 0,
 };
 
+// DashboardPage 渲染 Dashboard Page 组件。
 export default function DashboardPage() {
   const [overview, setOverview] = useState<OverviewStats>(emptyOverview);
   const [trend, setTrend] = useState<TrendPoint[]>([]);
@@ -23,6 +24,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // load 加载页面所需数据。
   async function load() {
     setLoading(true);
     setError('');
@@ -169,6 +171,7 @@ export default function DashboardPage() {
   );
 }
 
+// topBarOption 转换 top Bar Option 的数据结构。
 function topBarOption(items: TopItem[], color: string): EChartsOption {
   return {
     grid: { left: 112, right: 24, top: 16, bottom: 20 },

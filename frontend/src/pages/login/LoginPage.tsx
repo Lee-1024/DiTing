@@ -5,10 +5,12 @@ import { useNavigate } from 'react-router-dom';
 import { login } from '../../api/auth';
 import { saveSession } from '../../stores/auth';
 
+// LoginPage 渲染 Login Page 组件。
 export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
+  // submit 提交当前表单或操作。
   async function submit(values: { username: string; password: string }) {
     setLoading(true);
     try {

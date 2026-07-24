@@ -36,6 +36,7 @@ type Repository interface {
 
 var ErrInvalidStatus = errors.New("invalid risk status")
 
+// NormalizeStatus 规范化 Normalize Status 的默认值和边界值。
 func NormalizeStatus(status string) (string, error) {
 	switch status {
 	case "", StatusOpen:

@@ -25,6 +25,7 @@ interface FormCondition {
 
 const defaultConditions: FormCondition[] = [{ field: 'cmdline', op: 'contains', conditionValue: 'bash -i' }];
 
+// RulesPage 渲染 Rules Page 组件。
 export default function RulesPage() {
   const [rules, setRules] = useState<AuditRule[]>([]);
   const [loading, setLoading] = useState(false);
@@ -38,6 +39,7 @@ export default function RulesPage() {
   const [form] = Form.useForm<RuleFormValues>();
   const [testForm] = Form.useForm<RuleTestEvent>();
 
+  // load 加载页面所需数据。
   async function load() {
     setLoading(true);
     try {
@@ -51,6 +53,7 @@ export default function RulesPage() {
     void load();
   }, []);
 
+  // openCreate 打开对应的弹窗或详情视图。
   function openCreate() {
     setEditing(undefined);
     form.setFieldsValue({
@@ -68,6 +71,7 @@ export default function RulesPage() {
     setOpen(true);
   }
 
+  // openEdit 打开对应的弹窗或详情视图。
   async function openEdit(rule: AuditRule) {
     const detail = await getRule(rule.id);
     setEditing(detail);
@@ -81,6 +85,7 @@ export default function RulesPage() {
     setOpen(true);
   }
 
+  // toPayload 转换 to Payload 的数据结构。
   function toPayload(values: RuleFormValues): RulePayload {
     return {
       name: values.name,
@@ -94,6 +99,7 @@ export default function RulesPage() {
     };
   }
 
+  // submit 提交当前表单或操作。
   async function submit() {
     const values = await form.validateFields();
     setSaving(true);
@@ -115,17 +121,20 @@ export default function RulesPage() {
     }
   }
 
+  // toggleEnabled 切换 toggle Enabled 状态。
   async function toggleEnabled(rule: AuditRule, enabled: boolean) {
     await updateRule(rule.id, { ...rule, enabled });
     await load();
   }
 
+  // removeRule 删除指定的 remove Rule。
   async function removeRule(rule: AuditRule) {
     await deleteRule(rule.id);
     message.success('规则已删除');
     await load();
   }
 
+  // openTest 打开对应的弹窗或详情视图。
   async function openTest() {
     await form.validateFields();
     const values = form.getFieldsValue();
@@ -147,6 +156,7 @@ export default function RulesPage() {
     setTestOpen(true);
   }
 
+  // submitTest 提交当前表单或操作。
   async function submitTest() {
     const ruleValues = await form.validateFields();
     const eventValues = await testForm.validateFields();
@@ -365,6 +375,7 @@ export default function RulesPage() {
   );
 }
 
+// expressionToForm 处理 expression To Form 相关逻辑。
 function expressionToForm(expression?: RuleExpression): FormCondition[] {
   if (!expression?.conditions?.length) {
     return defaultConditions;
@@ -376,7 +387,9 @@ function expressionToForm(expression?: RuleExpression): FormCondition[] {
   }));
 }
 
+// formToExpression 处理 form To Expression 相关逻辑。
 function formToExpression(values: RuleFormValues): RuleExpression {
+  // conditions 处理 conditions 相关逻辑。
   const conditions = (values.conditions ?? []).map((condition) => {
     const value = String(condition.conditionValue ?? '').trim();
     const next: RuleCondition = {
@@ -393,6 +406,7 @@ function formToExpression(values: RuleFormValues): RuleExpression {
   return { operator: values.operator ?? 'and', conditions };
 }
 
+// expressionSummary 处理 expression Summary 相关逻辑。
 function expressionSummary(expression?: RuleExpression) {
   if (!expression?.conditions?.length) {
     return '-';

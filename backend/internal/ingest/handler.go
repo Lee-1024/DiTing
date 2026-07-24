@@ -19,10 +19,12 @@ type Handler struct {
 	token  string
 }
 
+// NewHandler 创建并初始化 New Handler 实例。
 func NewHandler(writer EventWriter, token string) *Handler {
 	return &Handler{writer: writer, token: strings.TrimSpace(token)}
 }
 
+// IngestEvents 处理 Ingest Events 相关逻辑。
 func (h *Handler) IngestEvents(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -54,6 +56,7 @@ func (h *Handler) IngestEvents(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]int{"accepted": len(events)})
 }
 
+// bearerToken 处理 bearer Token 相关逻辑。
 func bearerToken(header string) string {
 	const prefix = "Bearer "
 	if !strings.HasPrefix(header, prefix) {
@@ -62,6 +65,7 @@ func bearerToken(header string) string {
 	return strings.TrimSpace(strings.TrimPrefix(header, prefix))
 }
 
+// normalizeEvents 规范化 normalize Events 的默认值和边界值。
 func normalizeEvents(events []audit.Event, now time.Time) []audit.Event {
 	normalized := make([]audit.Event, 0, len(events))
 	for _, event := range events {

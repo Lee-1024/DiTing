@@ -31,6 +31,7 @@ type Query struct {
 	PageSize      int
 }
 
+// ParseQuery 解析 Parse Query 并返回结构化结果。
 func ParseQuery(r *http.Request) (Query, error) {
 	values := r.URL.Query()
 	now := time.Now().UTC()
@@ -77,6 +78,7 @@ func ParseQuery(r *http.Request) (Query, error) {
 	return query, nil
 }
 
+// parseCSV 解析 parse CSV 并返回结构化结果。
 func parseCSV(raw string) []string {
 	if raw == "" {
 		return nil
@@ -92,6 +94,7 @@ func parseCSV(raw string) []string {
 	return values
 }
 
+// parsePositiveInt 解析 parse Positive Int 并返回结构化结果。
 func parsePositiveInt(raw string, fallback int) int {
 	if raw == "" {
 		return fallback

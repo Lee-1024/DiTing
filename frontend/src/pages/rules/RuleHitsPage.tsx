@@ -8,12 +8,14 @@ import { formatLocalDateTime } from '../../utils/time';
 
 const defaultRange = [dayjs().subtract(7, 'day'), dayjs()] as const;
 
+// RuleHitsPage 渲染 Rule Hits Page 组件。
 export default function RuleHitsPage() {
   const [items, setItems] = useState<RuleHitItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [tablePageSize, setTablePageSize] = useState(10);
   const [form] = Form.useForm();
 
+  // buildQuery 构建 build Query 所需的数据结构。
   function buildQuery(): RuleHitQuery {
     const values = form.getFieldsValue();
     const range = values.timeRange ?? defaultRange;
@@ -25,6 +27,7 @@ export default function RuleHitsPage() {
     };
   }
 
+  // load 加载页面所需数据。
   async function load() {
     setLoading(true);
     try {
@@ -34,6 +37,7 @@ export default function RuleHitsPage() {
     }
   }
 
+  // resetAndLoad 重置 reset And Load 状态。
   async function resetAndLoad() {
     form.resetFields();
     await Promise.resolve();

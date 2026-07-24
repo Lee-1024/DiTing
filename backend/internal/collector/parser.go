@@ -68,6 +68,7 @@ type imageInfo struct {
 
 var ErrUnsupportedEvent = errors.New("unsupported tetragon event")
 
+// ParseTetragonEvent 解析 Parse Tetragon Event 并返回结构化结果。
 func ParseTetragonEvent(data []byte) (audit.Event, error) {
 	var envelope tetragonEnvelope
 	if err := json.Unmarshal(data, &envelope); err != nil {
@@ -82,6 +83,7 @@ func ParseTetragonEvent(data []byte) (audit.Event, error) {
 	return audit.Event{}, ErrUnsupportedEvent
 }
 
+// parseProcessExec 解析 parse Process Exec 并返回结构化结果。
 func parseProcessExec(envelope tetragonEnvelope, data []byte) (audit.Event, error) {
 	eventTime, err := time.Parse(time.RFC3339Nano, envelope.Time)
 	if err != nil {
@@ -125,6 +127,7 @@ func parseProcessExec(envelope tetragonEnvelope, data []byte) (audit.Event, erro
 	}, nil
 }
 
+// parseProcessExit 解析 parse Process Exit 并返回结构化结果。
 func parseProcessExit(envelope tetragonEnvelope, data []byte) (audit.Event, error) {
 	eventTimeRaw := envelope.ProcessExit.Time
 	if eventTimeRaw == "" {
@@ -167,6 +170,7 @@ func parseProcessExit(envelope tetragonEnvelope, data []byte) (audit.Event, erro
 	}, nil
 }
 
+// joinCmdline 处理 join Cmdline 相关逻辑。
 func joinCmdline(binary, arguments string) string {
 	if arguments == "" {
 		return binary
@@ -177,6 +181,7 @@ func joinCmdline(binary, arguments string) string {
 	return binary + " " + arguments
 }
 
+// processName 处理 process Name 相关逻辑。
 func processName(binary string) string {
 	if binary == "" {
 		return ""
@@ -187,11 +192,13 @@ func processName(binary string) string {
 	return strings.TrimSuffix(filepath.Base(binary), ".exe")
 }
 
+// dateOnly 处理 date Only 相关逻辑。
 func dateOnly(value time.Time) time.Time {
 	year, month, day := value.Date()
 	return time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
 }
 
+// stableID 处理 stable ID 相关逻辑。
 func stableID(data []byte) string {
 	sum := sha1.Sum(data)
 	return hex.EncodeToString(sum[:])

@@ -20,10 +20,12 @@ type emergencyDisableResponse struct {
 	Message       string `json:"message"`
 }
 
+// NewHandler 创建并初始化 New Handler 实例。
 func NewHandler(repository Repository) *Handler {
 	return &Handler{repository: repository}
 }
 
+// Create 创建新的 Create。
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	var request Policy
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
@@ -42,6 +44,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, created)
 }
 
+// List 查询并返回 List 列表。
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	policies, err := h.repository.List(r.Context())
 	if err != nil {
@@ -51,6 +54,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, policies)
 }
 
+// ListForCollector 查询并返回 List For Collector 列表。
 func (h *Handler) ListForCollector(w http.ResponseWriter, r *http.Request) {
 	hostID := r.URL.Query().Get("host_id")
 	if hostID == "" {
@@ -65,6 +69,7 @@ func (h *Handler) ListForCollector(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, policies)
 }
 
+// Get 查询并返回指定的 Get。
 func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	policy, err := h.repository.Get(r.Context(), r.PathValue("id"))
 	if err != nil {
@@ -74,6 +79,7 @@ func (h *Handler) Get(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, policy)
 }
 
+// Update 更新指定的 Update。
 func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	var request Policy
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
@@ -92,6 +98,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, updated)
 }
 
+// Delete 删除指定的 Delete。
 func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	if err := h.repository.Delete(r.Context(), r.PathValue("id")); err != nil {
 		writeError(w, err)
@@ -100,6 +107,7 @@ func (h *Handler) Delete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// UpdateDeployment 更新指定的 Update Deployment。
 func (h *Handler) UpdateDeployment(w http.ResponseWriter, r *http.Request) {
 	var request deploymentRequest
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
@@ -118,6 +126,7 @@ func (h *Handler) UpdateDeployment(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, updated)
 }
 
+// EmergencyDisable 处理 Emergency Disable 相关逻辑。
 func (h *Handler) EmergencyDisable(w http.ResponseWriter, r *http.Request) {
 	message := "紧急停用所有拦截策略"
 	count, err := h.repository.EmergencyDisable(r.Context(), message)
@@ -128,6 +137,7 @@ func (h *Handler) EmergencyDisable(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, emergencyDisableResponse{DisabledCount: count, Message: message})
 }
 
+// UpsertDeployment 处理 Upsert Deployment 相关逻辑。
 func (h *Handler) UpsertDeployment(w http.ResponseWriter, r *http.Request) {
 	var request Deployment
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
@@ -147,6 +157,7 @@ func (h *Handler) UpsertDeployment(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, updated)
 }
 
+// ListDeployments 查询并返回 List Deployments 列表。
 func (h *Handler) ListDeployments(w http.ResponseWriter, r *http.Request) {
 	deployments, err := h.repository.ListHostDeployments(r.Context(), r.PathValue("id"))
 	if err != nil {
@@ -156,10 +167,12 @@ func (h *Handler) ListDeployments(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, deployments)
 }
 
+// validPolicy 校验 valid Policy 是否满足要求。
 func validPolicy(policy Policy) bool {
 	return policy.Name != "" && policy.Template != "" && policy.YAML != ""
 }
 
+// validDeploymentStatus 校验 valid Deployment Status 是否满足要求。
 func validDeploymentStatus(status string) bool {
 	switch status {
 	case "draft", "deployed", "failed", "disabled":
@@ -169,6 +182,7 @@ func validDeploymentStatus(status string) bool {
 	}
 }
 
+// writeError 写入 write Error 数据。
 func writeError(w http.ResponseWriter, err error) {
 	if errors.Is(err, ErrNotFound) {
 		http.Error(w, "enforcement policy not found", http.StatusNotFound)
@@ -177,6 +191,7 @@ func writeError(w http.ResponseWriter, err error) {
 	http.Error(w, err.Error(), http.StatusInternalServerError)
 }
 
+// writeJSON 写入 write JSON 数据。
 func writeJSON(w http.ResponseWriter, status int, value any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)

@@ -13,10 +13,12 @@ type Handler struct {
 	repository Repository
 }
 
+// NewHandler 创建并初始化 New Handler 实例。
 func NewHandler(repository Repository) *Handler {
 	return &Handler{repository: repository}
 }
 
+// List 查询并返回 List 列表。
 func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	status := r.URL.Query().Get("status")
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
@@ -33,6 +35,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]any{"items": items})
 }
 
+// BatchGet 处理 Batch Get 相关逻辑。
 func (h *Handler) BatchGet(w http.ResponseWriter, r *http.Request) {
 	var request struct {
 		EventIDs []string `json:"eventIds"`
@@ -77,6 +80,7 @@ func (h *Handler) BatchGet(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(result)
 }
 
+// Upsert 处理 Upsert 相关逻辑。
 func (h *Handler) Upsert(w http.ResponseWriter, r *http.Request) {
 	var request struct {
 		Status      string `json:"status"`

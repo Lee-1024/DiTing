@@ -26,6 +26,7 @@ interface DistributionItem {
   highRiskEvents: number;
 }
 
+// UserAuditPage 封装 User Audit Page 相关的状态和行为。
 export default function UserAuditPage() {
   const [items, setItems] = useState<UserAuditItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -42,6 +43,7 @@ export default function UserAuditPage() {
   const [tablePageSize, setTablePageSize] = useState(10);
   const [form] = Form.useForm();
 
+  // buildQuery 构建 build Query 所需的数据结构。
   function buildQuery(): UserAuditQuery {
     const values = form.getFieldsValue();
     const range = values.timeRange ?? defaultRange;
@@ -54,6 +56,7 @@ export default function UserAuditPage() {
     };
   }
 
+  // load 加载页面所需数据。
   async function load() {
     setLoading(true);
     try {
@@ -63,12 +66,14 @@ export default function UserAuditPage() {
     }
   }
 
+  // resetAndLoad 重置 reset And Load 状态。
   async function resetAndLoad() {
     form.resetFields();
     await Promise.resolve();
     await load();
   }
 
+  // openDetails 打开对应的弹窗或详情视图。
   async function openDetails(item: UserAuditItem) {
     const values = form.getFieldsValue();
     const range = values.timeRange ?? defaultRange;
@@ -112,6 +117,7 @@ export default function UserAuditPage() {
     }
   }
 
+  // loadDetailEvents 加载页面所需数据。
   async function loadDetailEvents(item: UserAuditItem, filters: DetailFilters, nextPage = detailPage, nextPageSize = detailPageSize) {
     const values = form.getFieldsValue();
     const range = values.timeRange ?? defaultRange;
@@ -137,6 +143,7 @@ export default function UserAuditPage() {
     }
   }
 
+  // exportDetails 导出或下载 export Details 数据。
   async function exportDetails() {
     if (!selected) {
       return;
@@ -155,6 +162,7 @@ export default function UserAuditPage() {
     downloadBlob(blob, `${selected.username || 'user'}-commands.csv`);
   }
 
+  // closeDetails 关闭当前弹窗或详情视图。
   function closeDetails() {
     setSelected(undefined);
     setEvents([]);
@@ -166,6 +174,7 @@ export default function UserAuditPage() {
     setDetailTotal(0);
   }
 
+  // detailColumns 处理 detail Columns 相关逻辑。
   function detailColumns() {
     return [
       { title: '时间', dataIndex: 'eventTime', width: 190, render: (value: string) => formatLocalDateTime(value) },
@@ -348,14 +357,17 @@ export default function UserAuditPage() {
   );
 }
 
+// buildHostDistribution 构建 build Host Distribution 所需的数据结构。
 function buildHostDistribution(events: AuditEvent[]) {
   return topDistribution(events, (event) => event.hostName || event.nodeName || event.hostId || '-');
 }
 
+// buildCommandDistribution 构建 build Command Distribution 所需的数据结构。
 function buildCommandDistribution(events: AuditEvent[]) {
   return topDistribution(events, (event) => event.cmdline || event.processName || '-');
 }
 
+// topDistribution 转换 top Distribution 的数据结构。
 function topDistribution(events: AuditEvent[], keyOf: (event: AuditEvent) => string) {
   const byKey = new Map<string, DistributionItem>();
   for (const event of events) {

@@ -5,11 +5,13 @@ import { getCollectorFilterConfig, saveCollectorFilterConfig } from '../../api/s
 import type { CollectorFilterConfig } from '../../types/systemConfig';
 import { severityOptions } from '../../utils/labels';
 
+// CollectorConfigPage 渲染 Collector Config Page 组件。
 export default function CollectorConfigPage() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form] = Form.useForm<CollectorFilterConfig>();
 
+  // load 加载页面所需数据。
   async function load() {
     setLoading(true);
     try {
@@ -23,6 +25,7 @@ export default function CollectorConfigPage() {
     void load();
   }, []);
 
+  // submit 提交当前表单或操作。
   async function submit() {
     const values = await form.validateFields();
     setSaving(true);

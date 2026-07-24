@@ -20,10 +20,12 @@ type Condition struct {
 	Values []string `json:"values"`
 }
 
+// Match 处理 Match 相关逻辑。
 func Match(expr Expression, event audit.Event) bool {
 	return len(MatchConditions(expr, event)) > 0
 }
 
+// MatchConditions 处理 Match Conditions 相关逻辑。
 func MatchConditions(expr Expression, event audit.Event) []audit.RuleMatch {
 	if len(expr.Conditions) == 0 {
 		return nil
@@ -54,6 +56,7 @@ func MatchConditions(expr Expression, event audit.Event) []audit.RuleMatch {
 	return matches
 }
 
+// conditionMatch 处理 condition Match 相关逻辑。
 func conditionMatch(condition Condition, actual string) audit.RuleMatch {
 	return audit.RuleMatch{
 		Field:    condition.Field,
@@ -63,6 +66,7 @@ func conditionMatch(condition Condition, actual string) audit.RuleMatch {
 	}
 }
 
+// conditionValue 处理 condition Value 相关逻辑。
 func conditionValue(condition Condition) string {
 	if len(condition.Values) > 0 {
 		return strings.Join(condition.Values, ",")
@@ -70,6 +74,7 @@ func conditionValue(condition Condition) string {
 	return condition.Value
 }
 
+// matchCondition 处理 match Condition 相关逻辑。
 func matchCondition(condition Condition, event audit.Event) (bool, string) {
 	actual := fieldValue(condition.Field, event)
 	switch strings.ToLower(condition.Op) {
@@ -98,6 +103,7 @@ func matchCondition(condition Condition, event audit.Event) (bool, string) {
 	}
 }
 
+// fieldValue 处理 field Value 相关逻辑。
 func fieldValue(field string, event audit.Event) string {
 	switch field {
 	case "event_type":

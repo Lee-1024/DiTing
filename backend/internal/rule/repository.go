@@ -39,10 +39,12 @@ type MemoryRepository struct {
 	next  int
 }
 
+// NewMemoryRepository 创建并初始化 New Memory Repository 实例。
 func NewMemoryRepository() *MemoryRepository {
 	return &MemoryRepository{next: 1, rules: []Rule{}}
 }
 
+// Create 创建新的 Create。
 func (r *MemoryRepository) Create(_ context.Context, rule Rule) (Rule, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -59,6 +61,7 @@ func (r *MemoryRepository) Create(_ context.Context, rule Rule) (Rule, error) {
 	return rule, nil
 }
 
+// List 查询并返回 List 列表。
 func (r *MemoryRepository) List(_ context.Context) ([]Rule, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -68,6 +71,7 @@ func (r *MemoryRepository) List(_ context.Context) ([]Rule, error) {
 	return result, nil
 }
 
+// Get 查询并返回指定的 Get。
 func (r *MemoryRepository) Get(_ context.Context, id string) (Rule, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -80,6 +84,7 @@ func (r *MemoryRepository) Get(_ context.Context, id string) (Rule, error) {
 	return Rule{}, ErrNotFound
 }
 
+// Update 更新指定的 Update。
 func (r *MemoryRepository) Update(_ context.Context, id string, next Rule) (Rule, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -97,6 +102,7 @@ func (r *MemoryRepository) Update(_ context.Context, id string, next Rule) (Rule
 	return Rule{}, ErrNotFound
 }
 
+// Delete 删除指定的 Delete。
 func (r *MemoryRepository) Delete(_ context.Context, id string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -111,6 +117,7 @@ func (r *MemoryRepository) Delete(_ context.Context, id string) error {
 	return ErrNotFound
 }
 
+// CountEnabledRules 处理 Count Enabled Rules 相关逻辑。
 func (r *MemoryRepository) CountEnabledRules(_ context.Context) (uint64, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()

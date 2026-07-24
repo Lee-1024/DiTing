@@ -21,10 +21,12 @@ type StatsRepository struct {
 	ruleCounter RuleCounter
 }
 
+// NewStatsRepository 创建并初始化 New Stats Repository 实例。
 func NewStatsRepository(client *HTTPClient, ruleCounter RuleCounter) *StatsRepository {
 	return &StatsRepository{client: client, ruleCounter: ruleCounter}
 }
 
+// Overview 处理 Overview 相关逻辑。
 func (r *StatsRepository) Overview(ctx context.Context, query stats.Query) (stats.Overview, error) {
 	sql := fmt.Sprintf(`SELECT
 	count() AS total_events,
@@ -64,6 +66,7 @@ FORMAT JSONEachRow`, r.table(), statsWhere(query))
 
 type flexibleUint64 uint64
 
+// UnmarshalJSON 处理 Unmarshal JSON 相关逻辑。
 func (v *flexibleUint64) UnmarshalJSON(data []byte) error {
 	raw := strings.Trim(string(data), `"`)
 	if raw == "" || raw == "null" {
@@ -78,6 +81,7 @@ func (v *flexibleUint64) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// EventTrend 处理 Event Trend 相关逻辑。
 func (r *StatsRepository) EventTrend(ctx context.Context, query stats.Query) ([]stats.TrendPoint, error) {
 	sql := fmt.Sprintf(`SELECT
 	formatDateTime(toStartOfHour(toTimeZone(event_time, 'Asia/Shanghai')), '%%Y-%%m-%%d %%H:00:00') AS time,
@@ -102,6 +106,7 @@ FORMAT JSONEachRow`, r.table(), statsWhere(query))
 	return points, nil
 }
 
+// TopCommands 处理 Top Commands 相关逻辑。
 func (r *StatsRepository) TopCommands(ctx context.Context, query stats.Query) ([]stats.TopItem, error) {
 	limit := query.Limit
 	if limit <= 0 {
@@ -131,6 +136,7 @@ FORMAT JSONEachRow`, r.table(), statsWhere(query), limit)
 	return items, nil
 }
 
+// TopHosts 处理 Top Hosts 相关逻辑。
 func (r *StatsRepository) TopHosts(ctx context.Context, query stats.Query) ([]stats.TopItem, error) {
 	limit := query.Limit
 	if limit <= 0 {
@@ -148,6 +154,7 @@ FORMAT JSONEachRow`, r.table(), statsWhere(query), limit)
 	return r.topItems(ctx, sql)
 }
 
+// TopNamespaces 处理 Top Namespaces 相关逻辑。
 func (r *StatsRepository) TopNamespaces(ctx context.Context, query stats.Query) ([]stats.TopItem, error) {
 	limit := query.Limit
 	if limit <= 0 {
@@ -165,6 +172,7 @@ FORMAT JSONEachRow`, r.table(), statsWhere(query), limit)
 	return r.topItems(ctx, sql)
 }
 
+// topItems 处理 top Items 相关逻辑。
 func (r *StatsRepository) topItems(ctx context.Context, sql string) ([]stats.TopItem, error) {
 	data, err := r.client.Query(ctx, sql)
 	if err != nil {
@@ -181,6 +189,7 @@ func (r *StatsRepository) topItems(ctx context.Context, sql string) ([]stats.Top
 	return items, nil
 }
 
+// CommandStats 处理 Command Stats 相关逻辑。
 func (r *StatsRepository) CommandStats(ctx context.Context, query stats.Query) ([]stats.CommandItem, error) {
 	limit := query.Limit
 	if limit <= 0 {
@@ -249,6 +258,7 @@ FORMAT JSONEachRow`, r.table(), strings.Join(conditions, " AND "), limit)
 	return items, nil
 }
 
+// UserAudits 处理 User Audits 相关逻辑。
 func (r *StatsRepository) UserAudits(ctx context.Context, query stats.Query) ([]stats.UserAuditItem, error) {
 	limit := query.Limit
 	if limit <= 0 {
@@ -314,6 +324,7 @@ FORMAT JSONEachRow`, r.table(), statsWhere(query), strings.Join(conditions[1:], 
 	return items, nil
 }
 
+// HostAudits 处理 Host Audits 相关逻辑。
 func (r *StatsRepository) HostAudits(ctx context.Context, query stats.Query) ([]stats.HostAuditItem, error) {
 	limit := query.Limit
 	if limit <= 0 {
@@ -378,6 +389,7 @@ FORMAT JSONEachRow`, r.table(), statsWhere(query), strings.Join(conditions, " AN
 	return items, nil
 }
 
+// HostUsers 处理 Host Users 相关逻辑。
 func (r *StatsRepository) HostUsers(ctx context.Context, query stats.Query) ([]stats.HostUserItem, error) {
 	limit := query.Limit
 	if limit <= 0 {
@@ -433,6 +445,7 @@ FORMAT JSONEachRow`, r.table(), statsWhere(query), strings.Join(conditions, " AN
 	return items, nil
 }
 
+// HostBehavior 处理 Host Behavior 相关逻辑。
 func (r *StatsRepository) HostBehavior(ctx context.Context, query stats.Query) (stats.HostBehavior, error) {
 	limit := query.Limit
 	if limit <= 0 {
@@ -511,6 +524,7 @@ FORMAT JSONEachRow`, r.table(), statsWhere(query), hostFilter, limit)
 	return stats.HostBehavior{FilePaths: filePaths, Network: network, EventTypes: eventTypes, RuleHits: ruleHits}, nil
 }
 
+// behaviorItems 处理 behavior Items 相关逻辑。
 func (r *StatsRepository) behaviorItems(ctx context.Context, sql string) ([]stats.BehaviorItem, error) {
 	data, err := r.client.Query(ctx, sql)
 	if err != nil {
@@ -532,6 +546,7 @@ func (r *StatsRepository) behaviorItems(ctx context.Context, sql string) ([]stat
 	return items, nil
 }
 
+// RuleHits 处理 Rule Hits 相关逻辑。
 func (r *StatsRepository) RuleHits(ctx context.Context, query stats.Query) ([]stats.RuleHitItem, error) {
 	limit := query.Limit
 	if limit <= 0 {
@@ -611,6 +626,7 @@ type commandItemRow struct {
 	LastSeen      string         `json:"last_seen"`
 }
 
+// commandCount 处理 command Count 相关逻辑。
 func (r commandItemRow) commandCount() uint64 {
 	if r.CommandCount != 0 {
 		return uint64(r.CommandCount)
@@ -662,6 +678,7 @@ type ruleHitRow struct {
 	LastSeen    string         `json:"last_seen"`
 }
 
+// table 处理 table 相关逻辑。
 func (r *StatsRepository) table() string {
 	if r.client.config.Database == "" {
 		return "audit_events"
@@ -669,6 +686,7 @@ func (r *StatsRepository) table() string {
 	return r.client.config.Database + ".audit_events"
 }
 
+// statsWhere 处理 stats Where 相关逻辑。
 func statsWhere(query stats.Query) string {
 	return fmt.Sprintf("event_time >= parseDateTime64BestEffort('%s', 3) AND event_time <= parseDateTime64BestEffort('%s', 3)",
 		formatDateTime64(query.StartTime),
@@ -676,6 +694,7 @@ func statsWhere(query stats.Query) string {
 	)
 }
 
+// firstJSONRow 处理 first JSONRow 相关逻辑。
 func firstJSONRow(data []byte, value any) error {
 	scanner := bufio.NewScanner(bytes.NewReader(data))
 	for scanner.Scan() {

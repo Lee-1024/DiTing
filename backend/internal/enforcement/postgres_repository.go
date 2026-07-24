@@ -13,10 +13,12 @@ type PostgresRepository struct {
 	pool *pgxpool.Pool
 }
 
+// NewPostgresRepository 创建并初始化 New Postgres Repository 实例。
 func NewPostgresRepository(pool *pgxpool.Pool) *PostgresRepository {
 	return &PostgresRepository{pool: pool}
 }
 
+// Create 创建新的 Create。
 func (r *PostgresRepository) Create(ctx context.Context, policy Policy) (Policy, error) {
 	policy = normalize(policy)
 	row := r.pool.QueryRow(ctx, `
@@ -30,6 +32,7 @@ RETURNING id::text, name, description, template, mode, enabled, target_hosts, de
 	return scanPolicy(row)
 }
 
+// List 查询并返回 List 列表。
 func (r *PostgresRepository) List(ctx context.Context) ([]Policy, error) {
 	rows, err := r.pool.Query(ctx, `
 SELECT id::text, name, description, template, mode, enabled, target_hosts, definition, yaml, deployment_status, deployment_message, deployed_at, created_at, updated_at
@@ -55,6 +58,7 @@ ORDER BY updated_at DESC
 	return policies, nil
 }
 
+// ListForHost 查询并返回 List For Host 列表。
 func (r *PostgresRepository) ListForHost(ctx context.Context, hostID string) ([]Policy, error) {
 	rows, err := r.pool.Query(ctx, `
 SELECT id::text, name, description, template, mode, enabled, target_hosts, definition, yaml, deployment_status, deployment_message, deployed_at, created_at, updated_at
@@ -83,6 +87,7 @@ ORDER BY updated_at DESC
 	return policies, nil
 }
 
+// Get 查询并返回指定的 Get。
 func (r *PostgresRepository) Get(ctx context.Context, id string) (Policy, error) {
 	row := r.pool.QueryRow(ctx, `
 SELECT id::text, name, description, template, mode, enabled, target_hosts, definition, yaml, deployment_status, deployment_message, deployed_at, created_at, updated_at
@@ -96,6 +101,7 @@ WHERE id = $1
 	return policy, nil
 }
 
+// Update 更新指定的 Update。
 func (r *PostgresRepository) Update(ctx context.Context, id string, policy Policy) (Policy, error) {
 	policy = normalize(policy)
 	row := r.pool.QueryRow(ctx, `
@@ -121,6 +127,7 @@ RETURNING id::text, name, description, template, mode, enabled, target_hosts, de
 	return updated, nil
 }
 
+// Delete 删除指定的 Delete。
 func (r *PostgresRepository) Delete(ctx context.Context, id string) error {
 	commandTag, err := r.pool.Exec(ctx, `DELETE FROM diting_enforcement_policies WHERE id = $1`, id)
 	if err != nil {
@@ -132,6 +139,7 @@ func (r *PostgresRepository) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
+// UpdateDeployment 更新指定的 Update Deployment。
 func (r *PostgresRepository) UpdateDeployment(ctx context.Context, id string, status string, message string) (Policy, error) {
 	row := r.pool.QueryRow(ctx, `
 UPDATE diting_enforcement_policies
@@ -149,6 +157,7 @@ RETURNING id::text, name, description, template, mode, enabled, target_hosts, de
 	return updated, nil
 }
 
+// EmergencyDisable 处理 Emergency Disable 相关逻辑。
 func (r *PostgresRepository) EmergencyDisable(ctx context.Context, message string) (int, error) {
 	commandTag, err := r.pool.Exec(ctx, `
 UPDATE diting_enforcement_policies
@@ -165,6 +174,7 @@ WHERE enabled = TRUE OR mode <> 'disabled' OR deployment_status <> 'disabled'
 	return int(commandTag.RowsAffected()), nil
 }
 
+// UpsertHostDeployment 处理 Upsert Host Deployment 相关逻辑。
 func (r *PostgresRepository) UpsertHostDeployment(ctx context.Context, deployment Deployment) (Deployment, error) {
 	deployment.Status = normalizeDeploymentStatus(deployment.Status)
 	row := r.pool.QueryRow(ctx, `
@@ -191,6 +201,7 @@ RETURNING id::text, policy_id::text, host_id, host_name, status, message, deploy
 	return result, nil
 }
 
+// ListHostDeployments 查询并返回 List Host Deployments 列表。
 func (r *PostgresRepository) ListHostDeployments(ctx context.Context, policyID string) ([]Deployment, error) {
 	rows, err := r.pool.Query(ctx, `
 SELECT id::text, policy_id::text, host_id, host_name, status, message, deployed_at, updated_at
@@ -226,6 +237,7 @@ type policyScanner interface {
 	Scan(dest ...any) error
 }
 
+// scanPolicy 从查询结果中扫描并组装 scan Policy。
 func scanPolicy(scanner policyScanner) (Policy, error) {
 	var policy Policy
 	var createdAt time.Time
@@ -255,6 +267,7 @@ func scanPolicy(scanner policyScanner) (Policy, error) {
 	return policy, nil
 }
 
+// scanDeployment 从查询结果中扫描并组装 scan Deployment。
 func scanDeployment(scanner policyScanner) (Deployment, error) {
 	var deployment Deployment
 	var updatedAt time.Time
@@ -276,6 +289,7 @@ func scanDeployment(scanner policyScanner) (Deployment, error) {
 	return deployment, nil
 }
 
+// mapNotFound 映射 map Not Found 的错误或数据结构。
 func mapNotFound(err error) error {
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrNotFound

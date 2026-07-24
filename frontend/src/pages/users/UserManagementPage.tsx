@@ -14,6 +14,7 @@ type UserFormValues = {
   roles: string[];
 };
 
+// UserManagementPage 封装 User Management Page 相关的状态和行为。
 export default function UserManagementPage() {
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
@@ -27,6 +28,7 @@ export default function UserManagementPage() {
   const [form] = Form.useForm<UserFormValues>();
   const [passwordForm] = Form.useForm<{ password: string }>();
 
+  // load 加载页面所需数据。
   async function load() {
     setLoading(true);
     try {
@@ -42,6 +44,7 @@ export default function UserManagementPage() {
     void load();
   }, []);
 
+  // openCreate 打开对应的弹窗或详情视图。
   function openCreate() {
     setEditing(undefined);
     form.setFieldsValue({
@@ -55,6 +58,7 @@ export default function UserManagementPage() {
     setOpen(true);
   }
 
+  // openEdit 打开对应的弹窗或详情视图。
   function openEdit(user: ManagedUser) {
     setEditing(user);
     form.setFieldsValue({
@@ -67,6 +71,7 @@ export default function UserManagementPage() {
     setOpen(true);
   }
 
+  // submit 提交当前表单或操作。
   async function submit() {
     const values = await form.validateFields();
     setSaving(true);
@@ -97,12 +102,14 @@ export default function UserManagementPage() {
     }
   }
 
+  // openResetPassword 打开对应的弹窗或详情视图。
   function openResetPassword(user: ManagedUser) {
     setPasswordUser(user);
     passwordForm.resetFields();
     setPasswordOpen(true);
   }
 
+  // submitPassword 提交当前表单或操作。
   async function submitPassword() {
     if (!passwordUser) {
       return;
@@ -118,6 +125,7 @@ export default function UserManagementPage() {
     }
   }
 
+  // remove 删除指定的 remove。
   async function remove(user: ManagedUser) {
     await deleteUser(user.id);
     message.success('用户已删除');

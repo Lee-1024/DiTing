@@ -16,10 +16,12 @@ type AuditRepository struct {
 	client *HTTPClient
 }
 
+// NewAuditRepository 创建并初始化 New Audit Repository 实例。
 func NewAuditRepository(client *HTTPClient) *AuditRepository {
 	return &AuditRepository{client: client}
 }
 
+// ListEvents 查询并返回 List Events 列表。
 func (r *AuditRepository) ListEvents(ctx context.Context, query audit.Query) ([]audit.Event, int, error) {
 	sql := buildListEventsSQL(r.client.config.Database, query)
 	data, err := r.client.Query(ctx, sql)
@@ -51,6 +53,7 @@ func (r *AuditRepository) ListEvents(ctx context.Context, query audit.Query) ([]
 	return events, total, nil
 }
 
+// GetEvent 查询并返回指定的 Get Event。
 func (r *AuditRepository) GetEvent(ctx context.Context, eventID string) (audit.Event, error) {
 	sql := buildGetEventSQL(r.client.config.Database, eventID)
 	data, err := r.client.Query(ctx, sql)
@@ -70,6 +73,7 @@ func (r *AuditRepository) GetEvent(ctx context.Context, eventID string) (audit.E
 	return audit.Event{}, audit.ErrNotFound
 }
 
+// countEvents 处理 count Events 相关逻辑。
 func (r *AuditRepository) countEvents(ctx context.Context, query audit.Query) (int, error) {
 	sql := buildCountEventsSQL(r.client.config.Database, query)
 	data, err := r.client.Query(ctx, sql)
@@ -85,6 +89,7 @@ func (r *AuditRepository) countEvents(ctx context.Context, query audit.Query) (i
 	return int(row.Total), nil
 }
 
+// auditTable 处理 audit Table 相关逻辑。
 func auditTable(database string) string {
 	table := "audit_events"
 	if database != "" {
@@ -93,6 +98,7 @@ func auditTable(database string) string {
 	return table
 }
 
+// buildListEventsSQL 构建 build List Events SQL 所需的数据或表达式。
 func buildListEventsSQL(database string, query audit.Query) string {
 	table := auditTable(database)
 	limit := query.PageSize
@@ -113,6 +119,7 @@ LIMIT %d OFFSET %d
 FORMAT JSONEachRow`, auditEventListSelectFields(), table, where, limit, offset)
 }
 
+// buildGetEventSQL 构建 build Get Event SQL 所需的数据或表达式。
 func buildGetEventSQL(database string, eventID string) string {
 	return fmt.Sprintf(`SELECT %s
 FROM %s
@@ -121,14 +128,17 @@ LIMIT 1
 FORMAT JSONEachRow`, auditEventSelectFields(), auditTable(database), escapeSQL(eventID))
 }
 
+// auditEventSelectFields 处理 audit Event Select Fields 相关逻辑。
 func auditEventSelectFields() string {
 	return "event_id, event_time, event_type, severity, risk_score, host_name, host_id, node_name, namespace, pod_name, username, uid, gid, auid, euid, egid, login_username, process_name, binary_path, cmdline, cwd, parent_process_name, parent_binary_path, parent_cmdline, file_path, file_operation, src_ip, src_port, dst_ip, dst_port, protocol, domain, tags, rule_ids, rule_names, rule_matches, raw_event"
 }
 
+// auditEventListSelectFields 处理 audit Event List Select Fields 相关逻辑。
 func auditEventListSelectFields() string {
 	return "event_id, event_time, event_type, severity, risk_score, host_name, host_id, node_name, namespace, pod_name, username, uid, gid, auid, euid, egid, login_username, process_name, binary_path, cmdline, cwd, parent_process_name, parent_binary_path, parent_cmdline, file_path, file_operation, src_ip, src_port, dst_ip, dst_port, protocol, domain, tags, rule_ids, rule_names, '' AS rule_matches, '' AS raw_event"
 }
 
+// buildCountEventsSQL 构建 build Count Events SQL 所需的数据或表达式。
 func buildCountEventsSQL(database string, query audit.Query) string {
 	return fmt.Sprintf(`SELECT count() AS total
 FROM %s
@@ -136,6 +146,7 @@ WHERE %s
 FORMAT JSONEachRow`, auditTable(database), buildAuditWhere(query))
 }
 
+// buildAuditWhere 构建 build Audit Where 所需的数据或表达式。
 func buildAuditWhere(query audit.Query) string {
 	conditions := []string{
 		fmt.Sprintf("event_time >= parseDateTime64BestEffort('%s', 3)", query.StartTime.Format(time.RFC3339Nano)),
@@ -203,6 +214,7 @@ func buildAuditWhere(query audit.Query) string {
 	return strings.Join(conditions, " AND ")
 }
 
+// eventMatchesQuery 处理 event Matches Query 相关逻辑。
 func eventMatchesQuery(event audit.Event, query audit.Query) bool {
 	if query.EventType != "" && event.EventType != query.EventType {
 		return false
@@ -285,6 +297,7 @@ func eventMatchesQuery(event audit.Event, query audit.Query) bool {
 	return true
 }
 
+// hasString 判断 has String 是否符合条件。
 func hasString(values []string, expected string) bool {
 	for _, value := range values {
 		if value == expected {
@@ -294,6 +307,7 @@ func hasString(values []string, expected string) bool {
 	return false
 }
 
+// escapeSQL 处理 escape SQL 相关逻辑。
 func escapeSQL(value string) string {
 	return strings.ReplaceAll(value, "'", "''")
 }
@@ -338,6 +352,7 @@ type eventRow struct {
 	RawEvent          string   `json:"raw_event"`
 }
 
+// decodeEventRow 处理 decode Event Row 相关逻辑。
 func decodeEventRow(data []byte) (audit.Event, error) {
 	var row eventRow
 	if err := json.Unmarshal(data, &row); err != nil {

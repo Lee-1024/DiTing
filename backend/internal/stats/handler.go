@@ -13,40 +13,48 @@ type Handler struct {
 	repository Repository
 }
 
+// NewHandler 创建并初始化 New Handler 实例。
 func NewHandler(repository Repository) *Handler {
 	return &Handler{repository: repository}
 }
 
+// Overview 处理 Overview 相关逻辑。
 func (h *Handler) Overview(w http.ResponseWriter, r *http.Request) {
 	result, err := h.repository.Overview(r.Context(), parseQuery(r))
 	writeJSON(w, result, err)
 }
 
+// EventTrend 处理 Event Trend 相关逻辑。
 func (h *Handler) EventTrend(w http.ResponseWriter, r *http.Request) {
 	result, err := h.repository.EventTrend(r.Context(), parseQuery(r))
 	writeJSON(w, result, err)
 }
 
+// TopCommands 处理 Top Commands 相关逻辑。
 func (h *Handler) TopCommands(w http.ResponseWriter, r *http.Request) {
 	result, err := h.repository.TopCommands(r.Context(), parseQuery(r))
 	writeJSON(w, result, err)
 }
 
+// TopHosts 处理 Top Hosts 相关逻辑。
 func (h *Handler) TopHosts(w http.ResponseWriter, r *http.Request) {
 	result, err := h.repository.TopHosts(r.Context(), parseQuery(r))
 	writeJSON(w, result, err)
 }
 
+// TopNamespaces 处理 Top Namespaces 相关逻辑。
 func (h *Handler) TopNamespaces(w http.ResponseWriter, r *http.Request) {
 	result, err := h.repository.TopNamespaces(r.Context(), parseQuery(r))
 	writeJSON(w, result, err)
 }
 
+// CommandStats 处理 Command Stats 相关逻辑。
 func (h *Handler) CommandStats(w http.ResponseWriter, r *http.Request) {
 	result, err := h.repository.CommandStats(r.Context(), parseQuery(r))
 	writeJSON(w, result, err)
 }
 
+// ExportCommandStats 处理 Export Command Stats 相关逻辑。
 func (h *Handler) ExportCommandStats(w http.ResponseWriter, r *http.Request) {
 	query := parseQuery(r)
 	query.Limit = 5000
@@ -78,6 +86,7 @@ func (h *Handler) ExportCommandStats(w http.ResponseWriter, r *http.Request) {
 	writer.Flush()
 }
 
+// ExportHostAudits 处理 Export Host Audits 相关逻辑。
 func (h *Handler) ExportHostAudits(w http.ResponseWriter, r *http.Request) {
 	query := parseQuery(r)
 	query.Limit = 5000
@@ -106,31 +115,37 @@ func (h *Handler) ExportHostAudits(w http.ResponseWriter, r *http.Request) {
 	writer.Flush()
 }
 
+// UserAudits 处理 User Audits 相关逻辑。
 func (h *Handler) UserAudits(w http.ResponseWriter, r *http.Request) {
 	result, err := h.repository.UserAudits(r.Context(), parseQuery(r))
 	writeJSON(w, result, err)
 }
 
+// HostAudits 处理 Host Audits 相关逻辑。
 func (h *Handler) HostAudits(w http.ResponseWriter, r *http.Request) {
 	result, err := h.repository.HostAudits(r.Context(), parseQuery(r))
 	writeJSON(w, result, err)
 }
 
+// HostUsers 处理 Host Users 相关逻辑。
 func (h *Handler) HostUsers(w http.ResponseWriter, r *http.Request) {
 	result, err := h.repository.HostUsers(r.Context(), parseQuery(r))
 	writeJSON(w, result, err)
 }
 
+// HostBehavior 处理 Host Behavior 相关逻辑。
 func (h *Handler) HostBehavior(w http.ResponseWriter, r *http.Request) {
 	result, err := h.repository.HostBehavior(r.Context(), parseQuery(r))
 	writeJSON(w, result, err)
 }
 
+// RuleHits 处理 Rule Hits 相关逻辑。
 func (h *Handler) RuleHits(w http.ResponseWriter, r *http.Request) {
 	result, err := h.repository.RuleHits(r.Context(), parseQuery(r))
 	writeJSON(w, result, err)
 }
 
+// parseQuery 解析 parse Query 并返回结构化结果。
 func parseQuery(r *http.Request) Query {
 	values := r.URL.Query()
 	now := time.Now().UTC()
@@ -160,6 +175,7 @@ func parseQuery(r *http.Request) Query {
 	return query
 }
 
+// writeJSON 写入 write JSON 数据。
 func writeJSON(w http.ResponseWriter, value any, err error) {
 	if err != nil {
 		slog.Error("stats request failed", "error", err)

@@ -17,6 +17,7 @@ import EventDetailDrawer from '../audit-events/EventDetailDrawer';
 const defaultRange = [dayjs().subtract(7, 'day'), dayjs()] as const;
 type DispositionFilter = 'all' | RiskDispositionStatus;
 
+// RiskEventsPage 生成 Risk Events Page 的展示内容。
 export default function RiskEventsPage() {
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [visibleEvents, setVisibleEvents] = useState<AuditEvent[]>([]);
@@ -33,6 +34,7 @@ export default function RiskEventsPage() {
   const [dispositionForm] = Form.useForm();
   const requestSeq = useRef(0);
 
+  // buildQuery 构建 build Query 所需的数据结构。
   function buildQuery(nextPage = page, nextPageSize = pageSize, formValues = form.getFieldsValue()): AuditEventQuery {
     const values = formValues;
     const range = values.timeRange ?? defaultRange;
@@ -49,6 +51,7 @@ export default function RiskEventsPage() {
     };
   }
 
+  // load 加载页面所需数据。
   async function load(nextPage = page, nextPageSize = pageSize, formValues = form.getFieldsValue()) {
     const seq = requestSeq.current + 1;
     requestSeq.current = seq;
@@ -111,21 +114,25 @@ export default function RiskEventsPage() {
     }
   }
 
+  // submit 提交当前表单或操作。
   function submit() {
     void load(1, pageSize, form.getFieldsValue());
   }
 
+  // resetAndLoad 重置 reset And Load 状态。
   async function resetAndLoad() {
     form.resetFields();
     await Promise.resolve();
     await load(1, 10, form.getFieldsValue());
   }
 
+  // exportCSV 导出或下载 export CSV 数据。
   async function exportCSV() {
     const blob = await exportAuditEvents(buildQuery(1, 5000));
     downloadBlob(blob, 'risk-events.csv');
   }
 
+  // openDisposition 打开对应的弹窗或详情视图。
   function openDisposition(record: AuditEvent) {
     const existing = dispositions[record.eventId];
     setDispositionEvent(record);
@@ -136,6 +143,7 @@ export default function RiskEventsPage() {
     setDispositionOpen(true);
   }
 
+  // submitDisposition 提交当前表单或操作。
   async function submitDisposition() {
     if (!dispositionEvent) {
       return;
@@ -154,6 +162,7 @@ export default function RiskEventsPage() {
     }
   }
 
+  // dispositionFor 处理 disposition For 相关逻辑。
   function dispositionFor(record: AuditEvent): RiskDisposition {
     return dispositions[record.eventId] ?? {
       eventId: record.eventId,
@@ -318,6 +327,7 @@ export default function RiskEventsPage() {
   );
 }
 
+// riskTarget 生成 risk Target 的展示内容。
 function riskTarget(record: AuditEvent) {
   if (record.eventType === 'network_connect') {
     return record.dstIp ? (
@@ -338,6 +348,7 @@ function riskTarget(record: AuditEvent) {
   return record.processName ? <Typography.Text>{record.processName}</Typography.Text> : <Typography.Text type="secondary">-</Typography.Text>;
 }
 
+// filterEventsByDisposition 按条件过滤 filter Events By Disposition。
 function filterEventsByDisposition(events: AuditEvent[], dispositions: RiskDispositionMap, status: DispositionFilter) {
   if (status === 'all') {
     return events;
@@ -345,6 +356,7 @@ function filterEventsByDisposition(events: AuditEvent[], dispositions: RiskDispo
   return events.filter((event) => (dispositions[event.eventId]?.status ?? 'open') === status);
 }
 
+// formatNetworkTarget 格式化 format Network Target 以便界面展示。
 function formatNetworkTarget(record: AuditEvent) {
   if (!record.dstIp) {
     return '-';
@@ -353,6 +365,7 @@ function formatNetworkTarget(record: AuditEvent) {
   return record.dstPort ? `${ip}:${record.dstPort}` : ip;
 }
 
+// DispositionTag 渲染 Disposition Tag 组件。
 function DispositionTag({ disposition }: { disposition: RiskDisposition }) {
   const config: Record<RiskDispositionStatus, { color: string; text: string }> = {
     open: { color: 'red', text: '未处理' },

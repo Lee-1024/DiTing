@@ -20,10 +20,12 @@ type PostgresRepository struct {
 	pool *pgxpool.Pool
 }
 
+// NewPostgresRepository 创建并初始化 New Postgres Repository 实例。
 func NewPostgresRepository(pool *pgxpool.Pool) *PostgresRepository {
 	return &PostgresRepository{pool: pool}
 }
 
+// ListUsers 查询并返回 List Users 列表。
 func (r *PostgresRepository) ListUsers(ctx context.Context) ([]User, error) {
 	rows, err := r.pool.Query(ctx, `
 SELECT
@@ -60,6 +62,7 @@ ORDER BY u.created_at DESC
 	return users, nil
 }
 
+// CreateUser 创建新的 Create User。
 func (r *PostgresRepository) CreateUser(ctx context.Context, request CreateUserRequest) (User, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
@@ -89,6 +92,7 @@ RETURNING id::text, username, display_name, email, status, created_at, updated_a
 	return user, nil
 }
 
+// UpdateUser 更新指定的 Update User。
 func (r *PostgresRepository) UpdateUser(ctx context.Context, id string, request UpdateUserRequest) (User, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
@@ -126,6 +130,7 @@ RETURNING id::text, username, display_name, email, status, created_at, updated_a
 	return user, nil
 }
 
+// ResetPassword 重置 Reset Password。
 func (r *PostgresRepository) ResetPassword(ctx context.Context, id string, password string) error {
 	tag, err := r.pool.Exec(ctx, `UPDATE diting_users SET password_hash = $2, updated_at = NOW() WHERE id = $1`, id, auth.HashPassword(password, randomSalt()))
 	if err != nil {
@@ -137,6 +142,7 @@ func (r *PostgresRepository) ResetPassword(ctx context.Context, id string, passw
 	return nil
 }
 
+// DeleteUser 删除指定的 Delete User。
 func (r *PostgresRepository) DeleteUser(ctx context.Context, id string) error {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
@@ -161,6 +167,7 @@ func (r *PostgresRepository) DeleteUser(ctx context.Context, id string) error {
 	return tx.Commit(ctx)
 }
 
+// ListRoles 查询并返回 List Roles 列表。
 func (r *PostgresRepository) ListRoles(ctx context.Context) ([]Role, error) {
 	rows, err := r.pool.Query(ctx, `
 SELECT id::text, name, description, created_at, updated_at
@@ -190,6 +197,7 @@ type userScanner interface {
 	Scan(dest ...any) error
 }
 
+// scanUser 从查询结果中扫描并组装 scan User。
 func scanUser(scanner userScanner) (User, error) {
 	var user User
 	if err := scanner.Scan(&user.ID, &user.Username, &user.DisplayName, &user.Email, &user.Status, &user.Roles, &user.CreatedAt, &user.UpdatedAt); err != nil {
@@ -198,6 +206,7 @@ func scanUser(scanner userScanner) (User, error) {
 	return user, nil
 }
 
+// scanUserWithoutRoles 从查询结果中扫描并组装 scan User Without Roles。
 func scanUserWithoutRoles(scanner userScanner) (User, error) {
 	var user User
 	if err := scanner.Scan(&user.ID, &user.Username, &user.DisplayName, &user.Email, &user.Status, &user.CreatedAt, &user.UpdatedAt); err != nil {
@@ -206,6 +215,7 @@ func scanUserWithoutRoles(scanner userScanner) (User, error) {
 	return user, nil
 }
 
+// getUserForUpdate 查询并返回指定的 get User For Update。
 func getUserForUpdate(ctx context.Context, tx pgx.Tx, id string) (User, error) {
 	row := tx.QueryRow(ctx, `
 SELECT id::text, username, display_name, email, status, created_at, updated_at
@@ -225,6 +235,7 @@ FOR UPDATE
 	return user, nil
 }
 
+// userRoles 处理 user Roles 相关逻辑。
 func userRoles(ctx context.Context, tx pgx.Tx, userID string) ([]string, error) {
 	rows, err := tx.Query(ctx, `
 SELECT role.name
@@ -252,6 +263,7 @@ ORDER BY role.name
 	return roles, nil
 }
 
+// replaceUserRoles 处理 replace User Roles 相关逻辑。
 func replaceUserRoles(ctx context.Context, tx pgx.Tx, userID string, roles []string) error {
 	if _, err := tx.Exec(ctx, `DELETE FROM diting_user_roles WHERE user_id = $1`, userID); err != nil {
 		return err
@@ -271,6 +283,7 @@ SELECT $1::uuid, id FROM diting_roles WHERE name = $2
 	return nil
 }
 
+// removesLastAdmin 删除指定的 removes Last Admin。
 func removesLastAdmin(ctx context.Context, tx pgx.Tx, current User, nextRoles []string, nextStatus string) bool {
 	if current.Status != "active" || !hasRole(current.Roles, "admin") {
 		return false
@@ -281,6 +294,7 @@ func removesLastAdmin(ctx context.Context, tx pgx.Tx, current User, nextRoles []
 	return activeAdminCount(ctx, tx) == 1
 }
 
+// activeAdminCount 处理 active Admin Count 相关逻辑。
 func activeAdminCount(ctx context.Context, tx pgx.Tx) int {
 	var count int
 	if err := tx.QueryRow(ctx, `
@@ -295,6 +309,7 @@ WHERE u.status = 'active' AND role.name = 'admin'
 	return count
 }
 
+// mapUserNotFound 映射 map User Not Found 的错误或数据结构。
 func mapUserNotFound(err error) error {
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrNotFound
@@ -302,10 +317,12 @@ func mapUserNotFound(err error) error {
 	return err
 }
 
+// rollback 处理 rollback 相关逻辑。
 func rollback(ctx context.Context, tx pgx.Tx) {
 	_ = tx.Rollback(ctx)
 }
 
+// randomSalt 处理 random Salt 相关逻辑。
 func randomSalt() string {
 	var data [16]byte
 	if _, err := io.ReadFull(rand.Reader, data[:]); err != nil {
@@ -314,6 +331,7 @@ func randomSalt() string {
 	return hex.EncodeToString(data[:])
 }
 
+// isUniqueViolation 判断 is Unique Violation 是否符合条件。
 func isUniqueViolation(err error) bool {
 	return strings.Contains(err.Error(), "duplicate key value")
 }

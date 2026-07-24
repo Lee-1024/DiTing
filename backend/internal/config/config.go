@@ -61,6 +61,7 @@ type CollectorConfig struct {
 	TetragonRestartCommand         string
 }
 
+// Load 处理 Load 相关逻辑。
 func Load(path string) (Config, error) {
 	file, err := os.Open(path)
 	if err != nil {
@@ -97,6 +98,7 @@ func Load(path string) (Config, error) {
 	return cfg, nil
 }
 
+// assignValue 处理 assign Value 相关逻辑。
 func assignValue(cfg *Config, section, key, value string) error {
 	switch section {
 	case "server":
@@ -178,6 +180,7 @@ func assignValue(cfg *Config, section, key, value string) error {
 	return nil
 }
 
+// mustBool 处理 must Bool 相关逻辑。
 func mustBool(value string) bool {
 	switch strings.ToLower(strings.TrimSpace(value)) {
 	case "true", "yes", "1", "on":
@@ -187,6 +190,7 @@ func mustBool(value string) bool {
 	}
 }
 
+// mustInt 处理 must Int 相关逻辑。
 func mustInt(key, value string) int {
 	parsed, err := strconv.Atoi(value)
 	if err != nil {

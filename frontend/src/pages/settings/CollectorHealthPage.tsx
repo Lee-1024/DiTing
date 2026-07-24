@@ -6,11 +6,13 @@ import type { CollectorHeartbeat } from '../../types/collectorHealth';
 import { compactNumber } from '../../utils/format';
 import { formatLocalDateTime } from '../../utils/time';
 
+// CollectorHealthPage 渲染 Collector Health Page 组件。
 export default function CollectorHealthPage() {
   const [items, setItems] = useState<CollectorHeartbeat[]>([]);
   const [loading, setLoading] = useState(false);
   const [tablePageSize, setTablePageSize] = useState(10);
 
+  // load 加载页面所需数据。
   async function load() {
     setLoading(true);
     try {
@@ -89,6 +91,7 @@ export default function CollectorHealthPage() {
   );
 }
 
+// healthLabel 生成 health Label 的展示内容。
 function healthLabel(value?: string) {
   if (value === 'healthy') {
     return '正常';
@@ -102,6 +105,7 @@ function healthLabel(value?: string) {
   return value || '-';
 }
 
+// healthColor 生成 health Color 的展示内容。
 function healthColor(value?: string) {
   if (value === 'healthy') {
     return 'green';
@@ -115,6 +119,7 @@ function healthColor(value?: string) {
   return 'default';
 }
 
+// inputModeLabel 生成 input Mode Label 的展示内容。
 function inputModeLabel(value?: string) {
   if (value === 'grpc') {
     return <Tag color="blue">gRPC</Tag>;
@@ -122,6 +127,7 @@ function inputModeLabel(value?: string) {
   return <Tag>文件</Tag>;
 }
 
+// formatLag 格式化 format Lag 以便界面展示。
 function formatLag(value?: number) {
   if (value === undefined || value === null) {
     return '-';

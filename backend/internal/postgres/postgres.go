@@ -17,6 +17,7 @@ type Execer interface {
 	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
 }
 
+// DSN 处理 DSN 相关逻辑。
 func DSN(cfg config.PostgresConfig) string {
 	sslMode := cfg.SSLMode
 	if sslMode == "" {
@@ -26,14 +27,17 @@ func DSN(cfg config.PostgresConfig) string {
 		cfg.Host, cfg.Port, cfg.Database, cfg.Username, cfg.Password, sslMode)
 }
 
+// Connect 处理 Connect 相关逻辑。
 func Connect(ctx context.Context, cfg config.PostgresConfig) (*pgxpool.Pool, error) {
 	return pgxpool.New(ctx, DSN(cfg))
 }
 
+// ExecuteBootstrap 处理 Execute Bootstrap 相关逻辑。
 func ExecuteBootstrap(ctx context.Context, pool Execer) error {
 	return ExecuteSQL(ctx, pool, bootstrapSQL+"\n"+defaultProcessChainRiskRulesSQL)
 }
 
+// MigrationFiles 处理 Migration Files 相关逻辑。
 func MigrationFiles(dir string) ([]string, error) {
 	files, err := filepath.Glob(filepath.Join(dir, "*.sql"))
 	if err != nil {
@@ -43,6 +47,7 @@ func MigrationFiles(dir string) ([]string, error) {
 	return files, nil
 }
 
+// ExecuteMigrations 处理 Execute Migrations 相关逻辑。
 func ExecuteMigrations(ctx context.Context, pool Execer, dir string) error {
 	files, err := MigrationFiles(dir)
 	if err != nil {
@@ -56,6 +61,7 @@ func ExecuteMigrations(ctx context.Context, pool Execer, dir string) error {
 	return nil
 }
 
+// ExecuteMigrationFile 处理 Execute Migration File 相关逻辑。
 func ExecuteMigrationFile(ctx context.Context, pool Execer, path string) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -64,6 +70,7 @@ func ExecuteMigrationFile(ctx context.Context, pool Execer, path string) error {
 	return ExecuteSQL(ctx, pool, string(data))
 }
 
+// ExecuteSQL 处理 Execute SQL 相关逻辑。
 func ExecuteSQL(ctx context.Context, pool Execer, sql string) error {
 	for _, statement := range splitStatements(sql) {
 		if strings.TrimSpace(statement) == "" {
@@ -76,6 +83,7 @@ func ExecuteSQL(ctx context.Context, pool Execer, sql string) error {
 	return nil
 }
 
+// splitStatements 处理 split Statements 相关逻辑。
 func splitStatements(sql string) []string {
 	parts := strings.Split(sql, ";")
 	statements := make([]string, 0, len(parts))

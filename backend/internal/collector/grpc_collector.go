@@ -30,6 +30,7 @@ type GRPCCollector struct {
 	afterErrorForTest func()
 }
 
+// NewGRPCCollector 创建并初始化 New GRPCCollector 实例。
 func NewGRPCCollector(addr string, batchSize int, writer EventWriter) *GRPCCollector {
 	if batchSize <= 0 {
 		batchSize = 1000
@@ -45,26 +46,31 @@ func NewGRPCCollector(addr string, batchSize int, writer EventWriter) *GRPCColle
 	return collector
 }
 
+// SetReconnectInterval 设置 Set Reconnect Interval。
 func (c *GRPCCollector) SetReconnectInterval(interval time.Duration) {
 	if interval > 0 {
 		c.reconnectInterval = interval
 	}
 }
 
+// SetFlushInterval 设置 Set Flush Interval。
 func (c *GRPCCollector) SetFlushInterval(interval time.Duration) {
 	if interval > 0 {
 		c.flushInterval = interval
 	}
 }
 
+// SetErrorHandler 设置 Set Error Handler。
 func (c *GRPCCollector) SetErrorHandler(handler func(error)) {
 	c.onError = handler
 }
 
+// SetConnectHandler 设置 Set Connect Handler。
 func (c *GRPCCollector) SetConnectHandler(handler func()) {
 	c.onConnect = handler
 }
 
+// RunOnce 运行 Run Once 的主流程。
 func (c *GRPCCollector) RunOnce(ctx context.Context) error {
 	stream, closeConn, err := c.dial(ctx, c.addr)
 	if err != nil {
@@ -78,6 +84,7 @@ func (c *GRPCCollector) RunOnce(ctx context.Context) error {
 	}
 }
 
+// Run 运行 Run 的主流程。
 func (c *GRPCCollector) Run(ctx context.Context) error {
 	for {
 		if err := ctx.Err(); err != nil {
@@ -111,6 +118,7 @@ func (c *GRPCCollector) Run(ctx context.Context) error {
 	}
 }
 
+// consume 处理 consume 相关逻辑。
 func (c *GRPCCollector) consume(ctx context.Context, stream eventStream) error {
 	var batch []audit.Event
 	var received uint64
@@ -206,6 +214,7 @@ func (c *GRPCCollector) consume(ctx context.Context, stream eventStream) error {
 	}
 }
 
+// reportError 处理 report Error 相关逻辑。
 func (c *GRPCCollector) reportError(err error) {
 	if err != nil && c.onError != nil {
 		c.onError(err)
@@ -215,12 +224,14 @@ func (c *GRPCCollector) reportError(err error) {
 	}
 }
 
+// reportConnect 处理 report Connect 相关逻辑。
 func (c *GRPCCollector) reportConnect() {
 	if c.onConnect != nil {
 		c.onConnect()
 	}
 }
 
+// dialTetragon 处理 dial Tetragon 相关逻辑。
 func (c *GRPCCollector) dialTetragon(ctx context.Context, addr string) (eventStream, func() error, error) {
 	slog.Info("collector grpc connecting", "addr", addr)
 	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
@@ -236,6 +247,7 @@ func (c *GRPCCollector) dialTetragon(ctx context.Context, addr string) (eventStr
 	return stream, conn.Close, nil
 }
 
+// waitContext 处理 wait Context 相关逻辑。
 func waitContext(ctx context.Context, duration time.Duration) error {
 	timer := time.NewTimer(duration)
 	defer timer.Stop()

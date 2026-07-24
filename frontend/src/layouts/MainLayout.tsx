@@ -23,6 +23,7 @@ interface HeaderAlert {
   target: string;
 }
 
+// MainLayout 渲染 Main Layout 组件。
 export default function MainLayout() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -32,11 +33,13 @@ export default function MainLayout() {
   const [alerts, setAlerts] = useState<HeaderAlert[]>([]);
   const [form] = Form.useForm();
 
+  // logout 处理 logout 相关逻辑。
   function logout() {
     clearSession();
     navigate('/login');
   }
 
+  // submitPassword 提交当前表单或操作。
   async function submitPassword() {
     const values = await form.validateFields();
     setPasswordLoading(true);
@@ -51,6 +54,7 @@ export default function MainLayout() {
     }
   }
 
+  // loadHeaderAlerts 加载页面所需数据。
   async function loadHeaderAlerts() {
     const end = dayjs();
     const [riskData, collectors] = await Promise.all([
@@ -70,6 +74,7 @@ export default function MainLayout() {
     setAlerts(nextAlerts);
   }
 
+  // openAlertTarget 打开对应的弹窗或详情视图。
   function openAlertTarget(target: string) {
     navigate(target);
   }
@@ -202,6 +207,7 @@ export default function MainLayout() {
   );
 }
 
+// riskAlert 生成 risk Alert 的展示内容。
 function riskAlert(event: AuditEvent): HeaderAlert {
   return {
     id: `risk:${event.eventId}`,
@@ -213,6 +219,7 @@ function riskAlert(event: AuditEvent): HeaderAlert {
   };
 }
 
+// collectorAlerts 处理 collector Alerts 相关逻辑。
 function collectorAlerts(items: CollectorHeartbeat[]): HeaderAlert[] {
   return items
     .filter((item) => item.healthLevel === 'warning' || item.healthLevel === 'critical')

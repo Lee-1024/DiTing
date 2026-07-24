@@ -14,10 +14,12 @@ type PostgresRepository struct {
 	pool *pgxpool.Pool
 }
 
+// NewPostgresRepository 创建并初始化 New Postgres Repository 实例。
 func NewPostgresRepository(pool *pgxpool.Pool) *PostgresRepository {
 	return &PostgresRepository{pool: pool}
 }
 
+// Create 创建新的 Create。
 func (r *PostgresRepository) Create(ctx context.Context, rule Rule) (Rule, error) {
 	matchExpr, tags, err := marshalRuleJSON(rule)
 	if err != nil {
@@ -33,6 +35,7 @@ RETURNING id::text, name, description, event_type, enabled, severity, risk_score
 	return scanRule(row)
 }
 
+// List 查询并返回 List 列表。
 func (r *PostgresRepository) List(ctx context.Context) ([]Rule, error) {
 	rows, err := r.pool.Query(ctx, `
 SELECT id::text, name, description, event_type, enabled, severity, risk_score, match_expr, tags, created_at, updated_at
@@ -58,6 +61,7 @@ ORDER BY updated_at DESC
 	return rules, nil
 }
 
+// Get 查询并返回指定的 Get。
 func (r *PostgresRepository) Get(ctx context.Context, id string) (Rule, error) {
 	row := r.pool.QueryRow(ctx, `
 SELECT id::text, name, description, event_type, enabled, severity, risk_score, match_expr, tags, created_at, updated_at
@@ -71,6 +75,7 @@ WHERE id = $1
 	return rule, nil
 }
 
+// Update 更新指定的 Update。
 func (r *PostgresRepository) Update(ctx context.Context, id string, rule Rule) (Rule, error) {
 	matchExpr, tags, err := marshalRuleJSON(rule)
 	if err != nil {
@@ -97,6 +102,7 @@ RETURNING id::text, name, description, event_type, enabled, severity, risk_score
 	return updated, nil
 }
 
+// Delete 删除指定的 Delete。
 func (r *PostgresRepository) Delete(ctx context.Context, id string) error {
 	commandTag, err := r.pool.Exec(ctx, `DELETE FROM diting_audit_rules WHERE id = $1`, id)
 	if err != nil {
@@ -108,6 +114,7 @@ func (r *PostgresRepository) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
+// CountEnabledRules 处理 Count Enabled Rules 相关逻辑。
 func (r *PostgresRepository) CountEnabledRules(ctx context.Context) (uint64, error) {
 	var count uint64
 	if err := r.pool.QueryRow(ctx, `SELECT count(*) FROM diting_audit_rules WHERE enabled = true`).Scan(&count); err != nil {
@@ -120,6 +127,7 @@ type ruleScanner interface {
 	Scan(dest ...any) error
 }
 
+// scanRule 从查询结果中扫描并组装 scan Rule。
 func scanRule(scanner ruleScanner) (Rule, error) {
 	var rule Rule
 	var matchExpr []byte
@@ -152,6 +160,7 @@ func scanRule(scanner ruleScanner) (Rule, error) {
 	return rule, nil
 }
 
+// marshalRuleJSON 处理 marshal Rule JSON 相关逻辑。
 func marshalRuleJSON(rule Rule) ([]byte, []byte, error) {
 	matchExpr, err := json.Marshal(rule.MatchExpr)
 	if err != nil {
@@ -168,6 +177,7 @@ func marshalRuleJSON(rule Rule) ([]byte, []byte, error) {
 	return matchExpr, tagsJSON, nil
 }
 
+// mapNotFound 映射 map Not Found 的错误或数据结构。
 func mapNotFound(err error) error {
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrNotFound

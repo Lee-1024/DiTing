@@ -39,10 +39,12 @@ type MemoryRepository struct {
 	next   int
 }
 
+// NewMemoryRepository 创建并初始化 New Memory Repository 实例。
 func NewMemoryRepository() *MemoryRepository {
 	return &MemoryRepository{next: 1, assets: []HostAsset{}}
 }
 
+// Create 创建新的 Create。
 func (r *MemoryRepository) Create(_ context.Context, asset HostAsset) (HostAsset, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -56,6 +58,7 @@ func (r *MemoryRepository) Create(_ context.Context, asset HostAsset) (HostAsset
 	return asset, nil
 }
 
+// List 查询并返回 List 列表。
 func (r *MemoryRepository) List(_ context.Context) ([]HostAsset, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -64,6 +67,7 @@ func (r *MemoryRepository) List(_ context.Context) ([]HostAsset, error) {
 	return result, nil
 }
 
+// Get 查询并返回指定的 Get。
 func (r *MemoryRepository) Get(_ context.Context, id string) (HostAsset, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -75,6 +79,7 @@ func (r *MemoryRepository) Get(_ context.Context, id string) (HostAsset, error) 
 	return HostAsset{}, ErrNotFound
 }
 
+// Update 更新指定的 Update。
 func (r *MemoryRepository) Update(_ context.Context, id string, next HostAsset) (HostAsset, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -92,6 +97,7 @@ func (r *MemoryRepository) Update(_ context.Context, id string, next HostAsset) 
 	return HostAsset{}, ErrNotFound
 }
 
+// normalizeAsset 规范化 normalize Asset 的默认值和边界值。
 func normalizeAsset(asset HostAsset) HostAsset {
 	if asset.HostID == "" {
 		asset.HostID = asset.NodeName
@@ -108,6 +114,7 @@ func normalizeAsset(asset HostAsset) HostAsset {
 	return asset
 }
 
+// Delete 删除指定的 Delete。
 func (r *MemoryRepository) Delete(_ context.Context, id string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()

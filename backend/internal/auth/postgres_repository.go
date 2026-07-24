@@ -12,10 +12,12 @@ type PostgresUserRepository struct {
 	pool *pgxpool.Pool
 }
 
+// NewPostgresUserRepository 创建并初始化 New Postgres User Repository 实例。
 func NewPostgresUserRepository(pool *pgxpool.Pool) *PostgresUserRepository {
 	return &PostgresUserRepository{pool: pool}
 }
 
+// FindByUsername 处理 Find By Username 相关逻辑。
 func (r *PostgresUserRepository) FindByUsername(ctx context.Context, username string) (User, error) {
 	row := r.pool.QueryRow(ctx, `
 SELECT
@@ -42,6 +44,7 @@ GROUP BY u.id
 	return user, nil
 }
 
+// UpdatePassword 更新指定的 Update Password。
 func (r *PostgresUserRepository) UpdatePassword(ctx context.Context, userID, passwordHash string) error {
 	_, err := r.pool.Exec(ctx, `UPDATE diting_users SET password_hash = $2, updated_at = NOW() WHERE id = $1`, userID, passwordHash)
 	return err

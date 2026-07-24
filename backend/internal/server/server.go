@@ -27,24 +27,28 @@ type routerOptions struct {
 
 type RouterOption func(*routerOptions)
 
+// WithIngestWriter 处理 With Ingest Writer 相关逻辑。
 func WithIngestWriter(writer ingest.EventWriter) RouterOption {
 	return func(options *routerOptions) {
 		options.ingestWriter = writer
 	}
 }
 
+// WithCollectorToken 处理 With Collector Token 相关逻辑。
 func WithCollectorToken(token string) RouterOption {
 	return func(options *routerOptions) {
 		options.collectorToken = token
 	}
 }
 
+// WithEnforcementRepository 处理 With Enforcement Repository 相关逻辑。
 func WithEnforcementRepository(repository enforcement.Repository) RouterOption {
 	return func(options *routerOptions) {
 		options.enforcementRepository = repository
 	}
 }
 
+// NewRouter 创建并初始化 New Router 实例。
 func NewRouter(repository audit.Repository, ruleRepository rule.Repository, statsRepository stats.Repository, authService *auth.Service, operationRepository operationlog.Repository, hostAssetRepository hostasset.Repository, riskStatusRepository riskstatus.Repository, systemConfigRepository systemconfig.Repository, userAdminRepository useradmin.Repository, collectorHealthRepository collectorhealth.Repository, opts ...RouterOption) http.Handler {
 	options := routerOptions{}
 	for _, opt := range opts {
@@ -327,6 +331,7 @@ func NewRouter(repository audit.Repository, ruleRepository rule.Repository, stat
 	return loggingMiddleware(mux)
 }
 
+// loggingMiddleware 处理 logging Middleware 相关逻辑。
 func loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		started := time.Now()
@@ -348,6 +353,7 @@ type responseRecorder struct {
 	status int
 }
 
+// WriteHeader 写入 Write Header 数据。
 func (r *responseRecorder) WriteHeader(statusCode int) {
 	r.status = statusCode
 	r.ResponseWriter.WriteHeader(statusCode)

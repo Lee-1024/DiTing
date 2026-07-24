@@ -29,6 +29,7 @@ import (
 	"diting/backend/internal/useradmin"
 )
 
+// main 处理 main 相关逻辑。
 func main() {
 	slog.SetDefault(slog.New(newLogHandler(os.Stdout)))
 	mode, cfgPath := parseArgs(os.Args)
@@ -321,6 +322,7 @@ func main() {
 	}
 }
 
+// newLogHandler 创建并初始化 new Log Handler 实例。
 func newLogHandler(writer io.Writer) slog.Handler {
 	location, err := time.LoadLocation("Asia/Shanghai")
 	if err != nil {
@@ -336,11 +338,13 @@ func newLogHandler(writer io.Writer) slog.Handler {
 	})
 }
 
+// migrationFiles 处理 migration Files 相关逻辑。
 func migrationFiles(dir string) ([]string, error) {
 	pattern := filepath.Join(dir, "*.sql")
 	return filepath.Glob(pattern)
 }
 
+// ensureClickHouseMigrations 确保 ensure Click House Migrations 已完成初始化或迁移。
 func ensureClickHouseMigrations(ctx context.Context, client clickHouseMigrator) error {
 	dir, err := resolveMigrationDir("clickhouse")
 	if err != nil {
@@ -368,6 +372,7 @@ type clickHouseMigrator interface {
 	ExecuteStatements(ctx context.Context, sql string) error
 }
 
+// ensurePostgresMigrations 确保 ensure Postgres Migrations 已完成初始化或迁移。
 func ensurePostgresMigrations(ctx context.Context, pool postgres.Execer) error {
 	slog.Info("auto postgres bootstrap starting")
 	if err := postgres.ExecuteBootstrap(ctx, pool); err != nil {
@@ -387,6 +392,7 @@ func ensurePostgresMigrations(ctx context.Context, pool postgres.Execer) error {
 	return nil
 }
 
+// startEnforcementSyncIfEnabled 启动 start Enforcement Sync If Enabled 后台流程。
 func startEnforcementSyncIfEnabled(ctx context.Context, cfg config.Config, host collector.HostMetadata) {
 	if !cfg.Collector.EnforcementEnabled {
 		return
@@ -415,6 +421,7 @@ func startEnforcementSyncIfEnabled(ctx context.Context, cfg config.Config, host 
 	go syncer.Run(ctx, time.Duration(intervalSeconds)*time.Second)
 }
 
+// resolveMigrationDir 解析 resolve Migration Dir 的最终取值。
 func resolveMigrationDir(kind string) (string, error) {
 	candidates := []string{
 		filepath.Join("migrations", kind),
@@ -435,11 +442,13 @@ func resolveMigrationDir(kind string) (string, error) {
 	return "", fmt.Errorf("migration directory for %s not found; checked %s", kind, strings.Join(candidates, ", "))
 }
 
+// hasSQLFiles 判断 has SQLFiles 是否符合条件。
 func hasSQLFiles(dir string) bool {
 	files, err := filepath.Glob(filepath.Join(dir, "*.sql"))
 	return err == nil && len(files) > 0
 }
 
+// parseArgs 解析 parse Args 并返回结构化结果。
 func parseArgs(args []string) (string, string) {
 	mode := "api"
 	configPath := "./configs/config.example.yaml"
@@ -467,6 +476,7 @@ type collectorAPIEventSink struct {
 	writer collector.EventWriter
 }
 
+// WriteEvents 写入 Write Events 数据。
 func (s collectorAPIEventSink) WriteEvents(ctx context.Context, events []audit.Event) error {
 	return s.writer.Write(ctx, events)
 }
@@ -484,6 +494,7 @@ type dedupingEventWriter struct {
 	seen   map[string]time.Time
 }
 
+// newDedupingEventWriter 创建并初始化 new Deduping Event Writer 实例。
 func newDedupingEventWriter(next collector.EventWriter, window time.Duration) *dedupingEventWriter {
 	if window <= 0 {
 		window = 5 * time.Second
@@ -491,6 +502,7 @@ func newDedupingEventWriter(next collector.EventWriter, window time.Duration) *d
 	return &dedupingEventWriter{next: next, window: window, seen: map[string]time.Time{}}
 }
 
+// Write 写入 Write 数据。
 func (w *dedupingEventWriter) Write(ctx context.Context, events []audit.Event) error {
 	kept := make([]audit.Event, 0, len(events))
 	for _, event := range events {
@@ -506,6 +518,7 @@ func (w *dedupingEventWriter) Write(ctx context.Context, events []audit.Event) e
 	return w.next.Write(ctx, kept)
 }
 
+// shouldDrop 处理 should Drop 相关逻辑。
 func (w *dedupingEventWriter) shouldDrop(event audit.Event) bool {
 	key := collectorEventDedupKey(event)
 	now := event.EventTime
@@ -526,10 +539,12 @@ func (w *dedupingEventWriter) shouldDrop(event audit.Event) bool {
 	return false
 }
 
+// newAPIHeartbeatWriter 创建并初始化 new APIHeartbeat Writer 实例。
 func newAPIHeartbeatWriter(writer *collector.APIWriter, metadata collector.HostMetadata, inputMode string) *apiHeartbeatWriter {
 	return &apiHeartbeatWriter{writer: writer, metadata: metadata, inputMode: collectorInputMode(inputMode)}
 }
 
+// Write 写入 Write 数据。
 func (w *apiHeartbeatWriter) Write(ctx context.Context, events []audit.Event) error {
 	err := w.writer.Write(ctx, events)
 	if err != nil {
@@ -575,6 +590,7 @@ type repositoryRuleProvider struct {
 	repository rule.Repository
 }
 
+// Rules 处理 Rules 相关逻辑。
 func (p repositoryRuleProvider) Rules(ctx context.Context) ([]rule.Rule, error) {
 	return p.repository.List(ctx)
 }
@@ -590,6 +606,7 @@ type refreshingRuleWriter struct {
 	filter             collectorNoiseFilter
 }
 
+// newRefreshingRuleWriter 创建并初始化 new Refreshing Rule Writer 实例。
 func newRefreshingRuleWriter(sink eventSink, provider ruleProvider) *refreshingRuleWriter {
 	return &refreshingRuleWriter{sink: sink, provider: provider, rules: []rule.Rule{}}
 }
@@ -602,18 +619,21 @@ type collectorNoiseFilter struct {
 	KeepSeverities        []string
 }
 
+// SetNoiseFilter 设置 Set Noise Filter。
 func (w *refreshingRuleWriter) SetNoiseFilter(filter collectorNoiseFilter) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.filter = filter
 }
 
+// SetCollectorFilterProvider 设置 Set Collector Filter Provider。
 func (w *refreshingRuleWriter) SetCollectorFilterProvider(provider collectorFilterProvider) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.filterProvider = provider
 }
 
+// SetHeartbeatRecorder 设置 Set Heartbeat Recorder。
 func (w *refreshingRuleWriter) SetHeartbeatRecorder(recorder collectorHeartbeatRecorder, inputMode string) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -621,6 +641,7 @@ func (w *refreshingRuleWriter) SetHeartbeatRecorder(recorder collectorHeartbeatR
 	w.heartbeatInputMode = collectorInputMode(inputMode)
 }
 
+// collectorNoiseFilterFromSystemConfig 处理 collector Noise Filter From System Config 相关逻辑。
 func collectorNoiseFilterFromSystemConfig(cfg systemconfig.CollectorFilterConfig) collectorNoiseFilter {
 	return collectorNoiseFilter{
 		Enabled:               cfg.Enabled,
@@ -631,6 +652,7 @@ func collectorNoiseFilterFromSystemConfig(cfg systemconfig.CollectorFilterConfig
 	}
 }
 
+// collectorHeartbeatLoop 处理 collector Heartbeat Loop 相关逻辑。
 func collectorHeartbeatLoop(ctx context.Context, recorder collectorHeartbeatRecorder, metadata collector.HostMetadata, inputMode string, interval time.Duration) {
 	if recorder == nil || metadata.ID == "" {
 		return
@@ -651,6 +673,7 @@ func collectorHeartbeatLoop(ctx context.Context, recorder collectorHeartbeatReco
 	}
 }
 
+// recordCollectorSeen 记录 record Collector Seen 状态。
 func recordCollectorSeen(ctx context.Context, recorder collectorHeartbeatRecorder, metadata collector.HostMetadata, inputMode string) {
 	if err := recorder.Upsert(ctx, collectorhealth.HeartbeatUpdate{
 		HostID:     metadata.ID,
@@ -662,6 +685,7 @@ func recordCollectorSeen(ctx context.Context, recorder collectorHeartbeatRecorde
 	}
 }
 
+// recordCollectorError 记录 record Collector Error 状态。
 func recordCollectorError(ctx context.Context, recorder collectorHeartbeatRecorder, metadata collector.HostMetadata, inputMode string, err error) {
 	if recorder == nil || metadata.ID == "" || err == nil {
 		return
@@ -677,6 +701,7 @@ func recordCollectorError(ctx context.Context, recorder collectorHeartbeatRecord
 	}
 }
 
+// recordCollectorConnected 记录 record Collector Connected 状态。
 func recordCollectorConnected(ctx context.Context, recorder collectorHeartbeatRecorder, metadata collector.HostMetadata, inputMode string) {
 	if recorder == nil || metadata.ID == "" {
 		return
@@ -692,6 +717,7 @@ func recordCollectorConnected(ctx context.Context, recorder collectorHeartbeatRe
 	}
 }
 
+// collectorAPIHeartbeatLoop 处理 collector APIHeartbeat Loop 相关逻辑。
 func collectorAPIHeartbeatLoop(ctx context.Context, writer *collector.APIWriter, metadata collector.HostMetadata, inputMode string, interval time.Duration) {
 	if writer == nil || metadata.ID == "" {
 		return
@@ -712,6 +738,7 @@ func collectorAPIHeartbeatLoop(ctx context.Context, writer *collector.APIWriter,
 	}
 }
 
+// recordCollectorAPIConnected 记录 record Collector APIConnected 状态。
 func recordCollectorAPIConnected(ctx context.Context, writer *collector.APIWriter, metadata collector.HostMetadata, inputMode string) {
 	if writer == nil || metadata.ID == "" {
 		return
@@ -729,6 +756,7 @@ func recordCollectorAPIConnected(ctx context.Context, writer *collector.APIWrite
 	}
 }
 
+// recordCollectorAPIError 记录 record Collector APIError 状态。
 func recordCollectorAPIError(ctx context.Context, writer *collector.APIWriter, metadata collector.HostMetadata, inputMode string, err error) {
 	if writer == nil || metadata.ID == "" || err == nil {
 		return
@@ -746,6 +774,7 @@ func recordCollectorAPIError(ctx context.Context, writer *collector.APIWriter, m
 	}
 }
 
+// collectorInputMode 处理 collector Input Mode 相关逻辑。
 func collectorInputMode(value string) string {
 	mode := strings.ToLower(strings.TrimSpace(value))
 	if mode == "" {
@@ -754,6 +783,7 @@ func collectorInputMode(value string) string {
 	return mode
 }
 
+// collectorOutputMode 处理 collector Output Mode 相关逻辑。
 func collectorOutputMode(value string) string {
 	mode := strings.ToLower(strings.TrimSpace(value))
 	if mode == "" {
@@ -762,6 +792,7 @@ func collectorOutputMode(value string) string {
 	return mode
 }
 
+// runCollectorInput 运行 run Collector Input 的主流程。
 func runCollectorInput(ctx context.Context, mode string, inputMode string, cfg config.Config, eventWriter collector.EventWriter, onConnect func(), onError func(error)) error {
 	switch inputMode {
 	case "file":
@@ -793,6 +824,7 @@ func runCollectorInput(ctx context.Context, mode string, inputMode string, cfg c
 	}
 }
 
+// Refresh 刷新 Refresh 的缓存或配置。
 func (w *refreshingRuleWriter) Refresh(ctx context.Context) error {
 	rules, err := w.provider.Rules(ctx)
 	if err != nil {
@@ -818,6 +850,7 @@ func (w *refreshingRuleWriter) Refresh(ctx context.Context) error {
 	return nil
 }
 
+// RefreshLoop 刷新 Refresh Loop 的缓存或配置。
 func (w *refreshingRuleWriter) RefreshLoop(ctx context.Context, interval time.Duration) {
 	if interval <= 0 {
 		interval = 30 * time.Second
@@ -836,6 +869,7 @@ func (w *refreshingRuleWriter) RefreshLoop(ctx context.Context, interval time.Du
 	}
 }
 
+// Write 写入 Write 数据。
 func (w *refreshingRuleWriter) Write(ctx context.Context, events []audit.Event) error {
 	w.mu.RLock()
 	rules := make([]rule.Rule, len(w.rules))
@@ -887,6 +921,7 @@ func (w *refreshingRuleWriter) Write(ctx context.Context, events []audit.Event) 
 	return nil
 }
 
+// collectorEventDedupKey 处理 collector Event Dedup Key 相关逻辑。
 func collectorEventDedupKey(event audit.Event) string {
 	return strings.Join([]string{
 		event.EventTime.Truncate(time.Second).Format(time.RFC3339),
@@ -905,10 +940,12 @@ func collectorEventDedupKey(event audit.Event) string {
 	}, "\x00")
 }
 
+// WriteEvents 写入 Write Events 数据。
 func (w *refreshingRuleWriter) WriteEvents(ctx context.Context, events []audit.Event) error {
 	return w.Write(ctx, events)
 }
 
+// newestEventTime 创建并初始化 newest Event Time 实例。
 func newestEventTime(events []audit.Event) time.Time {
 	var newest time.Time
 	for _, event := range events {
@@ -919,6 +956,7 @@ func newestEventTime(events []audit.Event) time.Time {
 	return newest
 }
 
+// firstHostID 处理 first Host ID 相关逻辑。
 func firstHostID(events []audit.Event) string {
 	for _, event := range events {
 		if event.HostID != "" {
@@ -928,6 +966,7 @@ func firstHostID(events []audit.Event) string {
 	return ""
 }
 
+// firstHostName 处理 first Host Name 相关逻辑。
 func firstHostName(events []audit.Event) string {
 	for _, event := range events {
 		if event.HostName != "" {
@@ -937,6 +976,7 @@ func firstHostName(events []audit.Event) string {
 	return ""
 }
 
+// ShouldDrop 处理 Should Drop 相关逻辑。
 func (f collectorNoiseFilter) ShouldDrop(event audit.Event) bool {
 	if !f.Enabled || f.shouldKeep(event) {
 		return false
@@ -956,6 +996,7 @@ func (f collectorNoiseFilter) ShouldDrop(event audit.Event) bool {
 	return false
 }
 
+// shouldKeep 处理 should Keep 相关逻辑。
 func (f collectorNoiseFilter) shouldKeep(event audit.Event) bool {
 	keepSeverities := f.KeepSeverities
 	if len(keepSeverities) == 0 {
@@ -964,6 +1005,7 @@ func (f collectorNoiseFilter) shouldKeep(event audit.Event) bool {
 	return containsFold(keepSeverities, event.Severity)
 }
 
+// containsFold 判断 contains Fold 是否符合条件。
 func containsFold(values []string, target string) bool {
 	for _, value := range values {
 		if strings.EqualFold(strings.TrimSpace(value), strings.TrimSpace(target)) && strings.TrimSpace(value) != "" {

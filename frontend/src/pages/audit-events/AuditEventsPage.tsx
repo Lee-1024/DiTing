@@ -23,6 +23,7 @@ interface AuditEventGroup {
   maxSeverity: string;
 }
 
+// AuditEventsPage 渲染 Audit Events Page 组件。
 export default function AuditEventsPage() {
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [loading, setLoading] = useState(false);
@@ -34,6 +35,7 @@ export default function AuditEventsPage() {
   const requestSeq = useRef(0);
   const groupedEvents = useMemo(() => groupAuditEvents(events), [events]);
 
+  // buildQuery 构建 build Query 所需的数据结构。
   function buildQuery(nextPage = page, nextPageSize = pageSize, formValues = form.getFieldsValue()): AuditEventQuery {
     const values = formValues;
     const range = values.timeRange ?? defaultRange;
@@ -54,6 +56,7 @@ export default function AuditEventsPage() {
     };
   }
 
+  // load 加载页面所需数据。
   async function load(nextPage = page, nextPageSize = pageSize, formValues = form.getFieldsValue()) {
     const seq = requestSeq.current + 1;
     requestSeq.current = seq;
@@ -74,16 +77,19 @@ export default function AuditEventsPage() {
     }
   }
 
+  // submit 提交当前表单或操作。
   function submit() {
     void load(1, pageSize, form.getFieldsValue());
   }
 
+  // resetAndLoad 重置 reset And Load 状态。
   async function resetAndLoad() {
     form.resetFields();
     await Promise.resolve();
     await load(1, 10, form.getFieldsValue());
   }
 
+  // exportCSV 导出或下载 export CSV 数据。
   async function exportCSV() {
     const blob = await exportAuditEvents(buildQuery(1, 5000));
     downloadBlob(blob, 'audit-events.csv');
@@ -193,6 +199,7 @@ export default function AuditEventsPage() {
   );
 }
 
+// groupAuditEvents 处理 group Audit Events 相关逻辑。
 function groupAuditEvents(events: AuditEvent[]): AuditEventGroup[] {
   const groups = new Map<string, AuditEvent[]>();
   for (const event of events) {
@@ -214,6 +221,7 @@ function groupAuditEvents(events: AuditEvent[]): AuditEventGroup[] {
   });
 }
 
+// operationGroupKey 处理 operation Group Key 相关逻辑。
 function operationGroupKey(event: AuditEvent) {
   const second = dayjs(event.eventTime).format('YYYY-MM-DD HH:mm:ss');
   return [
@@ -228,15 +236,18 @@ function operationGroupKey(event: AuditEvent) {
   ].join('|');
 }
 
+// uniqueValues 处理 unique Values 相关逻辑。
 function uniqueValues(values: string[]) {
   return Array.from(new Set(values.filter(Boolean)));
 }
 
+// maxSeverity 处理 max Severity 相关逻辑。
 function maxSeverity(values: string[]) {
   const order: Record<string, number> = { info: 1, low: 2, medium: 3, high: 4, critical: 5 };
   return values.reduce((max, value) => (order[value] ?? 0) > (order[max] ?? 0) ? value : max, values[0] || 'info');
 }
 
+// findRelatedEvents 处理 find Related Events 相关逻辑。
 function findRelatedEvents(groups: AuditEventGroup[], selected?: AuditEvent) {
   if (!selected) {
     return [];
