@@ -1,7 +1,9 @@
 import { DeleteOutlined, EditOutlined, KeyOutlined, PlusOutlined } from '@ant-design/icons';
 import { Button, Card, Empty, Form, Input, Modal, Popconfirm, Select, Space, Table, Tag, Typography, message } from 'antd';
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { createUser, deleteUser, listRoles, listUsers, resetUserPassword, updateUser } from '../../api/userAdmin';
+import { InsightHero, MetricCard, SummaryPanel } from '../../components/InsightHeader';
 import type { ManagedUser, Role } from '../../types/userAdmin';
 import { formatLocalDateTime } from '../../utils/time';
 
@@ -133,6 +135,9 @@ export default function UserManagementPage() {
   }
 
   const roleOptions = roles.map((role) => ({ value: role.name, label: role.name }));
+  const activeUsers = users.filter((user) => user.status === 'active').length;
+  const disabledUsers = users.filter((user) => user.status === 'disabled').length;
+  const latestUser = users[0];
 
   return (
     <>
@@ -140,6 +145,31 @@ export default function UserManagementPage() {
         <Typography.Title level={3} className="page-title">用户管理</Typography.Title>
         <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新建用户</Button>
       </Space>
+      <section className="system-hero">
+        <InsightHero
+          kicker="IDENTITY CONTROL"
+          title="账号与权限工作台"
+          description="管理平台用户、角色授权与密码重置，快速识别停用账号和近期新增身份，减少权限漂移。"
+          actions={(
+            <>
+            <Button ghost icon={<PlusOutlined />} onClick={openCreate}>新建用户</Button>
+            <Link to="/settings/operation-logs"><Button ghost>查看操作审计</Button></Link>
+            </>
+          )}
+        />
+        <SummaryPanel
+          className="user-summary"
+          kicker="LATEST IDENTITY"
+          title={latestUser ? latestUser.username : '暂无用户'}
+          description={latestUser ? `${latestUser.displayName || '未设置显示名'} · ${latestUser.status === 'active' ? '启用' : '停用'}` : '等待账号创建后生成身份摘要'}
+        />
+      </section>
+      <div className="metric-grid">
+        <MetricCard label="用户总数" value={users.length} hint="Managed users" tone="cyan" />
+        <MetricCard label="启用账号" value={activeUsers} hint="Active identities" tone="success" />
+        <MetricCard label="停用账号" value={disabledUsers} hint="Disabled identities" tone="danger" />
+        <MetricCard label="角色数量" value={roles.length} hint="Role catalog" tone="blue" />
+      </div>
       <Card className="data-card">
         <Table
           rowKey="id"
@@ -155,8 +185,8 @@ export default function UserManagementPage() {
             onShowSizeChange: (_, size) => setTablePageSize(size),
           }}
           columns={[
-            { title: '用户名', dataIndex: 'username', width: 150 },
-            { title: '显示名', dataIndex: 'displayName', width: 160 },
+            { title: '用户名', dataIndex: 'username', width: 160, ellipsis: true },
+            { title: '显示名', dataIndex: 'displayName', width: 170, ellipsis: true },
             { title: '邮箱', dataIndex: 'email', width: 220, render: (value) => value || '-' },
             {
               title: '状态',

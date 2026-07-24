@@ -1,11 +1,11 @@
 import { Button, Card, DatePicker, Empty, Form, Input, Select, Table, Tag, Typography } from 'antd';
 import dayjs from 'dayjs';
-import type { CSSProperties } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { exportAuditEvents, queryAuditEvents } from '../../api/audit';
 import CommandText from '../../components/CommandText';
 import FilterToolbar from '../../components/FilterToolbar';
+import { MetricCard } from '../../components/InsightHeader';
 import SeverityTag from '../../components/SeverityTag';
 import type { AuditEvent, AuditEventQuery } from '../../types/audit';
 import { downloadBlob } from '../../utils/download';
@@ -134,10 +134,10 @@ export default function AuditEventsPage() {
         </aside>
       </div>
       <div className="metric-grid risk-metric-grid">
-        <AuditMetric label="操作分组" value={groupedEvents.length} hint={`共 ${compactNumber(total)} 条匹配结果`} />
-        <AuditMetric label="原始事件" value={events.length} hint="当前页事件数" />
-        <AuditMetric label="高危/严重" value={riskyEvents} hint={`${criticalEvents} 条严重事件`} tone="danger" />
-        <AuditMetric label="活跃主机" value={activeHosts} hint="当前页涉及主机" tone="success" />
+        <MetricCard label="操作分组" value={groupedEvents.length} hint={`共 ${compactNumber(total)} 条匹配结果`} tone="blue" />
+        <MetricCard label="原始事件" value={events.length} hint="当前页事件数" tone="cyan" />
+        <MetricCard label="高危/严重" value={riskyEvents} hint={`${criticalEvents} 条严重事件`} tone="danger" />
+        <MetricCard label="活跃主机" value={activeHosts} hint="当前页涉及主机" tone="success" />
       </div>
       <FilterToolbar form={form} initialValues={{ timeRange: defaultRange }} onSearch={submit} onReset={() => void resetAndLoad()} onExport={() => void exportCSV()}>
         <Form.Item name="timeRange" label="时间" className="filter-field-time">
@@ -233,18 +233,6 @@ export default function AuditEventsPage() {
       </Card>
       <EventDetailDrawer event={selected} relatedEvents={findRelatedEvents(groupedEvents, selected)} open={Boolean(selected)} onClose={() => setSelected(undefined)} />
     </>
-  );
-}
-
-// AuditMetric 渲染审计事件指标。
-function AuditMetric({ label, value, hint, tone }: { label: string; value: number; hint: string; tone?: 'danger' | 'success' }) {
-  const color = tone === 'danger' ? '#dc2626' : tone === 'success' ? '#16a34a' : '#2563eb';
-  return (
-    <div className="metric-card" style={{ '--metric-color': color } as CSSProperties}>
-      <div className="metric-label">{label}</div>
-      <div className="metric-value">{compactNumber(value)}</div>
-      <div className="metric-hint">{hint}</div>
-    </div>
   );
 }
 

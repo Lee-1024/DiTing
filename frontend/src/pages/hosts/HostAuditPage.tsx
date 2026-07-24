@@ -2,15 +2,18 @@ import { Button, Card, DatePicker, Descriptions, Drawer, Empty, Form, Input, Row
 import dayjs from 'dayjs';
 import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { exportAuditEvents, queryAuditEvents } from '../../api/audit';
 import { exportHostAudits, getHostAudits, getHostBehavior, getHostUsers } from '../../api/stats';
 import CommandText from '../../components/CommandText';
 import FilterToolbar from '../../components/FilterToolbar';
+import { MetricCard } from '../../components/InsightHeader';
 import ProcessChain from '../../components/ProcessChain';
 import SeverityTag from '../../components/SeverityTag';
 import type { AuditEvent } from '../../types/audit';
 import type { BehaviorItem, HostAuditItem, HostAuditQuery, HostBehavior, HostUserItem } from '../../types/stats';
 import { downloadBlob } from '../../utils/download';
+import { compactNumber } from '../../utils/format';
 import { eventTypeLabel, severityOptions } from '../../utils/labels';
 import { formatLocalDateTime } from '../../utils/time';
 
@@ -233,10 +236,42 @@ export default function HostAuditPage() {
     void load();
   }, []);
 
+  const totalCommands = items.reduce((sum, item) => sum + item.commandCount, 0);
+  const totalUsers = items.reduce((sum, item) => sum + item.activeUsers, 0);
+  const totalHighRisk = items.reduce((sum, item) => sum + item.highRiskEvents, 0);
+  const latestHost = [...items].sort((left, right) => new Date(right.lastSeen).getTime() - new Date(left.lastSeen).getTime())[0];
+
   return (
     <>
       <div className="page-heading">
-        <Typography.Title level={3} className="page-title">主机审计</Typography.Title>
+        <div>
+          <span className="page-kicker">HOST BEHAVIOR PROFILE</span>
+          <Typography.Title level={3} className="page-title">主机审计画像</Typography.Title>
+        </div>
+      </div>
+      <div className="host-hero">
+        <section className="host-summary">
+          <div className="ops-kicker">Host Behavior</div>
+          <Typography.Title level={2} className="investigation-title">从主机维度聚合用户、命令、文件和网络外联</Typography.Title>
+          <Typography.Text className="investigation-desc">
+            主机画像用于定位异常资产和横向移动线索；点击主机进入用户分布、风险时间线和行为画像。
+          </Typography.Text>
+          <div className="ops-hero-actions">
+            <Link to="/audit/users"><Button type="primary">用户审计</Button></Link>
+            <Link to="/settings/collector-health"><Button ghost>采集状态</Button></Link>
+          </div>
+        </section>
+        <aside className="investigation-latest">
+          <Typography.Text type="secondary">最近活跃主机</Typography.Text>
+          <div className="latest-risk-title">{latestHost?.hostName || latestHost?.nodeName || '-'}</div>
+          <div className="latest-risk-desc">{latestHost ? `${compactNumber(latestHost.commandCount)} 条命令 / ${compactNumber(latestHost.highRiskEvents)} 条高危` : '暂无主机审计数据'}</div>
+        </aside>
+      </div>
+      <div className="metric-grid risk-metric-grid">
+        <MetricCard label="主机数" value={items.length} hint="当前筛选结果" tone="blue" />
+        <MetricCard label="命令数" value={totalCommands} hint="聚合命令总量" tone="cyan" />
+        <MetricCard label="活跃用户足迹" value={totalUsers} hint="主机用户覆盖" tone="success" />
+        <MetricCard label="高危事件" value={totalHighRisk} hint="需重点调查" tone="danger" />
       </div>
       <FilterToolbar form={form} initialValues={{ timeRange: defaultRange }} onSearch={() => void load()} onReset={() => void resetAndLoad()} onExport={() => void exportHosts()}>
         <Form.Item name="timeRange" label="时间" className="filter-field-time">
@@ -286,6 +321,7 @@ export default function HostAuditPage() {
         title={selected?.hostName ? `${selected.hostName} 主机审计详情` : '主机审计详情'}
         width={1080}
         open={Boolean(selected)}
+        className="investigation-drawer"
         onClose={() => {
           setSelected(undefined);
           setEvents([]);
@@ -304,6 +340,19 @@ export default function HostAuditPage() {
       >
         {selected && (
           <Space direction="vertical" size={16} style={{ width: '100%' }}>
+            <div className="event-brief">
+              <div>
+                <div className="ops-kicker">Host Profile</div>
+                <Typography.Title level={4} className="event-brief-title">{selected.hostName || selected.nodeName || selected.hostId}</Typography.Title>
+                <Typography.Text className="event-brief-desc">
+                  {compactNumber(selected.commandCount)} 条命令，{compactNumber(selected.activeUsers)} 个活跃用户，{compactNumber(selected.highRiskEvents)} 条高危事件。
+                </Typography.Text>
+              </div>
+              <div className="event-brief-meta">
+                <span className="metric-label">高危事件</span>
+                <span className="ops-status-value">{compactNumber(selected.highRiskEvents)}</span>
+              </div>
+            </div>
             <Descriptions column={1} bordered size="small">
               <Descriptions.Item label="主机名">{selected.hostName || '-'}</Descriptions.Item>
               <Descriptions.Item label="Host ID">{selected.hostId || '-'}</Descriptions.Item>

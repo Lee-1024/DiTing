@@ -2,8 +2,10 @@ import { ReloadOutlined } from '@ant-design/icons';
 import { Button, Card, DatePicker, Empty, Form, Input, Select, Space, Switch, Table, Typography } from 'antd';
 import dayjs from 'dayjs';
 import { useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { queryAuditEvents } from '../../api/audit';
 import CommandText from '../../components/CommandText';
+import { MetricCard } from '../../components/InsightHeader';
 import SeverityTag from '../../components/SeverityTag';
 import type { AuditEvent, AuditEventQuery } from '../../types/audit';
 import { eventTypeLabel, eventTypeOptions } from '../../utils/labels';
@@ -69,14 +71,45 @@ export default function CollectorDebugPage() {
     return () => window.clearInterval(timer);
   }, [autoRefresh]);
 
+  const riskyEvents = events.filter((item) => item.severity === 'high' || item.severity === 'critical').length;
+  const hostCount = Array.from(new Set(events.map((item) => item.hostName || item.nodeName || item.hostId).filter(Boolean))).length;
+  const latestEvent = events[0];
+
   return (
     <>
-      <Space className="page-heading">
-        <Typography.Title level={3} className="page-title">采集调试</Typography.Title>
+      <Space className="page-heading" align="center">
+        <div>
+          <span className="page-kicker">LIVE EVENT STREAM</span>
+          <Typography.Title level={3} className="page-title">采集调试工作台</Typography.Title>
+        </div>
         <Button icon={<ReloadOutlined />} onClick={() => void load()}>刷新</Button>
         <Switch checked={autoRefresh} onChange={setAutoRefresh} checkedChildren="自动" unCheckedChildren="手动" />
         <Typography.Text type="secondary">最近 {total} 条</Typography.Text>
       </Space>
+      <div className="collector-hero">
+        <section className="debug-summary">
+          <div className="ops-kicker">Live Collector Debug</div>
+          <Typography.Title level={2} className="investigation-title">观察最近采集事件，验证规则与链路是否正常</Typography.Title>
+          <Typography.Text className="investigation-desc">
+            调试页保留短时间窗口和自动刷新，用于确认 Collector 是否持续产生日志、风险事件是否及时入库。
+          </Typography.Text>
+          <div className="ops-hero-actions">
+            <Link to="/settings/collector-health"><Button type="primary">采集状态</Button></Link>
+            <Link to="/audit/events"><Button ghost>操作日志</Button></Link>
+          </div>
+        </section>
+        <aside className="investigation-latest">
+          <Typography.Text type="secondary">最新事件</Typography.Text>
+          <div className="latest-risk-title">{latestEvent ? eventTypeLabel(latestEvent.eventType) : '-'}</div>
+          <div className="latest-risk-desc">{latestEvent ? latestEvent.cmdline || latestEvent.filePath || latestEvent.processName || '-' : '暂无采集事件'}</div>
+        </aside>
+      </div>
+      <div className="metric-grid risk-metric-grid">
+        <MetricCard label="匹配总量" value={total} hint="当前查询结果" tone="blue" />
+        <MetricCard label="当前页事件" value={events.length} hint="最近采集样本" tone="cyan" />
+        <MetricCard label="高危事件" value={riskyEvents} hint="需验证规则命中" tone="danger" />
+        <MetricCard label="涉及主机" value={hostCount} hint={autoRefresh ? '自动刷新中' : '手动刷新'} tone="success" />
+      </div>
       <Card className="data-card">
         <Form form={form} layout="inline" initialValues={{ timeRange: defaultRange, eventType: undefined }} style={{ marginBottom: 16 }}>
           <Form.Item name="timeRange" label="时间">

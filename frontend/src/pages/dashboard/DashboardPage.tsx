@@ -1,11 +1,11 @@
 import { Alert, Button, Card, Empty, Space, Tag, Typography } from 'antd';
 import dayjs from 'dayjs';
 import type { EChartsOption } from 'echarts';
-import type { CSSProperties } from 'react';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getEventTrend, getOverview, getTopCommands, getTopHosts, getTopNamespaces } from '../../api/stats';
 import EChart from '../../components/EChart';
+import { MetricCard } from '../../components/InsightHeader';
 import type { OverviewStats, TopItem, TrendPoint } from '../../types/stats';
 import { compactNumber } from '../../utils/format';
 
@@ -103,10 +103,10 @@ export default function DashboardPage() {
         </aside>
       </div>
       <div className="metric-grid">
-        <MetricCard label="今日事件" value={compactNumber(overview.totalEvents)} hint="审计事件总量" loading={loading} />
-        <MetricCard label="高危事件" value={compactNumber(overview.highRiskEvents)} hint="需优先处置" loading={loading} tone="danger" />
-        <MetricCard label="活跃主机" value={compactNumber(overview.activeHosts)} hint="产生审计行为" loading={loading} />
-        <MetricCard label="启用规则" value={compactNumber(overview.activeRules)} hint="参与风险判定" loading={loading} tone="success" />
+        <MetricCard label="今日事件" value={loading ? '-' : compactNumber(overview.totalEvents)} hint="审计事件总量" tone="blue" />
+        <MetricCard label="高危事件" value={loading ? '-' : compactNumber(overview.highRiskEvents)} hint="需优先处置" tone="danger" />
+        <MetricCard label="活跃主机" value={loading ? '-' : compactNumber(overview.activeHosts)} hint="产生审计行为" tone="cyan" />
+        <MetricCard label="启用规则" value={loading ? '-' : compactNumber(overview.activeRules)} hint="参与风险判定" tone="success" />
       </div>
       <div className="workbench-grid">
         <Space direction="vertical" size={16} style={{ width: '100%' }}>
@@ -142,18 +142,6 @@ export default function DashboardPage() {
         </Space>
       </div>
     </>
-  );
-}
-
-// MetricCard 渲染安全态势指标卡。
-function MetricCard({ label, value, hint, loading, tone }: { label: string; value: string; hint: string; loading: boolean; tone?: 'danger' | 'success' }) {
-  const color = tone === 'danger' ? '#dc2626' : tone === 'success' ? '#16a34a' : '#2563eb';
-  return (
-    <div className="metric-card" style={{ '--metric-color': color } as CSSProperties}>
-      <div className="metric-label">{label}</div>
-      <div className="metric-value">{loading ? '-' : value}</div>
-      <div className="metric-hint">{hint}</div>
-    </div>
   );
 }
 

@@ -1,14 +1,17 @@
 import { Button, Card, DatePicker, Descriptions, Drawer, Empty, Form, Input, Select, Space, Table, Typography } from 'antd';
 import dayjs from 'dayjs';
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { exportAuditEvents, queryAuditEvents } from '../../api/audit';
 import { getUserAudits } from '../../api/stats';
 import CommandText from '../../components/CommandText';
 import FilterToolbar from '../../components/FilterToolbar';
+import { MetricCard } from '../../components/InsightHeader';
 import SeverityTag from '../../components/SeverityTag';
 import type { AuditEvent } from '../../types/audit';
 import type { UserAuditItem, UserAuditQuery } from '../../types/stats';
 import { downloadBlob } from '../../utils/download';
+import { compactNumber } from '../../utils/format';
 import { severityOptions } from '../../utils/labels';
 import { formatLocalDateTime } from '../../utils/time';
 
@@ -191,10 +194,42 @@ export default function UserAuditPage() {
     void load();
   }, []);
 
+  const totalCommands = items.reduce((sum, item) => sum + item.commandCount, 0);
+  const totalHighRisk = items.reduce((sum, item) => sum + item.highRiskEvents, 0);
+  const activeHostFootprint = items.reduce((sum, item) => sum + item.activeHosts, 0);
+  const latestUser = [...items].sort((left, right) => new Date(right.lastSeen).getTime() - new Date(left.lastSeen).getTime())[0];
+
   return (
     <>
       <div className="page-heading">
-        <Typography.Title level={3} className="page-title">用户审计</Typography.Title>
+        <div>
+          <span className="page-kicker">USER BEHAVIOR PROFILE</span>
+          <Typography.Title level={3} className="page-title">用户审计画像</Typography.Title>
+        </div>
+      </div>
+      <div className="profile-hero">
+        <section className="user-summary">
+          <div className="ops-kicker">Identity Behavior</div>
+          <Typography.Title level={2} className="investigation-title">从用户维度追踪命令、主机和高危行为</Typography.Title>
+          <Typography.Text className="investigation-desc">
+            用户画像聚合执行命令、涉及主机和高危命中；点击用户进入行为分布和命令明细。
+          </Typography.Text>
+          <div className="ops-hero-actions">
+            <Link to="/audit/commands"><Button type="primary">命令审计</Button></Link>
+            <Link to="/audit/hosts"><Button ghost>主机画像</Button></Link>
+          </div>
+        </section>
+        <aside className="investigation-latest">
+          <Typography.Text type="secondary">最近活跃用户</Typography.Text>
+          <div className="latest-risk-title">{latestUser?.username || '-'}</div>
+          <div className="latest-risk-desc">{latestUser ? `${compactNumber(latestUser.commandCount)} 条命令 / ${compactNumber(latestUser.highRiskEvents)} 条高危` : '暂无用户审计数据'}</div>
+        </aside>
+      </div>
+      <div className="metric-grid risk-metric-grid">
+        <MetricCard label="用户数" value={items.length} hint="当前筛选结果" tone="blue" />
+        <MetricCard label="命令数" value={totalCommands} hint="聚合命令总量" tone="cyan" />
+        <MetricCard label="主机覆盖" value={activeHostFootprint} hint="用户涉及主机足迹" tone="success" />
+        <MetricCard label="高危事件" value={totalHighRisk} hint="需重点回溯" tone="danger" />
       </div>
       <FilterToolbar form={form} initialValues={{ timeRange: defaultRange }} onSearch={() => void load()} onReset={() => void resetAndLoad()}>
         <Form.Item name="timeRange" label="时间" className="filter-field-time">
@@ -238,9 +273,23 @@ export default function UserAuditPage() {
         width={1120}
         open={Boolean(selected)}
         onClose={closeDetails}
+        className="investigation-drawer"
       >
         {selected && (
           <Space direction="vertical" size={16} style={{ width: '100%' }}>
+            <div className="event-brief">
+              <div>
+                <div className="ops-kicker">User Profile</div>
+                <Typography.Title level={4} className="event-brief-title">{selected.username}</Typography.Title>
+                <Typography.Text className="event-brief-desc">
+                  {compactNumber(selected.commandCount)} 条命令，覆盖 {compactNumber(selected.activeHosts)} 台主机，命中 {compactNumber(selected.highRiskEvents)} 条高危事件。
+                </Typography.Text>
+              </div>
+              <div className="event-brief-meta">
+                <span className="metric-label">高危事件</span>
+                <span className="ops-status-value">{compactNumber(selected.highRiskEvents)}</span>
+              </div>
+            </div>
             <Descriptions column={2} bordered size="small">
               <Descriptions.Item label="用户">{selected.username}</Descriptions.Item>
               <Descriptions.Item label="涉及主机">{selected.activeHosts}</Descriptions.Item>

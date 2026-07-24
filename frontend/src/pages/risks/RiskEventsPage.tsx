@@ -1,11 +1,11 @@
 import { Button, Card, DatePicker, Empty, Form, Input, Modal, Select, Space, Table, Tag, Typography, message } from 'antd';
 import dayjs from 'dayjs';
-import type { CSSProperties } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { exportAuditEvents, queryAuditEvents } from '../../api/audit';
 import { getRiskDispositions, listRiskDispositions, updateRiskDisposition } from '../../api/riskDispositions';
 import CommandText from '../../components/CommandText';
 import FilterToolbar from '../../components/FilterToolbar';
+import { MetricCard } from '../../components/InsightHeader';
 import ProcessChain from '../../components/ProcessChain';
 import SeverityTag from '../../components/SeverityTag';
 import type { AuditEvent, AuditEventQuery } from '../../types/audit';
@@ -209,10 +209,10 @@ export default function RiskEventsPage() {
         </aside>
       </div>
       <div className="metric-grid risk-metric-grid">
-        <RiskMetric label="当前队列" value={visibleEvents.length} hint={`共 ${total} 条匹配结果`} />
-        <RiskMetric label="待处理" value={openCount} hint="需要确认或关闭" tone="danger" />
-        <RiskMetric label="Critical" value={criticalCount} hint="最高优先级" tone="danger" />
-        <RiskMetric label="High" value={highCount} hint="高优先级" tone="warning" />
+        <MetricCard label="当前队列" value={visibleEvents.length} hint={`共 ${total} 条匹配结果`} tone="blue" />
+        <MetricCard label="待处理" value={openCount} hint="需要确认或关闭" tone="danger" />
+        <MetricCard label="Critical" value={criticalCount} hint="最高优先级" tone="danger" />
+        <MetricCard label="High" value={highCount} hint="高优先级" tone="warning" />
       </div>
       <FilterToolbar form={form} initialValues={{ timeRange: defaultRange, severity: 'medium,high,critical', dispositionStatus: 'open' }} onSearch={submit} onReset={() => void resetAndLoad()} onExport={() => void exportCSV()}>
         <Form.Item name="timeRange" label="时间" className="filter-field-time">
@@ -354,18 +354,6 @@ export default function RiskEventsPage() {
         </Form>
       </Modal>
     </>
-  );
-}
-
-// RiskMetric 渲染风险队列指标。
-function RiskMetric({ label, value, hint, tone }: { label: string; value: number; hint: string; tone?: 'danger' | 'warning' }) {
-  const color = tone === 'danger' ? '#dc2626' : tone === 'warning' ? '#d97706' : '#2563eb';
-  return (
-    <div className="metric-card" style={{ '--metric-color': color } as CSSProperties}>
-      <div className="metric-label">{label}</div>
-      <div className="metric-value">{value}</div>
-      <div className="metric-hint">{hint}</div>
-    </div>
   );
 }
 

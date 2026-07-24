@@ -1,7 +1,9 @@
 import { DeleteOutlined, EditOutlined, ExperimentOutlined, PlusOutlined } from '@ant-design/icons';
 import { Alert, Button, Card, Empty, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Switch, Table, Tag, Typography, message } from 'antd';
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { createRule, deleteRule, getRule, listRules, testRule, updateRule } from '../../api/rules';
+import { MetricCard } from '../../components/InsightHeader';
 import type { AuditRule, RuleCondition, RuleExpression, RulePayload, RuleTestEvent, RuleTestResponse } from '../../types/rule';
 import { eventTypeOptions, optionLabel, ruleFieldLabel, ruleFieldOptions, ruleOperatorLabel, ruleOperatorOptions, severityOptions } from '../../utils/labels';
 
@@ -170,12 +172,44 @@ export default function RulesPage() {
     }
   }
 
+  const enabledCount = rules.filter((rule) => rule.enabled).length;
+  const highRiskCount = rules.filter((rule) => rule.severity === 'high' || rule.severity === 'critical').length;
+  const avgScore = rules.length ? Math.round(rules.reduce((sum, rule) => sum + rule.riskScore, 0) / rules.length) : 0;
+  const latestRule = [...rules].sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime())[0];
+
   return (
     <>
       <Space className="page-heading">
-        <Typography.Title level={3} className="page-title">审计规则</Typography.Title>
+        <div>
+          <span className="page-kicker">POLICY CONTROL</span>
+          <Typography.Title level={3} className="page-title">审计规则策略</Typography.Title>
+        </div>
         <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新建规则</Button>
       </Space>
+      <div className="policy-hero">
+        <section className="policy-summary">
+          <div className="ops-kicker">Detection Policy</div>
+          <Typography.Title level={2} className="investigation-title">维护风险识别规则，控制审计命中质量</Typography.Title>
+          <Typography.Text className="investigation-desc">
+            规则策略决定风险事件的生成质量；建议优先维护高风险规则、规则标签和测试样例。
+          </Typography.Text>
+          <div className="ops-hero-actions">
+            <Link to="/audit/rules"><Button type="primary">规则命中分析</Button></Link>
+            <Link to="/audit/risks"><Button ghost>风险事件</Button></Link>
+          </div>
+        </section>
+        <aside className="investigation-latest">
+          <Typography.Text type="secondary">最近更新规则</Typography.Text>
+          <div className="latest-risk-title">{latestRule?.name || '-'}</div>
+          <div className="latest-risk-desc">{latestRule ? `${optionLabel(eventTypeOptions, latestRule.eventType)} / ${optionLabel(severityOptions, latestRule.severity)} / ${latestRule.riskScore} 分` : '暂无审计规则'}</div>
+        </aside>
+      </div>
+      <div className="metric-grid risk-metric-grid">
+        <MetricCard label="规则总数" value={rules.length} hint="当前策略库" tone="blue" />
+        <MetricCard label="启用规则" value={enabledCount} hint={`${rules.length ? Math.round((enabledCount / rules.length) * 100) : 0}% 启用率`} tone="success" />
+        <MetricCard label="高危规则" value={highRiskCount} hint="High / Critical" tone="danger" />
+        <MetricCard label="平均分数" value={avgScore} hint="风险评分均值" tone="warning" />
+      </div>
       <Card className="data-card">
         <Table
           rowKey="id"

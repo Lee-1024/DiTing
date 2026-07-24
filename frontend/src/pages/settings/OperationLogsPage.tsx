@@ -1,8 +1,10 @@
-import { Card, DatePicker, Empty, Form, Input, InputNumber, Select, Table, Tag, Typography } from 'antd';
+import { Button, Card, DatePicker, Empty, Form, Input, InputNumber, Select, Table, Tag, Typography } from 'antd';
 import dayjs from 'dayjs';
 import { useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { queryOperationLogs } from '../../api/operationLogs';
 import FilterToolbar from '../../components/FilterToolbar';
+import { InsightHero, MetricCard, SummaryPanel } from '../../components/InsightHeader';
 import type { OperationLog, OperationLogQuery } from '../../types/operationLog';
 import { formatLocalDateTime } from '../../utils/time';
 
@@ -70,10 +72,38 @@ export default function OperationLogsPage() {
     void load();
   }, []);
 
+  const failedCount = items.filter((item) => item.status >= 400).length;
+  const activeUsers = new Set(items.map((item) => item.username).filter(Boolean)).size;
+  const latest = items[0];
+
   return (
     <>
       <div className="page-heading">
         <Typography.Title level={3} className="page-title">操作审计</Typography.Title>
+      </div>
+      <section className="system-hero">
+        <InsightHero
+          kicker="ADMIN OPERATION TRAIL"
+          title="后台操作留痕"
+          description="聚合管理端请求、状态码、来源 IP 与 User-Agent，快速定位失败操作、异常路径和高频用户行为。"
+          actions={(
+            <>
+            <Link to="/audit/events"><Button ghost>关联操作日志</Button></Link>
+            <Link to="/risks"><Button ghost>查看风险事件</Button></Link>
+            </>
+          )}
+        />
+        <SummaryPanel
+          kicker="LATEST TRACE"
+          title={latest ? latest.username : '暂无操作'}
+          description={latest ? `${latest.method} ${latest.path} · ${latest.status}` : '等待新的后台请求进入审计队列'}
+        />
+      </section>
+      <div className="metric-grid">
+        <MetricCard label="总记录" value={total} hint="Matched logs" tone="cyan" />
+        <MetricCard label="当前页" value={items.length} hint="Visible rows" tone="blue" />
+        <MetricCard label="失败状态" value={failedCount} hint="HTTP >= 400" tone="danger" />
+        <MetricCard label="活跃用户" value={activeUsers} hint="Current page users" tone="success" />
       </div>
       <FilterToolbar form={form} initialValues={{ timeRange: defaultRange }} onSearch={submit} onReset={() => void resetAndLoad()}>
         <Form.Item name="timeRange" label="时间" className="filter-field-time">
@@ -113,7 +143,7 @@ export default function OperationLogsPage() {
           }}
           columns={[
             { title: '时间', dataIndex: 'createdAt', width: 190, fixed: 'left', render: (value) => formatLocalDateTime(value) },
-            { title: '用户', dataIndex: 'username', width: 120 },
+            { title: '用户', dataIndex: 'username', width: 140, ellipsis: true },
             { title: '方法', dataIndex: 'method', width: 90, render: (value) => <Tag>{value}</Tag> },
             { title: '路径', dataIndex: 'path', width: 420, ellipsis: true },
             { title: '状态码', dataIndex: 'status', width: 116, align: 'right', className: 'number-cell', render: (value) => <Tag color={value >= 400 ? 'red' : 'green'}>{value}</Tag> },

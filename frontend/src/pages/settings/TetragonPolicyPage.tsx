@@ -1,6 +1,7 @@
 import { CopyOutlined, DownloadOutlined } from '@ant-design/icons';
 import { Alert, Button, Card, Form, Input, Popconfirm, Select, Space, Switch, Table, Tag, Typography, message } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   createEnforcementPolicy,
   deleteEnforcementPolicy,
@@ -11,6 +12,7 @@ import {
   updateEnforcementPolicy,
   upsertEnforcementDeployment,
 } from '../../api/enforcement';
+import { InsightHero, MetricCard, SummaryPanel } from '../../components/InsightHeader';
 import type { EnforcementDeployment, EnforcementDeploymentStatus, EnforcementPolicy, EnforcementPolicyPayload } from '../../types/enforcement';
 
 type PolicyTemplate = 'dangerous_command' | 'sensitive_file' | 'permission_change' | 'delete_behavior' | 'suspicious_process';
@@ -79,6 +81,10 @@ export default function TetragonPolicyPage() {
     targetHosts,
   }), [template, mode, name, description, enabled, commands, filePaths, processNames, userMatchMode, userIds, targetHosts]);
   const yaml = useMemo(() => generatePolicy(policy), [policy]);
+  const allDeployments = Object.values(deployments).flat();
+  const enabledPolicyCount = policies.filter((item) => item.enabled && item.mode !== 'disabled').length;
+  const enforcePolicyCount = policies.filter((item) => item.enabled && item.mode === 'enforce').length;
+  const failedDeploymentCount = allDeployments.filter((item) => item.status === 'failed').length;
 
   useEffect(() => {
     void loadPolicies();
@@ -236,7 +242,32 @@ export default function TetragonPolicyPage() {
         <Button icon={<CopyOutlined />} onClick={() => void copyYaml()}>复制 YAML</Button>
         <Button icon={<DownloadOutlined />} onClick={downloadYaml}>下载 YAML</Button>
       </Space>
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(360px, 520px) 1fr', gap: 16, alignItems: 'start' }}>
+      <section className="system-hero">
+        <InsightHero
+          className="policy-summary"
+          kicker="TETRAGON ENFORCEMENT"
+          title="运行时拦截策略控制"
+          description="将危险命令、敏感路径、权限变更和可疑进程链路沉淀为可审计、可同步、可紧急停用的 Tetragon 策略。"
+          actions={(
+            <>
+            <Link to="/settings/collectors"><Button ghost>检查同步状态</Button></Link>
+            <Button ghost icon={<CopyOutlined />} onClick={() => void copyYaml()}>复制当前 YAML</Button>
+            </>
+          )}
+        />
+        <SummaryPanel
+          kicker="DRAFT PREVIEW"
+          title={name || '未命名策略'}
+          description={`${templateLabelText(template)} · ${mode === 'enforce' ? '拦截模式' : mode === 'disabled' ? '禁用' : '仅审计'} · ${enabled ? '启用' : '停用'}`}
+        />
+      </section>
+      <div className="metric-grid">
+        <MetricCard label="策略总数" value={policies.length} hint="Saved policies" tone="cyan" />
+        <MetricCard label="启用策略" value={enabledPolicyCount} hint="Sync eligible" tone="success" />
+        <MetricCard label="强拦截" value={enforcePolicyCount} hint="Enforce mode" tone="danger" />
+        <MetricCard label="同步失败" value={failedDeploymentCount} hint="Deployment failures" tone="warning" />
+      </div>
+      <div className="config-grid">
         <Card className="data-card">
           <Form form={form} layout="vertical" initialValues={defaultValues}>
             <Form.Item name="template" label="策略模板" rules={[{ required: true }]}>
@@ -425,7 +456,7 @@ export default function TetragonPolicyPage() {
             { title: '模板', dataIndex: 'template', render: templateLabel },
             { title: '模式', dataIndex: 'mode', render: modeTag },
             { title: '启用', dataIndex: 'enabled', render: (value: boolean) => (value ? <Tag color="green">启用</Tag> : <Tag>停用</Tag>) },
-            { title: '适用主机', dataIndex: 'targetHosts', render: (hosts: string[]) => hosts?.length ? hosts.join(', ') : '通用' },
+            { title: '适用主机', dataIndex: 'targetHosts', ellipsis: true, render: (hosts: string[]) => hosts?.length ? hosts.join(', ') : '通用' },
             { title: '自动同步状态', render: (_: unknown, record: EnforcementPolicy) => deploymentSummary(record, deployments[record.id] ?? []) },
             { title: '更新时间', dataIndex: 'updatedAt', render: (value: string) => formatTime(value) },
             {
@@ -467,6 +498,11 @@ function defaultPolicyName(template: PolicyTemplate) {
 
 // templateLabel 生成 template Label 的展示内容。
 function templateLabel(value: string) {
+  return templateLabelText(value);
+}
+
+// templateLabelText 生成 template Label Text 的展示内容。
+function templateLabelText(value: string) {
   switch (value) {
     case 'sensitive_file':
       return '敏感文件读写';

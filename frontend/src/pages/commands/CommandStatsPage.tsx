@@ -1,14 +1,17 @@
-import { Card, DatePicker, Descriptions, Drawer, Empty, Form, Input, Space, Table, Typography } from 'antd';
+import { Button, Card, DatePicker, Descriptions, Drawer, Empty, Form, Input, Space, Table, Typography } from 'antd';
 import dayjs from 'dayjs';
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { exportAuditEvents, queryAuditEvents } from '../../api/audit';
 import { exportCommandStats, getCommandStats } from '../../api/stats';
 import CommandText from '../../components/CommandText';
 import FilterToolbar from '../../components/FilterToolbar';
+import { MetricCard } from '../../components/InsightHeader';
 import SeverityTag from '../../components/SeverityTag';
 import type { AuditEvent } from '../../types/audit';
 import type { CommandItem, CommandStatsQuery } from '../../types/stats';
 import { downloadBlob } from '../../utils/download';
+import { compactNumber } from '../../utils/format';
 import { formatLocalDateTime } from '../../utils/time';
 
 const defaultRange = [dayjs().subtract(7, 'day'), dayjs()] as const;
@@ -172,10 +175,42 @@ export default function CommandStatsPage() {
     void load();
   }, []);
 
+  const totalExecutions = items.reduce((sum, item) => sum + item.count, 0);
+  const totalHosts = items.reduce((sum, item) => sum + item.hostCount, 0);
+  const topCommand = items[0];
+  const recentCommand = [...items].sort((left, right) => new Date(right.lastSeen).getTime() - new Date(left.lastSeen).getTime())[0];
+
   return (
     <>
       <div className="page-heading">
-        <Typography.Title level={3} className="page-title">命令审计</Typography.Title>
+        <div>
+          <span className="page-kicker">COMMAND INTELLIGENCE</span>
+          <Typography.Title level={3} className="page-title">命令审计调查</Typography.Title>
+        </div>
+      </div>
+      <div className="command-hero">
+        <section className="command-summary">
+          <div className="ops-kicker">Command Behavior</div>
+          <Typography.Title level={2} className="investigation-title">从高频命令定位用户、主机与风险执行路径</Typography.Title>
+          <Typography.Text className="investigation-desc">
+            命令审计按命令聚合执行行为，点击命令可查看高危命中和完整执行明细。
+          </Typography.Text>
+          <div className="ops-hero-actions">
+            <Link to="/audit/risks"><Button type="primary">查看高危风险</Button></Link>
+            <Link to="/audit/users"><Button ghost>分析用户行为</Button></Link>
+          </div>
+        </section>
+        <aside className="investigation-latest">
+          <Typography.Text type="secondary">最近命令</Typography.Text>
+          <div className="latest-risk-title">{recentCommand ? commandName(recentCommand) : '-'}</div>
+          <div className="latest-risk-desc">{recentCommand?.cmdline || '暂无命令数据'}</div>
+        </aside>
+      </div>
+      <div className="metric-grid risk-metric-grid">
+        <MetricCard label="命令种类" value={items.length} hint="当前筛选结果" tone="blue" />
+        <MetricCard label="执行次数" value={totalExecutions} hint="聚合执行总量" tone="cyan" />
+        <MetricCard label="涉及主机" value={totalHosts} hint="命令覆盖主机数" tone="success" />
+        <MetricCard label="最高频命令" value={topCommand?.count ?? 0} hint={topCommand ? commandName(topCommand) : '暂无'} tone="warning" />
       </div>
       <FilterToolbar form={form} initialValues={{ timeRange: defaultRange }} onSearch={() => void load()} onReset={() => void resetAndLoad()} onExport={() => void exportCSV()}>
         <Form.Item name="timeRange" label="时间" className="filter-field-time">
@@ -225,9 +260,21 @@ export default function CommandStatsPage() {
         width={1120}
         open={Boolean(selected)}
         onClose={closeDetails}
+        className="investigation-drawer"
       >
         {selected && (
           <Space direction="vertical" size={16} style={{ width: '100%' }}>
+            <div className="event-brief">
+              <div>
+                <div className="ops-kicker">Command Detail</div>
+                <Typography.Title level={4} className="event-brief-title">{commandName(selected)}</Typography.Title>
+                <Typography.Text className="event-brief-desc">{selected.cmdline || '-'}</Typography.Text>
+              </div>
+              <div className="event-brief-meta">
+                <span className="metric-label">执行次数</span>
+                <span className="ops-status-value">{compactNumber(selected.count)}</span>
+              </div>
+            </div>
             <Descriptions column={2} bordered size="small">
               <Descriptions.Item label="命令">{commandName(selected)}</Descriptions.Item>
               <Descriptions.Item label="涉及主机">{selected.hostCount}</Descriptions.Item>

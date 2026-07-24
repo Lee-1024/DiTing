@@ -1,7 +1,9 @@
 import { ReloadOutlined } from '@ant-design/icons';
 import { Button, Card, Empty, Space, Table, Tag, Typography } from 'antd';
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { listCollectorHealth } from '../../api/collectorHealth';
+import { MetricCard } from '../../components/InsightHeader';
 import type { CollectorHeartbeat } from '../../types/collectorHealth';
 import { compactNumber } from '../../utils/format';
 import { formatLocalDateTime } from '../../utils/time';
@@ -26,12 +28,47 @@ export default function CollectorHealthPage() {
     void load();
   }, []);
 
+  const onlineCount = items.filter((item) => item.status === 'online').length;
+  const criticalCount = items.filter((item) => item.healthLevel === 'critical').length;
+  const warningCount = items.filter((item) => item.healthLevel === 'warning').length;
+  const bufferedTotal = items.reduce((sum, item) => sum + (item.bufferedEvents || 0), 0);
+  const droppedTotal = items.reduce((sum, item) => sum + (item.droppedEvents || 0), 0);
+  const writtenTotal = items.reduce((sum, item) => sum + (item.eventsWritten || 0), 0);
+  const latestProblem = items.find((item) => item.healthLevel === 'critical' || item.healthLevel === 'warning');
+
   return (
     <>
-      <Space className="page-heading">
-        <Typography.Title level={3} className="page-title">采集状态</Typography.Title>
+      <Space className="page-heading" align="center">
+        <div>
+          <span className="page-kicker">COLLECTOR HEALTH</span>
+          <Typography.Title level={3} className="page-title">采集状态工作台</Typography.Title>
+        </div>
         <Button icon={<ReloadOutlined />} onClick={() => void load()}>刷新</Button>
       </Space>
+      <div className="collector-hero">
+        <section className="collector-summary">
+          <div className="ops-kicker">Collector Pipeline</div>
+          <Typography.Title level={2} className="investigation-title">监控采集在线率、延迟、缓冲和丢弃风险</Typography.Title>
+          <Typography.Text className="investigation-desc">
+            Collector 是审计数据入口；这里优先暴露离线、异常、写入延迟和缓冲堆积。
+          </Typography.Text>
+          <div className="ops-hero-actions">
+            <Link to="/settings/collector-debug"><Button type="primary">采集调试</Button></Link>
+            <Link to="/audit/events"><Button ghost>查看操作日志</Button></Link>
+          </div>
+        </section>
+        <aside className="investigation-latest">
+          <Typography.Text type="secondary">当前异常</Typography.Text>
+          <div className="latest-risk-title">{latestProblem?.hostName || latestProblem?.hostId || (criticalCount || warningCount ? '采集异常' : '暂无异常')}</div>
+          <div className="latest-risk-desc">{latestProblem?.lastError || latestProblem?.message || 'Collector 状态平稳'}</div>
+        </aside>
+      </div>
+      <div className="metric-grid risk-metric-grid">
+        <MetricCard label="在线 Collector" value={onlineCount} hint={`共 ${items.length} 个采集端`} tone="success" />
+        <MetricCard label="异常 / 预警" value={criticalCount + warningCount} hint={`${criticalCount} 异常，${warningCount} 预警`} tone={criticalCount ? 'danger' : 'warning'} />
+        <MetricCard label="缓冲事件" value={bufferedTotal} hint="待写入队列" tone={bufferedTotal ? 'warning' : 'blue'} />
+        <MetricCard label="累计丢弃" value={droppedTotal} hint={`累计写入 ${compactNumber(writtenTotal)}`} tone={droppedTotal ? 'danger' : 'blue'} />
+      </div>
       <Card className="data-card">
         <Table
           rowKey="hostId"
