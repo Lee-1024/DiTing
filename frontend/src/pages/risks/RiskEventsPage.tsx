@@ -5,6 +5,7 @@ import { exportAuditEvents, queryAuditEvents } from '../../api/audit';
 import { getRiskDispositions, listRiskDispositions, updateRiskDisposition } from '../../api/riskDispositions';
 import CommandText from '../../components/CommandText';
 import FilterToolbar from '../../components/FilterToolbar';
+import ProcessChain from '../../components/ProcessChain';
 import SeverityTag from '../../components/SeverityTag';
 import type { AuditEvent, AuditEventQuery } from '../../types/audit';
 import type { RiskDisposition, RiskDispositionMap, RiskDispositionStatus } from '../../types/riskDisposition';
@@ -248,7 +249,7 @@ export default function RiskEventsPage() {
             { title: '执行用户', dataIndex: 'username', width: 96 },
             { title: '节点', dataIndex: 'nodeName', width: 120, render: (_, record) => record.nodeName || record.hostName },
             { title: '进程', dataIndex: 'processName', width: 110 },
-            { title: '进程链路', width: 190, render: (_, record) => processChain(record) },
+            { title: '进程链路', width: 220, render: (_, record) => <ProcessChain event={record} compact /> },
             { title: '风险对象', width: 210, render: (_, record) => riskTarget(record) },
             { title: '命令', dataIndex: 'cmdline', render: (value, record) => <CommandText value={value} onView={() => setSelected(record)} /> },
             {
@@ -342,18 +343,6 @@ function filterEventsByDisposition(events: AuditEvent[], dispositions: RiskDispo
     return events;
   }
   return events.filter((event) => (dispositions[event.eventId]?.status ?? 'open') === status);
-}
-
-function processChain(record: AuditEvent) {
-  if (!record.parentProcessName && !record.processName) {
-    return <Typography.Text type="secondary">-</Typography.Text>;
-  }
-  return (
-    <Space direction="vertical" size={0}>
-      {record.parentProcessName && <Typography.Text type="secondary">{record.parentProcessName}</Typography.Text>}
-      <Typography.Text>{record.parentProcessName ? `-> ${record.processName || '-'}` : record.processName || '-'}</Typography.Text>
-    </Space>
-  );
 }
 
 function formatNetworkTarget(record: AuditEvent) {

@@ -1,6 +1,7 @@
 import { Descriptions, Drawer, Space, Spin, Table, Tag, Typography, message } from 'antd';
 import { useEffect, useState } from 'react';
 import { getAuditEvent } from '../../api/audit';
+import ProcessChain from '../../components/ProcessChain';
 import SeverityTag from '../../components/SeverityTag';
 import type { AuditEvent } from '../../types/audit';
 import { formatJSON } from '../../utils/format';
@@ -75,6 +76,7 @@ export default function EventDetailDrawer({ event, eventId, relatedEvents = [], 
             <Descriptions.Item label="GID / EGID">{[current.gid, current.egid].filter((value) => value !== undefined).join(' / ')}</Descriptions.Item>
           </Descriptions>
           <Descriptions title="进程信息" column={1} bordered size="small">
+            <Descriptions.Item label="进程链路"><ProcessChain event={current} /></Descriptions.Item>
             <Descriptions.Item label="进程">{current.processName}</Descriptions.Item>
             <Descriptions.Item label="二进制">{current.binaryPath}</Descriptions.Item>
             <Descriptions.Item label="命令">{current.cmdline}</Descriptions.Item>

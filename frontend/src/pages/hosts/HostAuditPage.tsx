@@ -5,6 +5,7 @@ import { exportAuditEvents, queryAuditEvents } from '../../api/audit';
 import { exportHostAudits, getHostAudits, getHostBehavior, getHostUsers } from '../../api/stats';
 import CommandText from '../../components/CommandText';
 import FilterToolbar from '../../components/FilterToolbar';
+import ProcessChain from '../../components/ProcessChain';
 import SeverityTag from '../../components/SeverityTag';
 import type { AuditEvent } from '../../types/audit';
 import type { BehaviorItem, HostAuditItem, HostAuditQuery, HostBehavior, HostUserItem } from '../../types/stats';
@@ -540,7 +541,7 @@ function networkColumns() {
     { title: '登录用户', dataIndex: 'loginUsername', width: 110, render: (_: string, record: AuditEvent) => record.loginUsername || record.username },
     { title: '执行用户', dataIndex: 'username', width: 110 },
     { title: '进程', dataIndex: 'processName', width: 120 },
-    { title: '进程链路', width: 190, render: (_: string, record: AuditEvent) => processChain(record) },
+    { title: '进程链路', width: 220, render: (_: string, record: AuditEvent) => <ProcessChain event={record} compact /> },
     { title: '命令', dataIndex: 'cmdline', render: (value: string) => <CommandText value={value} /> },
     { title: '目标', dataIndex: 'dstIp', width: 190, render: (_: string, record: AuditEvent) => formatNetworkTarget(record) },
     { title: '协议', dataIndex: 'protocol', width: 80, render: (value: string) => value || '-' },
@@ -554,7 +555,7 @@ function fileColumns() {
     { title: '登录用户', dataIndex: 'loginUsername', width: 110, render: (_: string, record: AuditEvent) => record.loginUsername || record.username },
     { title: '执行用户', dataIndex: 'username', width: 110 },
     { title: '进程', dataIndex: 'processName', width: 120 },
-    { title: '进程链路', width: 190, render: (_: string, record: AuditEvent) => processChain(record) },
+    { title: '进程链路', width: 220, render: (_: string, record: AuditEvent) => <ProcessChain event={record} compact /> },
     { title: '操作', dataIndex: 'fileOperation', width: 150, render: (value: string) => value || '-' },
     { title: '文件路径', dataIndex: 'filePath', render: (value: string) => value || '-' },
     { title: '命中规则', dataIndex: 'ruleNames', width: 220, render: (value: string[]) => value?.join('、') || '-' },
@@ -569,7 +570,7 @@ function riskTimelineColumns() {
     { title: '登录用户', dataIndex: 'loginUsername', width: 110, render: (_: string, record: AuditEvent) => record.loginUsername || record.username },
     { title: '执行用户', dataIndex: 'username', width: 110 },
     { title: '进程', dataIndex: 'processName', width: 120 },
-    { title: '进程链路', width: 190, render: (_: string, record: AuditEvent) => processChain(record) },
+    { title: '进程链路', width: 220, render: (_: string, record: AuditEvent) => <ProcessChain event={record} compact /> },
     { title: '风险目标', dataIndex: 'cmdline', render: (_: string, record: AuditEvent) => riskTarget(record) },
     { title: '命中规则', dataIndex: 'ruleNames', width: 220, render: (value: string[]) => value?.join('、') || '-' },
     { title: '等级', dataIndex: 'severity', width: 90, render: (value: string) => <SeverityTag value={value} /> },
@@ -586,13 +587,6 @@ function riskTarget(record: AuditEvent) {
   return <CommandText value={record.cmdline || record.processName || '-'} />;
 }
 
-function processChain(record: AuditEvent) {
-  if (!record.parentProcessName && !record.processName) {
-    return '-';
-  }
-  return record.parentProcessName ? `${record.parentProcessName} -> ${record.processName || '-'}` : record.processName || '-';
-}
-
 function formatNetworkTarget(record: AuditEvent) {
   if (!record.dstIp) {
     return '-';
@@ -607,7 +601,7 @@ function commandColumns() {
     { title: '登录用户', dataIndex: 'loginUsername', width: 110, render: (_: string, record: AuditEvent) => record.loginUsername || record.username },
     { title: '执行用户', dataIndex: 'username', width: 110 },
     { title: '进程', dataIndex: 'processName', width: 120 },
-    { title: '进程链路', width: 190, render: (_: string, record: AuditEvent) => processChain(record) },
+    { title: '进程链路', width: 220, render: (_: string, record: AuditEvent) => <ProcessChain event={record} compact /> },
     { title: '命令', dataIndex: 'cmdline', render: (value: string) => <CommandText value={value} /> },
     { title: '等级', dataIndex: 'severity', width: 90, render: (value: string) => <SeverityTag value={value} /> },
   ];
