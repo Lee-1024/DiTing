@@ -39,9 +39,9 @@ export default function FilterToolbar({
           onReset();
         }}
         defaultCollapsed={false}
-        span={{ xs: 24, sm: 12, md: 12, lg: 8, xl: 6, xxl: 6 }}
+        span={{ xs: 24, sm: 12, md: 12, lg: 8, xl: 8, xxl: 8 }}
         searchGutter={[18, 16]}
-        submitterColSpanProps={{ span: 6, style: { minWidth: 360 } }}
+        submitterColSpanProps={{ span: 24 }}
         showHiddenNum
         optionRender={(_, __, dom) => (
           [

@@ -182,6 +182,7 @@ body {
 
 .filter-form .ant-picker,
 .filter-form .ant-input,
+.filter-form .ant-input-affix-wrapper,
 .filter-form .ant-select,
 .filter-form .ant-input-number {
   width: 100%;
@@ -189,8 +190,10 @@ body {
 
 .filter-form .ant-picker,
 .filter-form .ant-input,
+.filter-form .ant-input-affix-wrapper,
 .filter-form .ant-select-selector,
 .filter-form .ant-input-number {
+  height: 40px;
   min-height: 40px;
   border-color: rgba(148, 163, 184, 0.34) !important;
   background: rgba(255, 255, 255, 0.96) !important;
@@ -200,6 +203,7 @@ body {
 
 .filter-form .ant-picker:hover,
 .filter-form .ant-input:hover,
+.filter-form .ant-input-affix-wrapper:hover,
 .filter-form .ant-select-selector:hover,
 .filter-form .ant-input-number:hover {
   border-color: rgba(8, 145, 178, 0.62) !important;
@@ -207,10 +211,28 @@ body {
 
 .filter-form .ant-picker-focused,
 .filter-form .ant-input:focus,
+.filter-form .ant-input-affix-wrapper-focused,
 .filter-form .ant-select-focused .ant-select-selector,
 .filter-form .ant-input-number-focused {
   border-color: #2563eb !important;
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12) !important;
+}
+
+.filter-form .ant-input-affix-wrapper .ant-input {
+  height: 30px;
+  min-height: 30px;
+  box-shadow: none;
+}
+
+.filter-form .ant-select-single,
+.filter-form .ant-select-selector,
+.filter-form .ant-select-selection-search-input {
+  height: 40px !important;
+}
+
+.filter-form .ant-select-single .ant-select-selector .ant-select-selection-item,
+.filter-form .ant-select-single .ant-select-selector .ant-select-selection-placeholder {
+  line-height: 38px;
 }
 
 .filter-form .ant-select-selection-overflow {
@@ -223,7 +245,7 @@ body {
 }
 
 .filter-form .ant-select-selection-item {
-  max-width: 132px;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -254,6 +276,14 @@ body {
   height: 40px;
   padding-top: 0;
   white-space: nowrap;
+}
+
+.filter-form .ant-pro-query-filter-actions {
+  width: 100%;
+}
+
+.filter-form .ant-pro-query-filter-actions > div {
+  width: 100%;
 }
 
 .action-cluster {
@@ -1139,6 +1169,7 @@ body {
   .filter-form .ant-form-item,
   .filter-form .ant-select,
   .filter-form .ant-input,
+  .filter-form .ant-input-affix-wrapper,
   .filter-form .ant-input-number {
     width: 100% !important;
     min-width: 0;
