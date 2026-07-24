@@ -4,7 +4,6 @@ import dayjs from 'dayjs';
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { queryAuditEvents } from '../../api/audit';
-import ActionCluster from '../../components/ActionCluster';
 import CommandText from '../../components/CommandText';
 import { InsightHero, LatestPanel, MetricCard } from '../../components/InsightHeader';
 import SeverityTag from '../../components/SeverityTag';
@@ -115,7 +114,16 @@ export default function CollectorDebugPage() {
         <MetricCard label="涉及主机" value={hostCount} hint={autoRefresh ? '自动刷新中' : '手动刷新'} tone="success" />
       </div>
       <Card className="data-card live-filter-card">
-        <Form form={form} className="filter-form inline-filter-form" layout="vertical" initialValues={{ timeRange: defaultRange, eventType: undefined }}>
+        <Form
+          form={form}
+          className="filter-form inline-filter-form"
+          layout="horizontal"
+          labelCol={{ flex: '78px' }}
+          wrapperCol={{ flex: '1 1 0' }}
+          colon
+          initialValues={{ timeRange: defaultRange, eventType: undefined }}
+          onFinish={() => void load()}
+        >
           <div className="filter-fields">
             <Form.Item name="timeRange" label="时间" className="filter-field-time">
               <DatePicker.RangePicker showTime />
@@ -129,10 +137,11 @@ export default function CollectorDebugPage() {
             <Form.Item name="keyword" label="关键字">
               <Input allowClear placeholder="命令 / 文件 / IP" />
             </Form.Item>
-            <Form.Item className="filter-actions">
-              <Typography.Text className="filter-actions-label">操作</Typography.Text>
-              <ActionCluster actions={[{ key: 'search', label: '查询', icon: <SearchOutlined />, type: 'primary', onClick: () => void load() }]} />
-            </Form.Item>
+          </div>
+          <div className="filter-footer">
+            <Space className="filter-actions" size={10} wrap={false}>
+              <Button type="primary" icon={<SearchOutlined />} htmlType="submit">查询</Button>
+            </Space>
           </div>
         </Form>
         <Table
