@@ -82,9 +82,11 @@ export default function CollectorDebugPage() {
           <span className="page-kicker">LIVE EVENT STREAM</span>
           <Typography.Title level={3} className="page-title">采集调试工作台</Typography.Title>
         </div>
-        <Button icon={<ReloadOutlined />} onClick={() => void load()}>刷新</Button>
-        <Switch checked={autoRefresh} onChange={setAutoRefresh} checkedChildren="自动" unCheckedChildren="手动" />
-        <Typography.Text type="secondary">最近 {total} 条</Typography.Text>
+        <div className="page-heading-actions">
+          <Button icon={<ReloadOutlined />} onClick={() => void load()}>刷新</Button>
+          <Switch checked={autoRefresh} onChange={setAutoRefresh} checkedChildren="自动" unCheckedChildren="手动" />
+          <Typography.Text type="secondary">最近 {total} 条</Typography.Text>
+        </div>
       </Space>
       <div className="collector-hero">
         <InsightHero
@@ -111,21 +113,24 @@ export default function CollectorDebugPage() {
         <MetricCard label="高危事件" value={riskyEvents} hint="需验证规则命中" tone="danger" />
         <MetricCard label="涉及主机" value={hostCount} hint={autoRefresh ? '自动刷新中' : '手动刷新'} tone="success" />
       </div>
-      <Card className="data-card">
-        <Form form={form} layout="inline" initialValues={{ timeRange: defaultRange, eventType: undefined }} style={{ marginBottom: 16 }}>
-          <Form.Item name="timeRange" label="时间">
+      <Card className="data-card live-filter-card">
+        <Form form={form} className="filter-form inline-filter-form" layout="vertical" initialValues={{ timeRange: defaultRange, eventType: undefined }}>
+          <div className="filter-fields">
+          <Form.Item name="timeRange" label="时间" className="filter-field-time">
             <DatePicker.RangePicker showTime />
           </Form.Item>
           <Form.Item name="eventType" label="事件">
-            <Select allowClear style={{ width: 160 }} options={eventTypeOptions} />
+            <Select allowClear options={eventTypeOptions} />
           </Form.Item>
           <Form.Item name="hostName" label="主机">
-            <Input allowClear style={{ width: 180 }} placeholder="主机名 / Host ID" />
+            <Input allowClear placeholder="主机名 / Host ID" />
           </Form.Item>
           <Form.Item name="keyword" label="关键字">
-            <Input allowClear style={{ width: 220 }} placeholder="命令 / 文件 / IP" />
+            <Input allowClear placeholder="命令 / 文件 / IP" />
           </Form.Item>
-          <Form.Item>
+          </div>
+          <Form.Item className="filter-actions">
+            <Typography.Text className="filter-actions-label">操作</Typography.Text>
             <Button type="primary" onClick={() => void load()}>查询</Button>
           </Form.Item>
         </Form>

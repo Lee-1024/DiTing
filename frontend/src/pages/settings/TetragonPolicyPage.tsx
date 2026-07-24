@@ -237,10 +237,12 @@ export default function TetragonPolicyPage() {
     <>
       <Space className="page-heading">
         <Typography.Title level={3} className="page-title">拦截策略</Typography.Title>
+        <div className="page-heading-actions">
         <Button type="primary" loading={saving} onClick={() => void savePolicy()}>{editing ? '保存修改' : '保存策略'}</Button>
         {editing && <Button onClick={() => { setEditing(null); form.setFieldsValue(defaultValues); }}>取消编辑</Button>}
         <Button icon={<CopyOutlined />} onClick={() => void copyYaml()}>复制 YAML</Button>
         <Button icon={<DownloadOutlined />} onClick={downloadYaml}>下载 YAML</Button>
+        </div>
       </Space>
       <section className="system-hero">
         <InsightHero
@@ -368,7 +370,7 @@ export default function TetragonPolicyPage() {
             )}
           </Form>
         </Card>
-        <Card className="data-card" title="TracingPolicy YAML">
+        <Card className="data-card yaml-card" title="TracingPolicy YAML">
           <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: 13 }}>{yaml}</pre>
         </Card>
       </div>

@@ -102,16 +102,28 @@ body {
   margin-bottom: 12px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 12px;
   flex-wrap: wrap;
 }
 
-.page-heading > .ant-space-item:last-child,
-.page-heading > .ant-btn,
-.page-heading > a,
-.page-heading .ant-space {
+.page-heading > .ant-space-item:nth-child(2),
+.page-heading > .ant-btn:first-of-type,
+.page-heading > a:first-of-type,
+.page-heading .page-heading-actions {
+  margin-left: auto;
+}
+
+.page-heading-actions {
+  display: flex;
+  align-items: center;
   flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.page-heading-actions .ant-typography {
+  white-space: nowrap;
 }
 
 .filter-card {
@@ -123,22 +135,22 @@ body {
 }
 
 .filter-card .ant-card-body {
-  padding: 16px 20px 14px;
+  padding: 14px 16px;
 }
 
 .filter-form {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: flex-end;
-  gap: 12px 16px;
+  gap: 14px;
 }
 
 .filter-fields {
-  display: flex;
-  flex: 1 1 auto;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 10px 16px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(176px, 1fr));
+  align-items: end;
+  gap: 12px;
+  min-width: 0;
 }
 
 .filter-fields .ant-form-item {
@@ -146,12 +158,14 @@ body {
 }
 
 .filter-fields .ant-form-item-label {
-  padding-bottom: 4px;
-  font-weight: 500;
+  padding-bottom: 5px;
+  font-weight: 800;
 }
 
 .filter-fields .ant-form-item-label > label {
-  color: #374151;
+  color: #243044;
+  font-size: 13px;
+  font-weight: 800;
 }
 
 .filter-fields .ant-picker,
@@ -161,8 +175,17 @@ body {
   width: 100%;
 }
 
+.filter-fields .ant-picker,
+.filter-fields .ant-input,
+.filter-fields .ant-select-selector,
+.filter-fields .ant-input-number {
+  min-height: 40px;
+  border-color: rgba(148, 163, 184, 0.34) !important;
+  background: rgba(255, 255, 255, 0.92) !important;
+}
+
 .filter-control-compact {
-  width: 160px !important;
+  width: 100% !important;
 }
 
 .filter-fields .ant-segmented {
@@ -171,26 +194,73 @@ body {
 }
 
 .filter-field-time {
-  min-width: 280px;
+  grid-column: span 2;
+  min-width: 300px;
 }
 
 .filter-actions {
-  display: flex;
-  justify-content: flex-end;
-  flex: 0 0 auto;
-  padding-top: 2px;
+  display: grid;
+  justify-content: end;
+  align-self: stretch;
+  min-width: 244px;
+  padding: 0 0 0 14px;
+  border-left: 1px solid rgba(148, 163, 184, 0.18);
   margin-bottom: 0;
 }
 
+.filter-actions-label {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--dt-color-muted) !important;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 22px;
+  visibility: hidden;
+}
+
 .filter-actions .ant-form-item-control-input-content {
-  display: flex;
+  display: grid;
   justify-content: flex-end;
   white-space: nowrap;
+}
+
+.filter-actions .ant-space {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.filter-actions .ant-btn {
+  min-width: 92px;
+  height: 40px;
+}
+
+.live-filter-card .ant-card-body {
+  padding: 14px 16px 0;
+}
+
+.live-filter-card .ant-table-wrapper {
+  margin: 14px -16px 0;
+}
+
+.inline-filter-form {
+  margin-bottom: 0;
 }
 
 @media (max-width: 900px) {
   .filter-field-time {
     min-width: 100%;
+    grid-column: span 1;
+  }
+
+  .filter-form {
+    grid-template-columns: 1fr;
+  }
+
+  .filter-actions {
+    min-width: 0;
+    padding-left: 0;
+    border-left: 0;
+    justify-content: start;
   }
 
   .filter-actions,
@@ -928,17 +998,51 @@ body {
   display: grid;
   grid-template-columns: minmax(360px, 520px) minmax(0, 1fr);
   gap: 16px;
-  align-items: start;
+  align-items: stretch;
 }
 
 .config-card .ant-card-body {
   padding: 20px;
 }
 
+.config-grid > .data-card {
+  min-height: 560px;
+}
+
+.config-grid > .data-card .ant-card-body {
+  height: 100%;
+}
+
+.config-grid > .data-card:not(.yaml-card) .ant-card-body {
+  padding: 20px;
+}
+
+.yaml-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.yaml-card .ant-card-head {
+  flex: 0 0 auto;
+  border-bottom-color: rgba(148, 163, 184, 0.18);
+}
+
+.yaml-card .ant-card-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 0 !important;
+}
+
 .data-card pre {
-  max-height: 620px;
+  height: 100%;
+  max-height: none;
   overflow: auto;
+  margin: 0;
+  padding: 18px 20px;
+  background: linear-gradient(180deg, #fbfdff, #ffffff);
   font-family: var(--dt-font-mono);
+  font-size: 12px !important;
+  line-height: 20px;
 }
 
 @media (max-width: 1180px) {

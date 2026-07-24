@@ -1,5 +1,5 @@
 import { DownloadOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
-import { Button, Card, Form, Space } from 'antd';
+import { Button, Card, Form, Space, Typography } from 'antd';
 import type { FormInstance } from 'antd';
 import type { ReactNode } from 'react';
 
@@ -28,6 +28,7 @@ export default function FilterToolbar({
       <Form form={form} className="filter-form" layout="vertical" initialValues={initialValues} onFinish={onSearch}>
         <div className="filter-fields">{children}</div>
         <Form.Item className="filter-actions">
+          <Typography.Text className="filter-actions-label">操作</Typography.Text>
           <Space size={8} wrap={false}>
             <Button type="primary" icon={<SearchOutlined />} htmlType="submit">查询</Button>
             <Button icon={<ReloadOutlined />} onClick={onReset}>重置</Button>
