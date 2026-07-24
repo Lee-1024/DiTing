@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getRuleHits } from '../../api/stats';
 import FilterToolbar from '../../components/FilterToolbar';
-import { MetricCard } from '../../components/InsightHeader';
+import { InsightHero, LatestPanel, MetricCard } from '../../components/InsightHeader';
 import type { RuleHitItem, RuleHitQuery } from '../../types/stats';
 import { compactNumber } from '../../utils/format';
 import { formatLocalDateTime } from '../../utils/time';
@@ -65,22 +65,23 @@ export default function RuleHitsPage() {
         </div>
       </div>
       <div className="policy-hero">
-        <section className="policy-summary">
-          <div className="ops-kicker">Rule Effectiveness</div>
-          <Typography.Title level={2} className="investigation-title">观察规则命中活跃度，定位噪声与关键检测点</Typography.Title>
-          <Typography.Text className="investigation-desc">
-            命中分析帮助评估策略有效性：高频规则可能是关键威胁，也可能需要调优降噪。
-          </Typography.Text>
-          <div className="ops-hero-actions">
+        <InsightHero
+          className="policy-summary"
+          kicker="Rule Effectiveness"
+          title="观察规则命中活跃度，定位噪声与关键检测点"
+          description="命中分析帮助评估策略有效性：高频规则可能是关键威胁，也可能需要调优降噪。"
+          actions={(
+            <>
             <Link to="/rules"><Button type="primary">管理审计规则</Button></Link>
             <Link to="/audit/risks"><Button ghost>风险事件</Button></Link>
-          </div>
-        </section>
-        <aside className="investigation-latest">
-          <Typography.Text type="secondary">最高频规则</Typography.Text>
-          <div className="latest-risk-title">{topRule?.ruleName || '-'}</div>
-          <div className="latest-risk-desc">{topRule ? `${compactNumber(topRule.hitCount)} 次命中 / ${compactNumber(topRule.activeHosts)} 台主机 / ${compactNumber(topRule.activeUsers)} 个用户` : '暂无规则命中数据'}</div>
-        </aside>
+            </>
+          )}
+        />
+        <LatestPanel
+          label="最高频规则"
+          title={topRule?.ruleName || '-'}
+          description={topRule ? `${compactNumber(topRule.hitCount)} 次命中 / ${compactNumber(topRule.activeHosts)} 台主机 / ${compactNumber(topRule.activeUsers)} 个用户` : '暂无规则命中数据'}
+        />
       </div>
       <div className="metric-grid risk-metric-grid">
         <MetricCard label="命中规则" value={items.length} hint="当前筛选结果" tone="blue" />

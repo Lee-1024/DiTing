@@ -1,6 +1,7 @@
 import { Card, Descriptions, Drawer, Empty, Space, Spin, Table, Tabs, Tag, Typography, message } from 'antd';
 import { useEffect, useState } from 'react';
 import { getAuditEvent } from '../../api/audit';
+import { InvestigationBrief } from '../../components/InsightHeader';
 import ProcessChain from '../../components/ProcessChain';
 import SeverityTag from '../../components/SeverityTag';
 import type { AuditEvent } from '../../types/audit';
@@ -60,17 +61,13 @@ export default function EventDetailDrawer({ event, eventId, relatedEvents = [], 
       {loading && !current && <Spin />}
       {current && (
         <Space direction="vertical" size={16} style={{ width: '100%' }}>
-          <div className="event-brief">
-            <div>
-              <div className="ops-kicker">Event Investigation</div>
-              <Typography.Title level={4} className="event-brief-title">{eventTypeLabel(current.eventType)}</Typography.Title>
-              <Typography.Text className="event-brief-desc">{current.cmdline || current.filePath || formatAddress(current.dstIp, current.dstPort) || current.processName || '-'}</Typography.Text>
-            </div>
-            <div className="event-brief-meta">
-              <SeverityTag value={current.severity} />
-              <span className="ops-status-value">{current.riskScore}</span>
-            </div>
-          </div>
+          <InvestigationBrief
+            kicker="Event Investigation"
+            title={eventTypeLabel(current.eventType)}
+            description={current.cmdline || current.filePath || formatAddress(current.dstIp, current.dstPort) || current.processName || '-'}
+            metaExtra={<SeverityTag value={current.severity} />}
+            metaValue={current.riskScore}
+          />
           <Tabs
             className="investigation-tabs"
             items={[

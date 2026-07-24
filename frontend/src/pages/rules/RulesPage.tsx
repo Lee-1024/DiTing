@@ -3,7 +3,7 @@ import { Alert, Button, Card, Empty, Form, Input, InputNumber, Modal, Popconfirm
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { createRule, deleteRule, getRule, listRules, testRule, updateRule } from '../../api/rules';
-import { MetricCard } from '../../components/InsightHeader';
+import { InsightHero, LatestPanel, MetricCard } from '../../components/InsightHeader';
 import type { AuditRule, RuleCondition, RuleExpression, RulePayload, RuleTestEvent, RuleTestResponse } from '../../types/rule';
 import { eventTypeOptions, optionLabel, ruleFieldLabel, ruleFieldOptions, ruleOperatorLabel, ruleOperatorOptions, severityOptions } from '../../utils/labels';
 
@@ -187,22 +187,23 @@ export default function RulesPage() {
         <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新建规则</Button>
       </Space>
       <div className="policy-hero">
-        <section className="policy-summary">
-          <div className="ops-kicker">Detection Policy</div>
-          <Typography.Title level={2} className="investigation-title">维护风险识别规则，控制审计命中质量</Typography.Title>
-          <Typography.Text className="investigation-desc">
-            规则策略决定风险事件的生成质量；建议优先维护高风险规则、规则标签和测试样例。
-          </Typography.Text>
-          <div className="ops-hero-actions">
+        <InsightHero
+          className="policy-summary"
+          kicker="Detection Policy"
+          title="维护风险识别规则，控制审计命中质量"
+          description="规则策略决定风险事件的生成质量；建议优先维护高风险规则、规则标签和测试样例。"
+          actions={(
+            <>
             <Link to="/audit/rules"><Button type="primary">规则命中分析</Button></Link>
             <Link to="/audit/risks"><Button ghost>风险事件</Button></Link>
-          </div>
-        </section>
-        <aside className="investigation-latest">
-          <Typography.Text type="secondary">最近更新规则</Typography.Text>
-          <div className="latest-risk-title">{latestRule?.name || '-'}</div>
-          <div className="latest-risk-desc">{latestRule ? `${optionLabel(eventTypeOptions, latestRule.eventType)} / ${optionLabel(severityOptions, latestRule.severity)} / ${latestRule.riskScore} 分` : '暂无审计规则'}</div>
-        </aside>
+            </>
+          )}
+        />
+        <LatestPanel
+          label="最近更新规则"
+          title={latestRule?.name || '-'}
+          description={latestRule ? `${optionLabel(eventTypeOptions, latestRule.eventType)} / ${optionLabel(severityOptions, latestRule.severity)} / ${latestRule.riskScore} 分` : '暂无审计规则'}
+        />
       </div>
       <div className="metric-grid risk-metric-grid">
         <MetricCard label="规则总数" value={rules.length} hint="当前策略库" tone="blue" />

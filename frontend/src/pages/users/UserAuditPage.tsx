@@ -6,7 +6,7 @@ import { exportAuditEvents, queryAuditEvents } from '../../api/audit';
 import { getUserAudits } from '../../api/stats';
 import CommandText from '../../components/CommandText';
 import FilterToolbar from '../../components/FilterToolbar';
-import { MetricCard } from '../../components/InsightHeader';
+import { InsightHero, InvestigationBrief, LatestPanel, MetricCard } from '../../components/InsightHeader';
 import SeverityTag from '../../components/SeverityTag';
 import type { AuditEvent } from '../../types/audit';
 import type { UserAuditItem, UserAuditQuery } from '../../types/stats';
@@ -208,22 +208,23 @@ export default function UserAuditPage() {
         </div>
       </div>
       <div className="profile-hero">
-        <section className="user-summary">
-          <div className="ops-kicker">Identity Behavior</div>
-          <Typography.Title level={2} className="investigation-title">从用户维度追踪命令、主机和高危行为</Typography.Title>
-          <Typography.Text className="investigation-desc">
-            用户画像聚合执行命令、涉及主机和高危命中；点击用户进入行为分布和命令明细。
-          </Typography.Text>
-          <div className="ops-hero-actions">
+        <InsightHero
+          className="user-summary"
+          kicker="Identity Behavior"
+          title="从用户维度追踪命令、主机和高危行为"
+          description="用户画像聚合执行命令、涉及主机和高危命中；点击用户进入行为分布和命令明细。"
+          actions={(
+            <>
             <Link to="/audit/commands"><Button type="primary">命令审计</Button></Link>
             <Link to="/audit/hosts"><Button ghost>主机画像</Button></Link>
-          </div>
-        </section>
-        <aside className="investigation-latest">
-          <Typography.Text type="secondary">最近活跃用户</Typography.Text>
-          <div className="latest-risk-title">{latestUser?.username || '-'}</div>
-          <div className="latest-risk-desc">{latestUser ? `${compactNumber(latestUser.commandCount)} 条命令 / ${compactNumber(latestUser.highRiskEvents)} 条高危` : '暂无用户审计数据'}</div>
-        </aside>
+            </>
+          )}
+        />
+        <LatestPanel
+          label="最近活跃用户"
+          title={latestUser?.username || '-'}
+          description={latestUser ? `${compactNumber(latestUser.commandCount)} 条命令 / ${compactNumber(latestUser.highRiskEvents)} 条高危` : '暂无用户审计数据'}
+        />
       </div>
       <div className="metric-grid risk-metric-grid">
         <MetricCard label="用户数" value={items.length} hint="当前筛选结果" tone="blue" />
@@ -277,19 +278,13 @@ export default function UserAuditPage() {
       >
         {selected && (
           <Space direction="vertical" size={16} style={{ width: '100%' }}>
-            <div className="event-brief">
-              <div>
-                <div className="ops-kicker">User Profile</div>
-                <Typography.Title level={4} className="event-brief-title">{selected.username}</Typography.Title>
-                <Typography.Text className="event-brief-desc">
-                  {compactNumber(selected.commandCount)} 条命令，覆盖 {compactNumber(selected.activeHosts)} 台主机，命中 {compactNumber(selected.highRiskEvents)} 条高危事件。
-                </Typography.Text>
-              </div>
-              <div className="event-brief-meta">
-                <span className="metric-label">高危事件</span>
-                <span className="ops-status-value">{compactNumber(selected.highRiskEvents)}</span>
-              </div>
-            </div>
+            <InvestigationBrief
+              kicker="User Profile"
+              title={selected.username}
+              description={`${compactNumber(selected.commandCount)} 条命令，覆盖 ${compactNumber(selected.activeHosts)} 台主机，命中 ${compactNumber(selected.highRiskEvents)} 条高危事件。`}
+              metaLabel="高危事件"
+              metaValue={compactNumber(selected.highRiskEvents)}
+            />
             <Descriptions column={2} bordered size="small">
               <Descriptions.Item label="用户">{selected.username}</Descriptions.Item>
               <Descriptions.Item label="涉及主机">{selected.activeHosts}</Descriptions.Item>

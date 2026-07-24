@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom';
 import { exportAuditEvents, queryAuditEvents } from '../../api/audit';
 import CommandText from '../../components/CommandText';
 import FilterToolbar from '../../components/FilterToolbar';
-import { MetricCard } from '../../components/InsightHeader';
+import { InsightHero, LatestPanel, MetricCard } from '../../components/InsightHeader';
 import SeverityTag from '../../components/SeverityTag';
 import type { AuditEvent, AuditEventQuery } from '../../types/audit';
 import { downloadBlob } from '../../utils/download';
@@ -116,22 +116,23 @@ export default function AuditEventsPage() {
         </div>
       </div>
       <div className="audit-hero">
-        <section className="audit-summary">
-          <div className="ops-kicker">Audit Event Correlation</div>
-          <Typography.Title level={2} className="investigation-title">按同次操作聚合事件，快速还原执行上下文</Typography.Title>
-          <Typography.Text className="investigation-desc">
-            文件、进程、网络事件会被折叠成同一次操作队列；展开分组或点击行可进入统一调查抽屉。
-          </Typography.Text>
-          <div className="ops-hero-actions">
+        <InsightHero
+          className="audit-summary"
+          kicker="Audit Event Correlation"
+          title="按同次操作聚合事件，快速还原执行上下文"
+          description="文件、进程、网络事件会被折叠成同一次操作队列；展开分组或点击行可进入统一调查抽屉。"
+          actions={(
+            <>
             <Link to="/audit/risks"><Button type="primary">查看风险队列</Button></Link>
             <Link to="/audit/commands"><Button ghost>进入命令审计</Button></Link>
-          </div>
-        </section>
-        <aside className="investigation-latest">
-          <Typography.Text type="secondary">最近操作</Typography.Text>
-          <div className="latest-risk-title">{latestEvent ? eventTypeLabel(latestEvent.eventType) : '-'}</div>
-          <div className="latest-risk-desc">{latestEvent ? latestEvent.cmdline || latestEvent.filePath || latestEvent.processName || '-' : '暂无审计事件'}</div>
-        </aside>
+            </>
+          )}
+        />
+        <LatestPanel
+          label="最近操作"
+          title={latestEvent ? eventTypeLabel(latestEvent.eventType) : '-'}
+          description={latestEvent ? latestEvent.cmdline || latestEvent.filePath || latestEvent.processName || '-' : '暂无审计事件'}
+        />
       </div>
       <div className="metric-grid risk-metric-grid">
         <MetricCard label="操作分组" value={groupedEvents.length} hint={`共 ${compactNumber(total)} 条匹配结果`} tone="blue" />

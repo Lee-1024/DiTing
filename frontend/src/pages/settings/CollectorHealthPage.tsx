@@ -3,7 +3,7 @@ import { Button, Card, Empty, Space, Table, Tag, Typography } from 'antd';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { listCollectorHealth } from '../../api/collectorHealth';
-import { MetricCard } from '../../components/InsightHeader';
+import { InsightHero, LatestPanel, MetricCard } from '../../components/InsightHeader';
 import type { CollectorHeartbeat } from '../../types/collectorHealth';
 import { compactNumber } from '../../utils/format';
 import { formatLocalDateTime } from '../../utils/time';
@@ -46,22 +46,23 @@ export default function CollectorHealthPage() {
         <Button icon={<ReloadOutlined />} onClick={() => void load()}>刷新</Button>
       </Space>
       <div className="collector-hero">
-        <section className="collector-summary">
-          <div className="ops-kicker">Collector Pipeline</div>
-          <Typography.Title level={2} className="investigation-title">监控采集在线率、延迟、缓冲和丢弃风险</Typography.Title>
-          <Typography.Text className="investigation-desc">
-            Collector 是审计数据入口；这里优先暴露离线、异常、写入延迟和缓冲堆积。
-          </Typography.Text>
-          <div className="ops-hero-actions">
+        <InsightHero
+          className="collector-summary"
+          kicker="Collector Pipeline"
+          title="监控采集在线率、延迟、缓冲和丢弃风险"
+          description="Collector 是审计数据入口；这里优先暴露离线、异常、写入延迟和缓冲堆积。"
+          actions={(
+            <>
             <Link to="/settings/collector-debug"><Button type="primary">采集调试</Button></Link>
             <Link to="/audit/events"><Button ghost>查看操作日志</Button></Link>
-          </div>
-        </section>
-        <aside className="investigation-latest">
-          <Typography.Text type="secondary">当前异常</Typography.Text>
-          <div className="latest-risk-title">{latestProblem?.hostName || latestProblem?.hostId || (criticalCount || warningCount ? '采集异常' : '暂无异常')}</div>
-          <div className="latest-risk-desc">{latestProblem?.lastError || latestProblem?.message || 'Collector 状态平稳'}</div>
-        </aside>
+            </>
+          )}
+        />
+        <LatestPanel
+          label="当前异常"
+          title={latestProblem?.hostName || latestProblem?.hostId || (criticalCount || warningCount ? '采集异常' : '暂无异常')}
+          description={latestProblem?.lastError || latestProblem?.message || 'Collector 状态平稳'}
+        />
       </div>
       <div className="metric-grid risk-metric-grid">
         <MetricCard label="在线 Collector" value={onlineCount} hint={`共 ${items.length} 个采集端`} tone="success" />

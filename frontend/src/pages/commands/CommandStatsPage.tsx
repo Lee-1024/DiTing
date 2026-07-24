@@ -6,7 +6,7 @@ import { exportAuditEvents, queryAuditEvents } from '../../api/audit';
 import { exportCommandStats, getCommandStats } from '../../api/stats';
 import CommandText from '../../components/CommandText';
 import FilterToolbar from '../../components/FilterToolbar';
-import { MetricCard } from '../../components/InsightHeader';
+import { InsightHero, InvestigationBrief, LatestPanel, MetricCard } from '../../components/InsightHeader';
 import SeverityTag from '../../components/SeverityTag';
 import type { AuditEvent } from '../../types/audit';
 import type { CommandItem, CommandStatsQuery } from '../../types/stats';
@@ -189,22 +189,23 @@ export default function CommandStatsPage() {
         </div>
       </div>
       <div className="command-hero">
-        <section className="command-summary">
-          <div className="ops-kicker">Command Behavior</div>
-          <Typography.Title level={2} className="investigation-title">从高频命令定位用户、主机与风险执行路径</Typography.Title>
-          <Typography.Text className="investigation-desc">
-            命令审计按命令聚合执行行为，点击命令可查看高危命中和完整执行明细。
-          </Typography.Text>
-          <div className="ops-hero-actions">
+        <InsightHero
+          className="command-summary"
+          kicker="Command Behavior"
+          title="从高频命令定位用户、主机与风险执行路径"
+          description="命令审计按命令聚合执行行为，点击命令可查看高危命中和完整执行明细。"
+          actions={(
+            <>
             <Link to="/audit/risks"><Button type="primary">查看高危风险</Button></Link>
             <Link to="/audit/users"><Button ghost>分析用户行为</Button></Link>
-          </div>
-        </section>
-        <aside className="investigation-latest">
-          <Typography.Text type="secondary">最近命令</Typography.Text>
-          <div className="latest-risk-title">{recentCommand ? commandName(recentCommand) : '-'}</div>
-          <div className="latest-risk-desc">{recentCommand?.cmdline || '暂无命令数据'}</div>
-        </aside>
+            </>
+          )}
+        />
+        <LatestPanel
+          label="最近命令"
+          title={recentCommand ? commandName(recentCommand) : '-'}
+          description={recentCommand?.cmdline || '暂无命令数据'}
+        />
       </div>
       <div className="metric-grid risk-metric-grid">
         <MetricCard label="命令种类" value={items.length} hint="当前筛选结果" tone="blue" />
@@ -264,17 +265,13 @@ export default function CommandStatsPage() {
       >
         {selected && (
           <Space direction="vertical" size={16} style={{ width: '100%' }}>
-            <div className="event-brief">
-              <div>
-                <div className="ops-kicker">Command Detail</div>
-                <Typography.Title level={4} className="event-brief-title">{commandName(selected)}</Typography.Title>
-                <Typography.Text className="event-brief-desc">{selected.cmdline || '-'}</Typography.Text>
-              </div>
-              <div className="event-brief-meta">
-                <span className="metric-label">执行次数</span>
-                <span className="ops-status-value">{compactNumber(selected.count)}</span>
-              </div>
-            </div>
+            <InvestigationBrief
+              kicker="Command Detail"
+              title={commandName(selected)}
+              description={selected.cmdline || '-'}
+              metaLabel="执行次数"
+              metaValue={compactNumber(selected.count)}
+            />
             <Descriptions column={2} bordered size="small">
               <Descriptions.Item label="命令">{commandName(selected)}</Descriptions.Item>
               <Descriptions.Item label="涉及主机">{selected.hostCount}</Descriptions.Item>

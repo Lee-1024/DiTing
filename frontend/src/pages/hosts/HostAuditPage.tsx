@@ -7,7 +7,7 @@ import { exportAuditEvents, queryAuditEvents } from '../../api/audit';
 import { exportHostAudits, getHostAudits, getHostBehavior, getHostUsers } from '../../api/stats';
 import CommandText from '../../components/CommandText';
 import FilterToolbar from '../../components/FilterToolbar';
-import { MetricCard } from '../../components/InsightHeader';
+import { InsightHero, InvestigationBrief, LatestPanel, MetricCard } from '../../components/InsightHeader';
 import ProcessChain from '../../components/ProcessChain';
 import SeverityTag from '../../components/SeverityTag';
 import type { AuditEvent } from '../../types/audit';
@@ -250,22 +250,23 @@ export default function HostAuditPage() {
         </div>
       </div>
       <div className="host-hero">
-        <section className="host-summary">
-          <div className="ops-kicker">Host Behavior</div>
-          <Typography.Title level={2} className="investigation-title">从主机维度聚合用户、命令、文件和网络外联</Typography.Title>
-          <Typography.Text className="investigation-desc">
-            主机画像用于定位异常资产和横向移动线索；点击主机进入用户分布、风险时间线和行为画像。
-          </Typography.Text>
-          <div className="ops-hero-actions">
+        <InsightHero
+          className="host-summary"
+          kicker="Host Behavior"
+          title="从主机维度聚合用户、命令、文件和网络外联"
+          description="主机画像用于定位异常资产和横向移动线索；点击主机进入用户分布、风险时间线和行为画像。"
+          actions={(
+            <>
             <Link to="/audit/users"><Button type="primary">用户审计</Button></Link>
             <Link to="/settings/collector-health"><Button ghost>采集状态</Button></Link>
-          </div>
-        </section>
-        <aside className="investigation-latest">
-          <Typography.Text type="secondary">最近活跃主机</Typography.Text>
-          <div className="latest-risk-title">{latestHost?.hostName || latestHost?.nodeName || '-'}</div>
-          <div className="latest-risk-desc">{latestHost ? `${compactNumber(latestHost.commandCount)} 条命令 / ${compactNumber(latestHost.highRiskEvents)} 条高危` : '暂无主机审计数据'}</div>
-        </aside>
+            </>
+          )}
+        />
+        <LatestPanel
+          label="最近活跃主机"
+          title={latestHost?.hostName || latestHost?.nodeName || '-'}
+          description={latestHost ? `${compactNumber(latestHost.commandCount)} 条命令 / ${compactNumber(latestHost.highRiskEvents)} 条高危` : '暂无主机审计数据'}
+        />
       </div>
       <div className="metric-grid risk-metric-grid">
         <MetricCard label="主机数" value={items.length} hint="当前筛选结果" tone="blue" />
@@ -340,19 +341,13 @@ export default function HostAuditPage() {
       >
         {selected && (
           <Space direction="vertical" size={16} style={{ width: '100%' }}>
-            <div className="event-brief">
-              <div>
-                <div className="ops-kicker">Host Profile</div>
-                <Typography.Title level={4} className="event-brief-title">{selected.hostName || selected.nodeName || selected.hostId}</Typography.Title>
-                <Typography.Text className="event-brief-desc">
-                  {compactNumber(selected.commandCount)} 条命令，{compactNumber(selected.activeUsers)} 个活跃用户，{compactNumber(selected.highRiskEvents)} 条高危事件。
-                </Typography.Text>
-              </div>
-              <div className="event-brief-meta">
-                <span className="metric-label">高危事件</span>
-                <span className="ops-status-value">{compactNumber(selected.highRiskEvents)}</span>
-              </div>
-            </div>
+            <InvestigationBrief
+              kicker="Host Profile"
+              title={selected.hostName || selected.nodeName || selected.hostId}
+              description={`${compactNumber(selected.commandCount)} 条命令，${compactNumber(selected.activeUsers)} 个活跃用户，${compactNumber(selected.highRiskEvents)} 条高危事件。`}
+              metaLabel="高危事件"
+              metaValue={compactNumber(selected.highRiskEvents)}
+            />
             <Descriptions column={1} bordered size="small">
               <Descriptions.Item label="主机名">{selected.hostName || '-'}</Descriptions.Item>
               <Descriptions.Item label="Host ID">{selected.hostId || '-'}</Descriptions.Item>

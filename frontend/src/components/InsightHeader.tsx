@@ -49,6 +49,50 @@ export function SummaryPanel({ className = 'system-summary system-summary-alt', 
   );
 }
 
+interface LatestPanelProps {
+  label: string;
+  title: ReactNode;
+  description: ReactNode;
+}
+
+export function LatestPanel({ label, title, description }: LatestPanelProps) {
+  return (
+    <aside className="investigation-latest">
+      <Typography.Text type="secondary">{label}</Typography.Text>
+      <div className="latest-risk-title">{title}</div>
+      <div className="latest-risk-desc">{description}</div>
+    </aside>
+  );
+}
+
+interface InvestigationBriefProps {
+  kicker: string;
+  title: ReactNode;
+  description: ReactNode;
+  metaLabel?: string;
+  metaValue?: ReactNode;
+  metaExtra?: ReactNode;
+}
+
+export function InvestigationBrief({ kicker, title, description, metaLabel, metaValue, metaExtra }: InvestigationBriefProps) {
+  return (
+    <div className="event-brief">
+      <div className="event-brief-main">
+        <div className="ops-kicker">{kicker}</div>
+        <Typography.Title level={4} className="event-brief-title">{title}</Typography.Title>
+        <Typography.Text className="event-brief-desc">{description}</Typography.Text>
+      </div>
+      {(metaLabel || metaValue || metaExtra) && (
+        <div className="event-brief-meta">
+          {metaExtra}
+          {metaLabel && <span className="metric-label">{metaLabel}</span>}
+          {metaValue && <span className="ops-status-value">{metaValue}</span>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface MetricCardProps {
   label: string;
   value: number | string;

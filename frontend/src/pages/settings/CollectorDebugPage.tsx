@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { queryAuditEvents } from '../../api/audit';
 import CommandText from '../../components/CommandText';
-import { MetricCard } from '../../components/InsightHeader';
+import { InsightHero, LatestPanel, MetricCard } from '../../components/InsightHeader';
 import SeverityTag from '../../components/SeverityTag';
 import type { AuditEvent, AuditEventQuery } from '../../types/audit';
 import { eventTypeLabel, eventTypeOptions } from '../../utils/labels';
@@ -87,22 +87,23 @@ export default function CollectorDebugPage() {
         <Typography.Text type="secondary">最近 {total} 条</Typography.Text>
       </Space>
       <div className="collector-hero">
-        <section className="debug-summary">
-          <div className="ops-kicker">Live Collector Debug</div>
-          <Typography.Title level={2} className="investigation-title">观察最近采集事件，验证规则与链路是否正常</Typography.Title>
-          <Typography.Text className="investigation-desc">
-            调试页保留短时间窗口和自动刷新，用于确认 Collector 是否持续产生日志、风险事件是否及时入库。
-          </Typography.Text>
-          <div className="ops-hero-actions">
+        <InsightHero
+          className="debug-summary"
+          kicker="Live Collector Debug"
+          title="观察最近采集事件，验证规则与链路是否正常"
+          description="调试页保留短时间窗口和自动刷新，用于确认 Collector 是否持续产生日志、风险事件是否及时入库。"
+          actions={(
+            <>
             <Link to="/settings/collector-health"><Button type="primary">采集状态</Button></Link>
             <Link to="/audit/events"><Button ghost>操作日志</Button></Link>
-          </div>
-        </section>
-        <aside className="investigation-latest">
-          <Typography.Text type="secondary">最新事件</Typography.Text>
-          <div className="latest-risk-title">{latestEvent ? eventTypeLabel(latestEvent.eventType) : '-'}</div>
-          <div className="latest-risk-desc">{latestEvent ? latestEvent.cmdline || latestEvent.filePath || latestEvent.processName || '-' : '暂无采集事件'}</div>
-        </aside>
+            </>
+          )}
+        />
+        <LatestPanel
+          label="最新事件"
+          title={latestEvent ? eventTypeLabel(latestEvent.eventType) : '-'}
+          description={latestEvent ? latestEvent.cmdline || latestEvent.filePath || latestEvent.processName || '-' : '暂无采集事件'}
+        />
       </div>
       <div className="metric-grid risk-metric-grid">
         <MetricCard label="匹配总量" value={total} hint="当前查询结果" tone="blue" />

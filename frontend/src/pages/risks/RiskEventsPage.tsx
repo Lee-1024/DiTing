@@ -5,7 +5,7 @@ import { exportAuditEvents, queryAuditEvents } from '../../api/audit';
 import { getRiskDispositions, listRiskDispositions, updateRiskDisposition } from '../../api/riskDispositions';
 import CommandText from '../../components/CommandText';
 import FilterToolbar from '../../components/FilterToolbar';
-import { MetricCard } from '../../components/InsightHeader';
+import { InsightHero, LatestPanel, MetricCard } from '../../components/InsightHeader';
 import ProcessChain from '../../components/ProcessChain';
 import SeverityTag from '../../components/SeverityTag';
 import type { AuditEvent, AuditEventQuery } from '../../types/audit';
@@ -195,18 +195,17 @@ export default function RiskEventsPage() {
         </div>
       </div>
       <div className="investigation-hero">
-        <section className="investigation-summary">
-          <div className="ops-kicker">Risk Operations</div>
-          <Typography.Title level={2} className="investigation-title">按处置状态、风险等级和上下文快速收敛事件</Typography.Title>
-          <Typography.Text className="investigation-desc">
-            默认聚焦待处理风险；点击任意事件进入调查抽屉，按概览、进程、规则、关联事件和原始数据分层排查。
-          </Typography.Text>
-        </section>
-        <aside className="investigation-latest">
-          <Typography.Text type="secondary">最近风险</Typography.Text>
-          <div className="latest-risk-title">{latestEvent ? eventTypeLabel(latestEvent.eventType) : '-'}</div>
-          <div className="latest-risk-desc">{latestEvent ? latestEvent.cmdline || latestEvent.filePath || latestEvent.dstIp || '-' : '暂无风险事件'}</div>
-        </aside>
+        <InsightHero
+          className="investigation-summary"
+          kicker="Risk Operations"
+          title="按处置状态、风险等级和上下文快速收敛事件"
+          description="默认聚焦待处理风险；点击任意事件进入调查抽屉，按概览、进程、规则、关联事件和原始数据分层排查。"
+        />
+        <LatestPanel
+          label="最近风险"
+          title={latestEvent ? eventTypeLabel(latestEvent.eventType) : '-'}
+          description={latestEvent ? latestEvent.cmdline || latestEvent.filePath || latestEvent.dstIp || '-' : '暂无风险事件'}
+        />
       </div>
       <div className="metric-grid risk-metric-grid">
         <MetricCard label="当前队列" value={visibleEvents.length} hint={`共 ${total} 条匹配结果`} tone="blue" />
