@@ -29,7 +29,7 @@ export default function FilterToolbar({
         form={form}
         className="filter-form"
         layout="horizontal"
-        labelCol={{ flex: '86px' }}
+        labelCol={{ flex: '78px' }}
         wrapperCol={{ flex: '1 1 0' }}
         colon
         initialValues={initialValues}
