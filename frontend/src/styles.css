@@ -147,9 +147,10 @@ body {
 
 .filter-fields {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(176px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(260px, 260px));
   align-items: end;
-  gap: 12px;
+  gap: 12px 16px;
+  justify-content: start;
   min-width: 0;
 }
 
@@ -195,7 +196,11 @@ body {
 
 .filter-field-time {
   grid-column: span 2;
-  min-width: 300px;
+  min-width: 536px;
+}
+
+.filter-fields .filter-field-time .ant-picker {
+  width: 100% !important;
 }
 
 .filter-actions {
