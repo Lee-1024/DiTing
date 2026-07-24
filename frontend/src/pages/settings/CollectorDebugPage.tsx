@@ -137,11 +137,9 @@ export default function CollectorDebugPage() {
             <Form.Item name="keyword" label="关键字">
               <Input allowClear placeholder="命令 / 文件 / IP" />
             </Form.Item>
-          </div>
-          <div className="filter-footer">
-            <Space className="filter-actions" size={10} wrap={false}>
+            <Form.Item className="filter-action-item">
               <Button type="primary" icon={<SearchOutlined />} htmlType="submit">查询</Button>
-            </Space>
+            </Form.Item>
           </div>
         </Form>
         <Table

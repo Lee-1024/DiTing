@@ -348,15 +348,34 @@ body {
 }
 
 .live-filter-card .ant-card-body {
-  padding: 14px 16px 0;
+  padding: 18px 18px 0;
 }
 
 .live-filter-card .ant-table-wrapper {
-  margin: 14px -16px 0;
+  margin: 18px 0 0;
 }
 
 .inline-filter-form {
   margin-bottom: 0;
+}
+
+.live-filter-card .filter-fields {
+  align-items: center;
+}
+
+.filter-action-item {
+  width: auto !important;
+}
+
+.filter-action-item .ant-form-item-control {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.filter-action-item .ant-btn {
+  min-width: 84px;
+  height: 36px;
+  font-weight: 700;
 }
 
 @media (max-width: 900px) {
@@ -385,6 +404,10 @@ body {
 
 .data-card .ant-card-body {
   padding: 0;
+}
+
+.data-card.live-filter-card .ant-card-body {
+  padding: 18px 18px 0;
 }
 
 .ant-card {
