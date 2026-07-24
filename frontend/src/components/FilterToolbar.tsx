@@ -1,6 +1,5 @@
 import { DownloadOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
-import { QueryFilter } from '@ant-design/pro-components';
-import { Button, Card, Space } from 'antd';
+import { Button, Card, Form, Space } from 'antd';
 import type { FormInstance } from 'antd';
 import type { ReactNode } from 'react';
 
@@ -26,36 +25,29 @@ export default function FilterToolbar({
 }: FilterToolbarProps) {
   return (
     <Card className="filter-card">
-      <QueryFilter
+      <Form
         form={form}
         className="filter-form"
         layout="horizontal"
-        labelWidth={76}
+        labelCol={{ flex: '86px' }}
+        wrapperCol={{ flex: '1 1 0' }}
+        colon
         initialValues={initialValues}
         onFinish={() => {
           onSearch();
         }}
-        onReset={() => {
-          onReset();
-        }}
-        defaultCollapsed={false}
-        span={{ xs: 24, sm: 12, md: 12, lg: 8, xl: 8, xxl: 8 }}
-        searchGutter={[18, 16]}
-        submitterColSpanProps={{ span: 24 }}
-        showHiddenNum
-        optionRender={(_, __, dom) => (
-          [
-            <Space key="filter-actions" className="filter-actions" size={8} wrap={false}>
-              <Button type="primary" icon={<SearchOutlined />} htmlType="submit">查询</Button>
-              <Button icon={<ReloadOutlined />} onClick={onReset}>重置</Button>
-              {onExport && <Button icon={<DownloadOutlined />} onClick={onExport}>{exportText}</Button>}
-              {dom.slice(2)}
-            </Space>,
-          ]
-        )}
       >
-        {children}
-      </QueryFilter>
+        <div className="filter-fields">
+          {children}
+        </div>
+        <div className="filter-footer">
+          <Space className="filter-actions" size={10} wrap={false}>
+            <Button type="primary" icon={<SearchOutlined />} htmlType="submit">查询</Button>
+            <Button icon={<ReloadOutlined />} onClick={onReset}>重置</Button>
+            {onExport && <Button icon={<DownloadOutlined />} onClick={onExport}>{exportText}</Button>}
+          </Space>
+        </div>
+      </Form>
     </Card>
   );
 }
