@@ -137,15 +137,17 @@ body {
 }
 
 .filter-card .ant-card-body {
-  padding: 16px 18px;
+  padding: 18px 20px;
 }
 
 .filter-form {
   margin: 0;
 }
 
-.filter-form .ant-pro-query-filter-row {
-  row-gap: 14px !important;
+.filter-form .ant-pro-query-filter-row,
+.filter-form .ant-row {
+  align-items: center;
+  row-gap: 16px !important;
 }
 
 .filter-form .ant-col,
@@ -158,15 +160,24 @@ body {
 }
 
 .filter-form .ant-form-item-label {
-  padding-bottom: 5px;
+  height: 40px;
+  padding-bottom: 0;
   font-weight: 800;
+  display: flex;
+  align-items: center;
 }
 
 .filter-form .ant-form-item-label > label {
   color: #243044;
   font-size: 13px;
   font-weight: 800;
-  line-height: 20px;
+  line-height: 40px;
+  white-space: nowrap;
+}
+
+.filter-form .ant-form-item-label > label::after {
+  margin-inline-start: 2px;
+  margin-inline-end: 8px;
 }
 
 .filter-form .ant-picker,
@@ -237,9 +248,12 @@ body {
 
 .filter-actions {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
   width: 100%;
-  padding-top: 25px;
+  height: 40px;
+  padding-top: 0;
+  white-space: nowrap;
 }
 
 .action-cluster {
@@ -254,9 +268,13 @@ body {
 
 .filter-actions .ant-btn,
 .action-cluster .ant-btn {
-  min-width: 92px;
+  min-width: 96px;
   height: 40px;
   font-weight: 700;
+}
+
+.filter-actions .ant-btn {
+  flex: 0 0 auto;
 }
 
 .action-cluster .ant-btn:not(.ant-btn-primary):not(.ant-btn-dangerous) {
@@ -295,6 +313,7 @@ body {
   .filter-actions {
     justify-content: start;
     padding-top: 0;
+    height: auto;
   }
 
 }

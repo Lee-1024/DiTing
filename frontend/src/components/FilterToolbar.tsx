@@ -29,7 +29,8 @@ export default function FilterToolbar({
       <QueryFilter
         form={form}
         className="filter-form"
-        layout="vertical"
+        layout="horizontal"
+        labelWidth={76}
         initialValues={initialValues}
         onFinish={() => {
           onSearch();
@@ -38,12 +39,13 @@ export default function FilterToolbar({
           onReset();
         }}
         defaultCollapsed={false}
-        span={{ xs: 24, sm: 12, md: 8, lg: 6, xl: 6, xxl: 6 }}
-        searchGutter={[16, 14]}
+        span={{ xs: 24, sm: 12, md: 12, lg: 8, xl: 6, xxl: 6 }}
+        searchGutter={[18, 16]}
+        submitterColSpanProps={{ span: 6, style: { minWidth: 360 } }}
         showHiddenNum
         optionRender={(_, __, dom) => (
           [
-            <Space key="filter-actions" className="filter-actions" size={8} wrap>
+            <Space key="filter-actions" className="filter-actions" size={8} wrap={false}>
               <Button type="primary" icon={<SearchOutlined />} htmlType="submit">查询</Button>
               <Button icon={<ReloadOutlined />} onClick={onReset}>重置</Button>
               {onExport && <Button icon={<DownloadOutlined />} onClick={onExport}>{exportText}</Button>}
