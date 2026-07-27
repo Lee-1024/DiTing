@@ -10,6 +10,7 @@ import SeverityTag from '../../components/SeverityTag';
 import type { AuditEvent, AuditEventQuery } from '../../types/audit';
 import { downloadBlob } from '../../utils/download';
 import { compactNumber } from '../../utils/format';
+import { displayHostIdentity } from '../../utils/hostDisplay';
 import { eventTypeLabel, eventTypeOptions, severityOptions } from '../../utils/labels';
 import { formatLocalDateTime } from '../../utils/time';
 import EventDetailDrawer from './EventDetailDrawer';
@@ -104,7 +105,7 @@ export default function AuditEventsPage() {
 
   const riskyEvents = events.filter((item) => item.severity === 'high' || item.severity === 'critical').length;
   const criticalEvents = events.filter((item) => item.severity === 'critical').length;
-  const activeHosts = uniqueValues(events.map((item) => item.hostName || item.nodeName || item.hostId || '').filter(Boolean)).length;
+  const activeHosts = uniqueValues(events.map((item) => displayHostIdentity(item, '')).filter(Boolean)).length;
   const latestEvent = groupedEvents[0]?.representative;
 
   return (

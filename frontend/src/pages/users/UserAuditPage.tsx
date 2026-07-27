@@ -12,6 +12,7 @@ import type { AuditEvent } from '../../types/audit';
 import type { UserAuditItem, UserAuditQuery } from '../../types/stats';
 import { downloadBlob } from '../../utils/download';
 import { compactNumber } from '../../utils/format';
+import { displayHostIdentity } from '../../utils/hostDisplay';
 import { severityOptions } from '../../utils/labels';
 import { formatLocalDateTime } from '../../utils/time';
 
@@ -183,7 +184,7 @@ export default function UserAuditPage() {
       { title: '时间', dataIndex: 'eventTime', width: 190, render: (value: string) => formatLocalDateTime(value) },
       { title: '登录用户', dataIndex: 'loginUsername', width: 110, render: (_: string, record: AuditEvent) => record.loginUsername || record.username },
       { title: '执行用户', dataIndex: 'username', width: 110 },
-      { title: '主机', dataIndex: 'hostName', width: 170, render: (_: string, record: AuditEvent) => record.hostName || record.nodeName || record.hostId || '-' },
+      { title: '主机', dataIndex: 'hostName', width: 170, render: (_: string, record: AuditEvent) => displayHostIdentity(record) },
       { title: '进程', dataIndex: 'processName', width: 120 },
       { title: '命令', dataIndex: 'cmdline', render: (value: string) => <CommandText value={value} /> },
       { title: '等级', dataIndex: 'severity', width: 90, render: (value: string) => <SeverityTag value={value} /> },
@@ -406,7 +407,7 @@ export default function UserAuditPage() {
 
 // buildHostDistribution 构建 build Host Distribution 所需的数据结构。
 function buildHostDistribution(events: AuditEvent[]) {
-  return topDistribution(events, (event) => event.hostName || event.nodeName || event.hostId || '-');
+  return topDistribution(events, (event) => displayHostIdentity(event));
 }
 
 // buildCommandDistribution 构建 build Command Distribution 所需的数据结构。

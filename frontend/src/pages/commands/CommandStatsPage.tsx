@@ -12,6 +12,7 @@ import type { AuditEvent } from '../../types/audit';
 import type { CommandItem, CommandStatsQuery } from '../../types/stats';
 import { downloadBlob } from '../../utils/download';
 import { compactNumber } from '../../utils/format';
+import { displayHostIdentity } from '../../utils/hostDisplay';
 import { formatLocalDateTime } from '../../utils/time';
 
 const defaultRange = [dayjs().subtract(7, 'day'), dayjs()] as const;
@@ -164,7 +165,7 @@ export default function CommandStatsPage() {
       { title: '时间', dataIndex: 'eventTime', width: 190, render: (value: string) => formatLocalDateTime(value) },
       { title: '登录用户', dataIndex: 'loginUsername', width: 110, render: (_: string, record: AuditEvent) => record.loginUsername || record.username },
       { title: '执行用户', dataIndex: 'username', width: 110 },
-      { title: '主机', dataIndex: 'hostName', width: 170, render: (_: string, record: AuditEvent) => record.hostName || record.nodeName || record.hostId || '-' },
+      { title: '主机', dataIndex: 'hostName', width: 170, render: (_: string, record: AuditEvent) => displayHostIdentity(record) },
       { title: '进程', dataIndex: 'processName', width: 120 },
       { title: '命令', dataIndex: 'cmdline', render: (value: string) => <CommandText value={value} /> },
       { title: '等级', dataIndex: 'severity', width: 90, render: (value: string) => <SeverityTag value={value} /> },
@@ -248,7 +249,7 @@ export default function CommandStatsPage() {
             { title: '完整命令', dataIndex: 'cmdline', render: (value, record) => <CommandText value={value} onView={() => void openDetails(record)} /> },
             { title: '登录用户', dataIndex: 'loginUsername', width: 120, render: (_, record) => record.loginUsername || record.username },
             { title: '执行用户', dataIndex: 'username', width: 120 },
-            { title: '最近主机', dataIndex: 'hostName', width: 170, render: (_, record) => record.hostName || record.nodeName || record.hostId || '-' },
+            { title: '最近主机', dataIndex: 'hostName', width: 170, render: (_, record) => displayHostIdentity(record) },
             { title: '涉及主机', dataIndex: 'hostCount', width: 116, align: 'right', className: 'number-cell' },
             { title: '次数', dataIndex: 'count', width: 104, align: 'right', className: 'number-cell' },
             { title: '首次执行', dataIndex: 'firstSeen', width: 190, render: (value) => formatLocalDateTime(value) },
@@ -278,7 +279,7 @@ export default function CommandStatsPage() {
               <Descriptions.Item label="登录用户">{selected.loginUsername || selected.username}</Descriptions.Item>
               <Descriptions.Item label="执行用户">{selected.username}</Descriptions.Item>
               <Descriptions.Item label="执行次数">{selected.count}</Descriptions.Item>
-              <Descriptions.Item label="最近主机">{selected.hostName || selected.nodeName || selected.hostId || '-'}</Descriptions.Item>
+              <Descriptions.Item label="最近主机">{displayHostIdentity(selected)}</Descriptions.Item>
               <Descriptions.Item label="首次执行">{formatLocalDateTime(selected.firstSeen)}</Descriptions.Item>
               <Descriptions.Item label="最近执行">{formatLocalDateTime(selected.lastSeen)}</Descriptions.Item>
             </Descriptions>

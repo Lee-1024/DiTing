@@ -14,6 +14,7 @@ import type { AuditEvent } from '../../types/audit';
 import type { BehaviorItem, HostAuditItem, HostAuditQuery, HostBehavior, HostUserItem } from '../../types/stats';
 import { downloadBlob } from '../../utils/download';
 import { compactNumber } from '../../utils/format';
+import { displayHostIdentity, isContainerLikeId } from '../../utils/hostDisplay';
 import { eventTypeLabel, severityOptions } from '../../utils/labels';
 import { formatLocalDateTime } from '../../utils/time';
 
@@ -264,7 +265,7 @@ export default function HostAuditPage() {
         />
         <LatestPanel
           label="最近活跃主机"
-          title={latestHost?.hostName || latestHost?.nodeName || '-'}
+          title={latestHost ? displayHostIdentity(latestHost) : '-'}
           description={latestHost ? `${compactNumber(latestHost.commandCount)} 条命令 / ${compactNumber(latestHost.highRiskEvents)} 条高危` : '暂无主机审计数据'}
         />
       </div>
@@ -304,9 +305,8 @@ export default function HostAuditPage() {
               dataIndex: 'hostName',
               render: (value: string, record) => (
                 <Space direction="vertical" size={0}>
-                  <Typography.Text>{value}</Typography.Text>
-                  {record.hostId && record.hostId !== value && <Typography.Text type="secondary">{record.hostId}</Typography.Text>}
-                  {record.nodeName && record.nodeName !== value && record.nodeName !== record.hostId && <Typography.Text type="secondary">{record.nodeName}</Typography.Text>}
+                  <Typography.Text>{displayHostIdentity(record)}</Typography.Text>
+                  {record.nodeName && record.nodeName !== displayHostIdentity(record) && !isContainerLikeId(record.nodeName) && <Typography.Text type="secondary">{record.nodeName}</Typography.Text>}
                 </Space>
               ),
             },
@@ -319,7 +319,7 @@ export default function HostAuditPage() {
         />
       </Card>
       <Drawer
-        title={selected?.hostName ? `${selected.hostName} 主机审计详情` : '主机审计详情'}
+        title={selected ? `${displayHostIdentity(selected)} 主机审计详情` : '主机审计详情'}
         width={1080}
         open={Boolean(selected)}
         className="investigation-drawer"
@@ -343,13 +343,13 @@ export default function HostAuditPage() {
           <Space direction="vertical" size={16} style={{ width: '100%' }}>
             <InvestigationBrief
               kicker="Host Profile"
-              title={selected.hostName || selected.nodeName || selected.hostId}
+              title={displayHostIdentity(selected)}
               description={`${compactNumber(selected.commandCount)} 条命令，${compactNumber(selected.activeUsers)} 个活跃用户，${compactNumber(selected.highRiskEvents)} 条高危事件。`}
               metaLabel="高危事件"
               metaValue={compactNumber(selected.highRiskEvents)}
             />
             <Descriptions column={1} bordered size="small">
-              <Descriptions.Item label="主机名">{selected.hostName || '-'}</Descriptions.Item>
+              <Descriptions.Item label="主机名">{displayHostIdentity(selected)}</Descriptions.Item>
               <Descriptions.Item label="Host ID">{selected.hostId || '-'}</Descriptions.Item>
               <Descriptions.Item label="节点名">{selected.nodeName || '-'}</Descriptions.Item>
               <Descriptions.Item label="首次活动">{formatLocalDateTime(selected.firstSeen)}</Descriptions.Item>

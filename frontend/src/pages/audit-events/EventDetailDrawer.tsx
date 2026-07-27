@@ -6,6 +6,7 @@ import ProcessChain from '../../components/ProcessChain';
 import SeverityTag from '../../components/SeverityTag';
 import type { AuditEvent } from '../../types/audit';
 import { formatJSON } from '../../utils/format';
+import { displayHostIdentity } from '../../utils/hostDisplay';
 import { eventTypeLabel, ruleFieldLabel, ruleOperatorLabel } from '../../utils/labels';
 import { formatLocalDateTime } from '../../utils/time';
 
@@ -91,7 +92,7 @@ function OverviewTab({ event }: { event: AuditEvent }) {
       <Descriptions column={1} bordered size="small">
         <Descriptions.Item label="事件 ID">{event.eventId}</Descriptions.Item>
         <Descriptions.Item label="时间">{formatLocalDateTime(event.eventTime)}</Descriptions.Item>
-        <Descriptions.Item label="主机">{event.nodeName || event.hostName || event.hostId || '-'}</Descriptions.Item>
+        <Descriptions.Item label="主机">{displayHostIdentity(event)}</Descriptions.Item>
         <Descriptions.Item label="容器">{event.containerName || event.containerId || '-'}</Descriptions.Item>
         <Descriptions.Item label="镜像">{event.image || '-'}</Descriptions.Item>
         <Descriptions.Item label="文件路径">{event.filePath || '-'}</Descriptions.Item>

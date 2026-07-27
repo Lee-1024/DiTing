@@ -11,6 +11,7 @@ import SeverityTag from '../../components/SeverityTag';
 import type { AuditEvent, AuditEventQuery } from '../../types/audit';
 import type { RiskDisposition, RiskDispositionMap, RiskDispositionStatus } from '../../types/riskDisposition';
 import { downloadBlob } from '../../utils/download';
+import { displayHostIdentity } from '../../utils/hostDisplay';
 import { eventTypeLabel, eventTypeOptions, severityLabel } from '../../utils/labels';
 import { formatLocalDateTime } from '../../utils/time';
 import EventDetailDrawer from '../audit-events/EventDetailDrawer';
@@ -285,7 +286,7 @@ export default function RiskEventsPage() {
             { title: '类型', dataIndex: 'eventType', width: 124, render: (value) => eventTypeLabel(value) || '-' },
             { title: '登录用户', dataIndex: 'loginUsername', width: 112, render: (_, record) => record.loginUsername || record.username },
             { title: '执行用户', dataIndex: 'username', width: 112 },
-            { title: '节点', dataIndex: 'nodeName', width: 150, ellipsis: true, render: (_, record) => record.nodeName || record.hostName },
+            { title: '节点', dataIndex: 'nodeName', width: 150, ellipsis: true, render: (_, record) => displayHostIdentity(record) },
             { title: '进程', dataIndex: 'processName', width: 130, ellipsis: true },
             { title: '进程链路', width: 220, render: (_, record) => <ProcessChain event={record} compact /> },
             { title: '风险对象', width: 260, render: (_, record) => riskTarget(record) },

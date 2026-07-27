@@ -8,6 +8,7 @@ import CommandText from '../../components/CommandText';
 import { InsightHero, LatestPanel, MetricCard } from '../../components/InsightHeader';
 import SeverityTag from '../../components/SeverityTag';
 import type { AuditEvent, AuditEventQuery } from '../../types/audit';
+import { displayHostIdentity } from '../../utils/hostDisplay';
 import { eventTypeLabel, eventTypeOptions } from '../../utils/labels';
 import { formatLocalDateTime } from '../../utils/time';
 import EventDetailDrawer from '../audit-events/EventDetailDrawer';
@@ -72,7 +73,7 @@ export default function CollectorDebugPage() {
   }, [autoRefresh]);
 
   const riskyEvents = events.filter((item) => item.severity === 'high' || item.severity === 'critical').length;
-  const hostCount = Array.from(new Set(events.map((item) => item.hostName || item.nodeName || item.hostId).filter(Boolean))).length;
+  const hostCount = Array.from(new Set(events.map((item) => displayHostIdentity(item, '')).filter(Boolean))).length;
   const latestEvent = events[0];
 
   return (
@@ -156,7 +157,7 @@ export default function CollectorDebugPage() {
             { title: '时间', dataIndex: 'eventTime', width: 190, fixed: 'left', render: (value) => formatLocalDateTime(value) },
             { title: '等级', dataIndex: 'severity', width: 90, render: (value) => <SeverityTag value={value} /> },
             { title: '事件', dataIndex: 'eventType', width: 120, render: (value) => eventTypeLabel(value) },
-            { title: '主机', dataIndex: 'hostName', width: 190, ellipsis: true, render: (_, record) => record.hostName || record.nodeName || record.hostId || '-' },
+            { title: '主机', dataIndex: 'hostName', width: 190, ellipsis: true, render: (_, record) => displayHostIdentity(record) },
             { title: '进程', dataIndex: 'processName', width: 150, ellipsis: true },
             { title: '命令', dataIndex: 'cmdline', width: 260, render: (value) => <CommandText value={value} /> },
             { title: '文件路径', dataIndex: 'filePath', width: 320, ellipsis: true, render: (value) => value || '-' },
