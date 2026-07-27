@@ -1,5 +1,5 @@
-import { LockOutlined, UserOutlined } from '@ant-design/icons';
-import { Button, Card, Form, Input, Typography, message } from 'antd';
+import { LockOutlined, SafetyCertificateOutlined, UserOutlined } from '@ant-design/icons';
+import { Button, Card, Form, Input, Space, Typography, message } from 'antd';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { login } from '../../api/auth';
@@ -27,16 +27,33 @@ export default function LoginPage() {
   return (
     <div className="login-page">
       <Card className="login-card">
-        <Typography.Title level={3}>DiTing</Typography.Title>
+        <div className="login-brand">
+          <div className="login-logo-frame">
+            <img src="/logo.png" alt="DiTing" />
+          </div>
+          <div>
+            <Typography.Title level={3} className="login-title">DiTing</Typography.Title>
+            <Typography.Text className="login-subtitle">Runtime Security Operations Console</Typography.Text>
+          </div>
+        </div>
+        <div className="login-signal">
+          <SafetyCertificateOutlined />
+          <span>审计追踪 · 风险调查 · 主机画像</span>
+        </div>
         <Form layout="vertical" onFinish={submit} initialValues={{ username: 'admin' }}>
           <Form.Item name="username" label="用户名" rules={[{ required: true }]}>
-            <Input prefix={<UserOutlined />} />
+            <Input prefix={<UserOutlined />} placeholder="请输入用户名" />
           </Form.Item>
           <Form.Item name="password" label="密码" rules={[{ required: true }]}>
-            <Input.Password prefix={<LockOutlined />} />
+            <Input.Password prefix={<LockOutlined />} placeholder="请输入密码" />
           </Form.Item>
           <Button block type="primary" htmlType="submit" loading={loading}>登录</Button>
         </Form>
+        <Space className="login-footer" size={8}>
+          <span>Collector</span>
+          <span>Policy</span>
+          <span>Audit</span>
+        </Space>
       </Card>
     </div>
   );
