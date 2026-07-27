@@ -180,7 +180,7 @@ export default function AuditEventsPage() {
           dataSource={groupedEvents}
           className="clickable-table"
           locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无审计事件" /> }}
-          scroll={{ x: 1540 }}
+          scroll={{ x: 1710 }}
           onRow={(record) => ({ onClick: () => setSelected(record.representative), title: '点击查看操作详情' })}
           expandable={{
             expandedRowRender: (group) => (
@@ -197,6 +197,7 @@ export default function AuditEventsPage() {
                 columns={[
                   { title: '时间', dataIndex: 'eventTime', width: 180, render: (value) => formatLocalDateTime(value) },
                   { title: '事件', dataIndex: 'eventType', width: 120, render: (value) => eventTypeLabel(value) },
+                  { title: '主机/节点', dataIndex: 'hostName', width: 170, ellipsis: true, render: (_, record) => displayHostIdentity(record) },
                   { title: '文件路径', dataIndex: 'filePath', width: 420, ellipsis: true, render: (value) => value || '-' },
                   { title: '文件操作', dataIndex: 'fileOperation', width: 120, render: (value) => value || '-' },
                   { title: '标签', dataIndex: 'tags', render: (tags: string[]) => tags?.length ? tags.map((tag) => <Tag key={tag}>{tag}</Tag>) : '-' },
@@ -222,6 +223,7 @@ export default function AuditEventsPage() {
             { title: '等级', dataIndex: 'maxSeverity', width: 100, render: (value) => <SeverityTag value={value} /> },
             { title: '事件', dataIndex: 'eventTypes', width: 160, render: (values: string[]) => values.map((value) => <Tag key={value}>{eventTypeLabel(value)}</Tag>) },
             { title: '明细数', dataIndex: ['events', 'length'], width: 104, align: 'right', className: 'number-cell', render: (_, record) => record.events.length },
+            { title: '主机/节点', dataIndex: ['representative', 'hostName'], width: 170, ellipsis: true, render: (_, record) => displayHostIdentity(record.representative) },
             { title: 'Namespace', dataIndex: ['representative', 'namespace'], width: 160, ellipsis: true },
             { title: 'Pod', dataIndex: ['representative', 'podName'], width: 200, ellipsis: true },
             { title: '登录用户', dataIndex: ['representative', 'loginUsername'], width: 120, render: (_, record) => record.representative.loginUsername || record.representative.username },
