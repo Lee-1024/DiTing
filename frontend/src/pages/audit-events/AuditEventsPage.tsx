@@ -16,6 +16,7 @@ import { formatLocalDateTime } from '../../utils/time';
 import EventDetailDrawer from './EventDetailDrawer';
 
 const defaultRange = [dayjs().subtract(7, 'day'), dayjs()] as const;
+const rawPageMultiplier = 10;
 
 interface AuditEventGroup {
   groupId: string;
@@ -56,7 +57,7 @@ export default function AuditEventsPage() {
       keyword: values.keyword,
       tag: values.tag,
       page: nextPage,
-      page_size: nextPageSize,
+      page_size: nextPageSize * rawPageMultiplier,
     };
   }
 
@@ -177,34 +178,13 @@ export default function AuditEventsPage() {
         <Table
           rowKey="groupId"
           loading={loading}
-          dataSource={groupedEvents}
+          dataSource={groupedEvents.slice(0, pageSize)}
           className="clickable-table"
           locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无审计事件" /> }}
           scroll={{ x: 1710 }}
           onRow={(record) => ({ onClick: () => setSelected(record.representative), title: '点击查看操作详情' })}
           expandable={{
-            expandedRowRender: (group) => (
-              <Table
-                rowKey="eventId"
-                size="small"
-                pagination={false}
-                dataSource={group.events}
-                className="clickable-table audit-detail-table"
-                scroll={{ x: 1120 }}
-                onRow={(record) => ({ onClick: (event) => {
-                  event.stopPropagation();
-                  setSelected(record);
-                }, title: '点击查看明细事件' })}
-                columns={[
-                  { title: '时间', dataIndex: 'eventTime', width: 180, render: (value) => formatLocalDateTime(value) },
-                  { title: '事件', dataIndex: 'eventType', width: 120, render: (value) => eventTypeLabel(value) },
-                  { title: '主机/节点', dataIndex: 'hostName', width: 170, ellipsis: true, render: (_, record) => displayHostIdentity(record) },
-                  { title: '文件路径', dataIndex: 'filePath', width: 420, ellipsis: true, render: (value) => value || '-' },
-                  { title: '文件操作', dataIndex: 'fileOperation', width: 120, render: (value) => value || '-' },
-                  { title: '标签', dataIndex: 'tags', render: (tags: string[]) => tags?.length ? tags.map((tag) => <Tag key={tag}>{tag}</Tag>) : '-' },
-                ]}
-              />
-            ),
+            expandedRowRender: (group) => renderAuditGroupDetails(group, setSelected),
             expandedRowClassName: () => 'audit-expanded-row',
             rowExpandable: (group) => group.events.length > 1,
           }}
@@ -214,7 +194,7 @@ export default function AuditEventsPage() {
             total,
             showSizeChanger: true,
             pageSizeOptions: [10, 20, 50, 100],
-            showTotal: (value) => `共 ${value} 条`,
+            showTotal: (value) => `共 ${value} 条原始事件，当前 ${groupedEvents.length} 个操作`,
             onChange: (nextPage, nextPageSize) => {
               const sizeChanged = nextPageSize !== pageSize;
               void load(sizeChanged ? 1 : nextPage, nextPageSize, form.getFieldsValue());
@@ -239,6 +219,39 @@ export default function AuditEventsPage() {
       </Card>
       <EventDetailDrawer event={selected} relatedEvents={findRelatedEvents(groupedEvents, selected)} open={Boolean(selected)} onClose={() => setSelected(undefined)} />
     </>
+  );
+}
+
+function renderAuditGroupDetails(group: AuditEventGroup, onSelect: (event: AuditEvent) => void) {
+  return (
+    <div className="audit-detail-panel" onClick={(event) => event.stopPropagation()}>
+      <div className="audit-detail-grid audit-detail-grid-head">
+        <span>时间</span>
+        <span>事件</span>
+        <span>主机/节点</span>
+        <span>文件路径</span>
+        <span>文件操作</span>
+        <span>标签</span>
+      </div>
+      {group.events.map((event) => (
+        <button
+          key={event.eventId}
+          type="button"
+          className="audit-detail-grid audit-detail-row"
+          onClick={() => onSelect(event)}
+          title="点击查看明细事件"
+        >
+          <span>{formatLocalDateTime(event.eventTime)}</span>
+          <span>{eventTypeLabel(event.eventType)}</span>
+          <span>{displayHostIdentity(event)}</span>
+          <span className="ellipsis-text">{event.filePath || '-'}</span>
+          <span>{event.fileOperation || '-'}</span>
+          <span className="audit-detail-tags">
+            {event.tags?.length ? event.tags.map((tag) => <Tag key={tag}>{tag}</Tag>) : '-'}
+          </span>
+        </button>
+      ))}
+    </div>
   );
 }
 

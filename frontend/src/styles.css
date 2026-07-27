@@ -499,33 +499,63 @@ body {
 }
 
 .audit-expanded-row > .ant-table-cell {
-  padding: 14px 18px 18px !important;
+  padding: 16px 20px 18px !important;
   background: linear-gradient(180deg, #ecfeff 0%, #f8fdff 100%) !important;
   overflow: visible;
 }
 
-.audit-expanded-row .audit-detail-table {
+.audit-detail-panel {
   border: 1px solid rgba(8, 145, 178, 0.14);
   border-radius: 6px;
   overflow: hidden;
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+  background: rgba(255, 255, 255, 0.96);
 }
 
-.audit-expanded-row .audit-detail-table .ant-table {
-  overflow: visible;
+.audit-detail-grid {
+  display: grid;
+  grid-template-columns: 180px 140px 180px minmax(280px, 1fr) 140px 220px;
+  align-items: center;
+  min-width: 1140px;
+  column-gap: 12px;
 }
 
-.audit-expanded-row .audit-detail-table .ant-table-thead > tr > th {
-  height: 38px;
-  padding: 9px 12px !important;
-  line-height: 20px;
-  vertical-align: middle;
-  position: relative;
-  z-index: 2;
+.audit-detail-grid-head {
+  height: 40px;
+  padding: 0 14px;
+  background: linear-gradient(180deg, #f8fbff 0%, #eef6fb 100%);
+  color: #475569;
+  font-size: 12px;
+  font-weight: 800;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
 }
 
-.audit-expanded-row .audit-detail-table .ant-table-tbody > tr > td {
-  padding: 12px !important;
+.audit-detail-row {
+  width: 100%;
+  min-height: 54px;
+  padding: 10px 14px;
+  border: 0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+  background: transparent;
+  color: #172033;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.audit-detail-row:last-child {
+  border-bottom: 0;
+}
+
+.audit-detail-row:hover {
+  background: #ecfeff;
+}
+
+.audit-detail-tags {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
 }
 
 .ellipsis-text {
