@@ -189,7 +189,8 @@ export default function AuditEventsPage() {
                 size="small"
                 pagination={false}
                 dataSource={group.events}
-                className="clickable-table"
+                className="clickable-table audit-detail-table"
+                scroll={{ x: 1120 }}
                 onRow={(record) => ({ onClick: (event) => {
                   event.stopPropagation();
                   setSelected(record);
@@ -204,6 +205,7 @@ export default function AuditEventsPage() {
                 ]}
               />
             ),
+            expandedRowClassName: () => 'audit-expanded-row',
             rowExpandable: (group) => group.events.length > 1,
           }}
           pagination={{
@@ -219,7 +221,7 @@ export default function AuditEventsPage() {
             },
           }}
           columns={[
-            { title: '时间', dataIndex: ['representative', 'eventTime'], width: 190, fixed: 'left', render: (value) => formatLocalDateTime(value) },
+            { title: '时间', dataIndex: ['representative', 'eventTime'], width: 190, render: (value) => formatLocalDateTime(value) },
             { title: '等级', dataIndex: 'maxSeverity', width: 100, render: (value) => <SeverityTag value={value} /> },
             { title: '事件', dataIndex: 'eventTypes', width: 160, render: (values: string[]) => values.map((value) => <Tag key={value}>{eventTypeLabel(value)}</Tag>) },
             { title: '明细数', dataIndex: ['events', 'length'], width: 104, align: 'right', className: 'number-cell', render: (_, record) => record.events.length },
