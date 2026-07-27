@@ -176,8 +176,12 @@ function Signal({ title, desc, to }: { title: string; desc: string; to: string }
 // trendChartOption 构建趋势图配置。
 function trendChartOption(trend: TrendPoint[], peakPoint?: TrendPoint): EChartsOption {
   return {
-    grid: { left: 42, right: 20, top: 28, bottom: 34 },
-    tooltip: { trigger: 'axis' },
+    grid: { left: 64, right: 24, top: 42, bottom: 40, containLabel: true },
+    tooltip: {
+      trigger: 'axis',
+      valueFormatter: (value) => compactNumber(Number(value)),
+      confine: true,
+    },
     xAxis: {
       type: 'category',
       data: trend.map((item) => item.time),
@@ -186,7 +190,11 @@ function trendChartOption(trend: TrendPoint[], peakPoint?: TrendPoint): EChartsO
     },
     yAxis: {
       type: 'value',
-      axisLabel: { color: '#64748b' },
+      axisLabel: {
+        color: '#64748b',
+        margin: 10,
+        formatter: (value: number) => compactNumber(value),
+      },
       splitLine: { lineStyle: { color: '#e9eef5' } },
     },
     series: [{
@@ -197,9 +205,10 @@ function trendChartOption(trend: TrendPoint[], peakPoint?: TrendPoint): EChartsO
       lineStyle: { color: '#2563eb', width: 2 },
       itemStyle: { color: '#2563eb' },
       markPoint: peakPoint ? {
-        symbolSize: 42,
+        symbolSize: 44,
+        symbolOffset: [0, -6],
         itemStyle: { color: '#dc2626' },
-        label: { color: '#fff', fontSize: 10 },
+        label: { color: '#fff', fontSize: 10, formatter: ({ value }) => compactNumber(Number(value)) },
         data: [{ name: '峰值', coord: [peakPoint.time, peakPoint.count], value: peakPoint.count }],
       } : undefined,
       data: trend.map((item) => item.count),
@@ -210,11 +219,16 @@ function trendChartOption(trend: TrendPoint[], peakPoint?: TrendPoint): EChartsO
 // topBarOption 转换 top Bar Option 的数据结构。
 function topBarOption(items: TopItem[], color: string): EChartsOption {
   return {
-    grid: { left: 112, right: 24, top: 16, bottom: 20 },
-    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+    grid: { left: 112, right: 32, top: 16, bottom: 20, containLabel: true },
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' },
+      valueFormatter: (value) => compactNumber(Number(value)),
+      confine: true,
+    },
     xAxis: {
       type: 'value',
-      axisLabel: { color: '#64748b' },
+      axisLabel: { color: '#64748b', formatter: (value: number) => compactNumber(value) },
       splitLine: { lineStyle: { color: '#e9eef5' } },
     },
     yAxis: {
