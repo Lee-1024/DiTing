@@ -544,15 +544,16 @@ export default function HostAuditPage() {
         />
       </Drawer>
       <Modal
-        title={selectedFileTarget ? `${selectedFileTarget.name} 文件访问明细` : '文件访问明细'}
+        title={<DetailModalTitle title="文件访问明细" target={selectedFileTarget?.name} />}
         open={Boolean(selectedFileTarget)}
         onCancel={() => {
           setSelectedFileTarget(undefined);
           setFileEvents([]);
         }}
         footer={null}
-        width="min(1180px, calc(100vw - 48px))"
+        width="min(960px, calc(100vw - 40px))"
         className="detail-modal"
+        styles={{ body: { maxHeight: 'min(620px, calc(100vh - 180px))', overflow: 'auto' } }}
       >
         <Table
           rowKey="eventId"
@@ -561,20 +562,21 @@ export default function HostAuditPage() {
           dataSource={fileEvents}
           locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无文件访问明细" /> }}
           pagination={false}
-          scroll={{ x: 1200 }}
+          scroll={{ x: 1120, y: 430 }}
           columns={fileColumns()}
         />
       </Modal>
       <Modal
-        title={selectedNetworkTarget ? `${selectedNetworkTarget.name} 连接明细` : '网络连接明细'}
+        title={<DetailModalTitle title="网络连接明细" target={selectedNetworkTarget?.name} />}
         open={Boolean(selectedNetworkTarget)}
         onCancel={() => {
           setSelectedNetworkTarget(undefined);
           setNetworkEvents([]);
         }}
         footer={null}
-        width="min(1120px, calc(100vw - 48px))"
+        width="min(920px, calc(100vw - 40px))"
         className="detail-modal"
+        styles={{ body: { maxHeight: 'min(620px, calc(100vh - 180px))', overflow: 'auto' } }}
       >
         <Table
           rowKey="eventId"
@@ -583,11 +585,24 @@ export default function HostAuditPage() {
           dataSource={networkEvents}
           locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无网络连接明细" /> }}
           pagination={false}
-          scroll={{ x: 1140 }}
+          scroll={{ x: 1080, y: 430 }}
           columns={networkColumns()}
         />
       </Modal>
     </>
+  );
+}
+
+function DetailModalTitle({ title, target }: { title: string; target?: string }) {
+  return (
+    <div className="detail-modal-title">
+      <span>{title}</span>
+      {target && (
+        <Tooltip title={target}>
+          <Typography.Text className="detail-modal-target">{target}</Typography.Text>
+        </Tooltip>
+      )}
+    </div>
   );
 }
 
@@ -663,7 +678,7 @@ function fileColumns() {
     { title: '进程', dataIndex: 'processName', width: 120 },
     { title: '进程链路', width: 220, render: (_: string, record: AuditEvent) => <ProcessChain event={record} compact /> },
     { title: '操作', dataIndex: 'fileOperation', width: 150, render: (value: string) => value || '-' },
-    { title: '文件路径', dataIndex: 'filePath', render: (value: string) => value || '-' },
+    { title: '文件路径', dataIndex: 'filePath', width: 220, ellipsis: true, render: (value: string) => value ? <Tooltip title={value}>{value}</Tooltip> : '-' },
     { title: '命中规则', dataIndex: 'ruleNames', width: 220, render: (value: string[]) => value?.join('、') || '-' },
     { title: '等级', dataIndex: 'severity', width: 90, render: (value: string) => <SeverityTag value={value} /> },
   ];
