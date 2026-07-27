@@ -585,7 +585,7 @@ export default function HostAuditPage() {
           dataSource={networkEvents}
           locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无网络连接明细" /> }}
           pagination={false}
-          scroll={{ x: 1080, y: 430 }}
+          scroll={{ x: 1180, y: 430 }}
           columns={networkColumns()}
         />
       </Modal>
@@ -603,6 +603,14 @@ function DetailModalTitle({ title, target }: { title: string; target?: string })
         </Tooltip>
       )}
     </div>
+  );
+}
+
+function NetworkTargetText({ value }: { value: string }) {
+  return (
+    <Tooltip title={value}>
+      <Typography.Text className="network-target-text">{value}</Typography.Text>
+    </Tooltip>
   );
 }
 
@@ -658,12 +666,12 @@ function behaviorColumns(title: string, renderName?: (value: string) => string) 
 function networkColumns() {
   return [
     { title: '时间', dataIndex: 'eventTime', width: 170, render: (value: string) => formatLocalDateTime(value) },
-    { title: '登录用户', dataIndex: 'loginUsername', width: 110, render: (_: string, record: AuditEvent) => record.loginUsername || record.username },
-    { title: '执行用户', dataIndex: 'username', width: 110 },
-    { title: '进程', dataIndex: 'processName', width: 120 },
-    { title: '进程链路', width: 220, render: (_: string, record: AuditEvent) => <ProcessChain event={record} compact /> },
-    { title: '命令', dataIndex: 'cmdline', render: (value: string) => <CommandText value={value} /> },
-    { title: '目标', dataIndex: 'dstIp', width: 190, render: (_: string, record: AuditEvent) => formatNetworkTarget(record) },
+    { title: '登录用户', dataIndex: 'loginUsername', width: 100, render: (_: string, record: AuditEvent) => record.loginUsername || record.username },
+    { title: '执行用户', dataIndex: 'username', width: 100 },
+    { title: '进程', dataIndex: 'processName', width: 120, ellipsis: true },
+    { title: '进程链路', width: 210, render: (_: string, record: AuditEvent) => <ProcessChain event={record} compact /> },
+    { title: '命令', dataIndex: 'cmdline', width: 260, render: (value: string) => <CommandText value={value} width={200} /> },
+    { title: '目标', dataIndex: 'dstIp', width: 190, ellipsis: true, render: (_: string, record: AuditEvent) => <NetworkTargetText value={formatNetworkTarget(record)} /> },
     { title: '协议', dataIndex: 'protocol', width: 80, render: (value: string) => value || '-' },
     { title: '等级', dataIndex: 'severity', width: 90, render: (value: string) => <SeverityTag value={value} /> },
   ];

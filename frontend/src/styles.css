@@ -1450,6 +1450,16 @@ body {
   white-space: nowrap;
 }
 
+.network-target-text {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--dt-font-mono);
+  line-height: 22px;
+}
+
 .ant-modal-mask {
   background: rgba(15, 23, 42, 0.58) !important;
   backdrop-filter: blur(4px);
