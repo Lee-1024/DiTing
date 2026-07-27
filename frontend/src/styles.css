@@ -584,6 +584,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 2px;
+  flex: 0 0 auto;
 }
 
 .command-cell .ant-btn {
@@ -603,6 +604,15 @@ body {
 
 .rule-tags .ant-tag {
   margin-inline-end: 0;
+}
+
+.rule-tags-compact {
+  max-height: 52px;
+  overflow: hidden;
+}
+
+.rule-tags-compact .ant-tag {
+  max-width: 100%;
 }
 
 .detail-json {

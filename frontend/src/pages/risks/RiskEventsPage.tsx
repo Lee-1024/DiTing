@@ -290,13 +290,13 @@ export default function RiskEventsPage() {
             { title: '进程', dataIndex: 'processName', width: 130, ellipsis: true },
             { title: '进程链路', width: 220, render: (_, record) => <ProcessChain event={record} compact /> },
             { title: '风险对象', width: 260, render: (_, record) => riskTarget(record) },
-            { title: '命令', dataIndex: 'cmdline', render: (value, record) => <CommandText value={value} onView={() => setSelected(record)} /> },
             {
               title: '命中规则',
               dataIndex: 'ruleNames',
-              width: 180,
-              render: (rules?: string[]) => rules?.length ? <div className="rule-tags">{rules.map((rule) => <Tag color="orange" key={rule}>{rule}</Tag>)}</div> : <Typography.Text type="secondary">-</Typography.Text>,
+              width: 220,
+              render: (rules?: string[]) => rules?.length ? <div className="rule-tags rule-tags-compact">{rules.map((rule) => <Tag color="orange" key={rule}>{rule}</Tag>)}</div> : <Typography.Text type="secondary">-</Typography.Text>,
             },
+            { title: '命令', dataIndex: 'cmdline', width: 360, render: (value, record) => <CommandText value={value} width={280} onView={() => setSelected(record)} /> },
             {
               title: '处置状态',
               width: 128,
