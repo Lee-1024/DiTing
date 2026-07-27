@@ -15,6 +15,7 @@ import {
 import ActionCluster from '../../components/ActionCluster';
 import { InsightHero, MetricCard, SummaryPanel } from '../../components/InsightHeader';
 import type { EnforcementDeployment, EnforcementDeploymentStatus, EnforcementPolicy, EnforcementPolicyPayload } from '../../types/enforcement';
+import { copyText } from '../../utils/clipboard';
 
 type PolicyTemplate = 'dangerous_command' | 'sensitive_file' | 'permission_change' | 'delete_behavior' | 'suspicious_process';
 type PolicyMode = 'audit' | 'enforce' | 'disabled';
@@ -119,7 +120,7 @@ export default function TetragonPolicyPage() {
 
   // copyYaml 复制 copy Yaml 到剪贴板。
   async function copyYaml() {
-    await navigator.clipboard.writeText(yaml);
+    await copyText(yaml);
     message.success('策略 YAML 已复制');
   }
 

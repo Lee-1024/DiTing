@@ -1,5 +1,6 @@
 import { CopyOutlined, EyeOutlined } from '@ant-design/icons';
 import { Button, Tooltip, Typography, message } from 'antd';
+import { copyText } from '../utils/clipboard';
 
 interface CommandTextProps {
   value?: string;
@@ -16,17 +17,8 @@ export default function CommandText({ value, width = 420, onView }: CommandTextP
     if (!text) {
       return;
     }
-    try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(text);
-      } else {
-        fallbackCopy(text);
-      }
-      message.success('已复制命令');
-    } catch {
-      fallbackCopy(text);
-      message.success('已复制命令');
-    }
+    await copyText(text);
+    message.success('已复制命令');
   }
 
   return (
@@ -48,17 +40,4 @@ export default function CommandText({ value, width = 420, onView }: CommandTextP
       </div>
     </div>
   );
-}
-
-function fallbackCopy(text: string) {
-  const textarea = document.createElement('textarea');
-  textarea.value = text;
-  textarea.setAttribute('readonly', 'true');
-  textarea.style.position = 'fixed';
-  textarea.style.left = '-9999px';
-  textarea.style.top = '0';
-  document.body.appendChild(textarea);
-  textarea.select();
-  document.execCommand('copy');
-  document.body.removeChild(textarea);
 }
