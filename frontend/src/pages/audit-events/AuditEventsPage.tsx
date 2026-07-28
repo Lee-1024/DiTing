@@ -23,6 +23,7 @@ export default function AuditEventsPage() {
   const [selected, setSelected] = useState<AuditEvent>();
   const [relatedEvents, setRelatedEvents] = useState<AuditEvent[]>([]);
   const [total, setTotal] = useState(0);
+  const [totalKnown, setTotalKnown] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [form] = Form.useForm();
@@ -62,6 +63,7 @@ export default function AuditEventsPage() {
       const items = data.items ?? [];
       setGroups(items);
       setTotal(effectivePagedTotal(data.total, data.hasMore, data.page, data.pageSize, items.length));
+      setTotalKnown(Boolean(data.total && data.total > 0));
       setPage(data.page);
       setPageSize(nextPageSize);
     } finally {
@@ -126,7 +128,7 @@ export default function AuditEventsPage() {
         />
       </div>
       <div className="metric-grid risk-metric-grid">
-        <MetricCard label="操作分组" value={groups.length} hint={total > 0 ? `共 ${compactNumber(total)} 条匹配结果` : '按当前筛选返回'} tone="blue" />
+        <MetricCard label="操作分组" value={groups.length} hint={totalKnown ? `共 ${compactNumber(total)} 条匹配结果` : '未执行全量计数，按页加载'} tone="blue" />
         <MetricCard label="原始事件" value={groups.reduce((sum, item) => sum + item.eventCount, 0)} hint="当前页聚合事件数" tone="cyan" />
         <MetricCard label="高危/严重" value={riskyEvents} hint={`${criticalEvents} 条严重事件`} tone="danger" />
         <MetricCard label="活跃主机" value={activeHosts} hint="当前页涉及主机" tone="success" />
@@ -186,7 +188,7 @@ export default function AuditEventsPage() {
             total,
             showSizeChanger: true,
             pageSizeOptions: [10, 20, 50, 100],
-            showTotal: (value) => value > 0 ? `共 ${value} 个操作，当前 ${groups.length} 个操作` : `当前 ${groups.length} 个操作`,
+            showTotal: (value, range) => paginationTotalText(totalKnown, value, range, page, pageSize, groups.length),
             onChange: (nextPage, nextPageSize) => {
               const sizeChanged = nextPageSize !== pageSize;
               void load(sizeChanged ? 1 : nextPage, nextPageSize, form.getFieldsValue());
@@ -266,3 +268,10 @@ function effectivePagedTotal(total: number | undefined, hasMore: boolean | undef
   return hasMore ? previous + itemCount + 1 : previous + itemCount;
 }
 
+function paginationTotalText(totalKnown: boolean, value: number, range: [number, number], page: number, pageSize: number, itemCount: number) {
+  if (totalKnown) {
+    return value > 0 ? `共 ${value} 个操作，当前 ${itemCount} 个操作` : `当前 ${itemCount} 个操作`;
+  }
+  const hasMore = value > page * pageSize;
+  return hasMore ? `当前第 ${page} 页 ${range[1] - range[0] + 1} 个操作，还有更多` : `共 ${range[1]} 个操作`;
+}

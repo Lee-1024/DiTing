@@ -26,6 +26,7 @@ export default function RiskEventsPage() {
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<AuditEvent>();
   const [total, setTotal] = useState(0);
+  const [totalKnown, setTotalKnown] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [dispositions, setDispositions] = useState<RiskDispositionMap>({});
@@ -71,6 +72,7 @@ export default function RiskEventsPage() {
           setDispositions({});
           setVisibleEvents([]);
           setTotal(0);
+          setTotalKnown(true);
           setPage(1);
           setPageSize(nextPageSize);
           return;
@@ -90,6 +92,7 @@ export default function RiskEventsPage() {
         setDispositions(dispositionMap);
         setVisibleEvents(items);
         setTotal(items.length);
+        setTotalKnown(true);
         setPage(1);
         setPageSize(nextPageSize);
         return;
@@ -107,6 +110,7 @@ export default function RiskEventsPage() {
       setDispositions(statusMap);
       setVisibleEvents(filterEventsByDisposition(items, statusMap, dispositionStatus));
       setTotal(effectivePagedTotal(data.total, data.hasMore, data.page, data.pageSize, items.length));
+      setTotalKnown(Boolean(data.total && data.total > 0));
       setPage(data.page);
       setPageSize(nextPageSize);
     } finally {
@@ -209,7 +213,7 @@ export default function RiskEventsPage() {
         />
       </div>
       <div className="metric-grid risk-metric-grid">
-        <MetricCard label="当前页" value={visibleEvents.length} hint={`约 ${total} 条匹配结果`} tone="blue" />
+        <MetricCard label="当前页" value={visibleEvents.length} hint={totalKnown ? `共 ${total} 条匹配结果` : '未执行全量计数，按页加载'} tone="blue" />
         <MetricCard label="待处理" value={openCount} hint="需要确认或关闭" tone="danger" />
         <MetricCard label="Critical" value={criticalCount} hint="最高优先级" tone="danger" />
         <MetricCard label="High" value={highCount} hint="高优先级" tone="warning" />
@@ -274,7 +278,7 @@ export default function RiskEventsPage() {
             total,
             showSizeChanger: true,
             pageSizeOptions: [10, 20, 50, 100],
-            showTotal: (value) => `共 ${value} 条`,
+            showTotal: (value, range) => paginationTotalText(totalKnown, value, range, page, pageSize),
             onChange: (nextPage, nextPageSize) => {
               const sizeChanged = nextPageSize !== pageSize;
               void load(sizeChanged ? 1 : nextPage, nextPageSize, form.getFieldsValue());
@@ -392,6 +396,14 @@ function effectivePagedTotal(total: number | undefined, hasMore: boolean | undef
   }
   const previous = (Math.max(page, 1) - 1) * pageSize;
   return hasMore ? previous + itemCount + 1 : previous + itemCount;
+}
+
+function paginationTotalText(totalKnown: boolean, value: number, range: [number, number], page: number, pageSize: number) {
+  if (totalKnown) {
+    return `共 ${value} 条`;
+  }
+  const hasMore = value > page * pageSize;
+  return hasMore ? `当前第 ${page} 页 ${range[1] - range[0] + 1} 条，还有更多` : `共 ${range[1]} 条`;
 }
 
 // formatNetworkTarget 格式化 format Network Target 以便界面展示。
