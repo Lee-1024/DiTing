@@ -105,8 +105,8 @@ export default function RiskEventsPage() {
         return;
       }
       setDispositions(statusMap);
-      setVisibleEvents(filterEventsByDisposition(items, statusMap, formValues.dispositionStatus ?? 'open'));
-      setTotal(data.total);
+      setVisibleEvents(filterEventsByDisposition(items, statusMap, dispositionStatus));
+      setTotal(effectivePagedTotal(data.total, data.hasMore, data.page, data.pageSize, items.length));
       setPage(data.page);
       setPageSize(nextPageSize);
     } finally {
@@ -209,7 +209,7 @@ export default function RiskEventsPage() {
         />
       </div>
       <div className="metric-grid risk-metric-grid">
-        <MetricCard label="当前队列" value={visibleEvents.length} hint={`共 ${total} 条匹配结果`} tone="blue" />
+        <MetricCard label="当前页" value={visibleEvents.length} hint={`约 ${total} 条匹配结果`} tone="blue" />
         <MetricCard label="待处理" value={openCount} hint="需要确认或关闭" tone="danger" />
         <MetricCard label="Critical" value={criticalCount} hint="最高优先级" tone="danger" />
         <MetricCard label="High" value={highCount} hint="高优先级" tone="warning" />
@@ -384,6 +384,14 @@ function filterEventsByDisposition(events: AuditEvent[], dispositions: RiskDispo
     return events;
   }
   return events.filter((event) => (dispositions[event.eventId]?.status ?? 'open') === status);
+}
+
+function effectivePagedTotal(total: number | undefined, hasMore: boolean | undefined, page: number, pageSize: number, itemCount: number) {
+  if (total && total > 0) {
+    return total;
+  }
+  const previous = (Math.max(page, 1) - 1) * pageSize;
+  return hasMore ? previous + itemCount + 1 : previous + itemCount;
 }
 
 // formatNetworkTarget 格式化 format Network Target 以便界面展示。

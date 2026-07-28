@@ -39,6 +39,7 @@ export default function HostAuditPage() {
   const [riskEvents, setRiskEvents] = useState<AuditEvent[]>([]);
   const [riskTimeline, setRiskTimeline] = useState<AuditEvent[]>([]);
   const [hostUsers, setHostUsers] = useState<HostUserItem[]>([]);
+  const [hostUsersLoading, setHostUsersLoading] = useState(false);
   const [hostBehavior, setHostBehavior] = useState<HostBehavior>(emptyBehavior);
   const [selectedFileTarget, setSelectedFileTarget] = useState<BehaviorItem>();
   const [fileEvents, setFileEvents] = useState<AuditEvent[]>([]);
@@ -176,6 +177,24 @@ export default function HostAuditPage() {
       setRiskLoaded(true);
     } finally {
       setRiskLoading(false);
+    }
+  }
+
+  async function loadHostUsers(item: HostAuditItem) {
+    const values = form.getFieldsValue();
+    const range = values.timeRange ?? defaultRange;
+    setHostUsersLoading(true);
+    try {
+      const data = await getHostUsers({
+        start_time: range?.[0]?.startOf('day').toISOString(),
+        end_time: range?.[1]?.endOf('day').toISOString(),
+        host_name: item.hostId || item.nodeName || item.hostName,
+        limit: 20,
+        _refresh: Date.now(),
+      } as HostAuditQuery & { _refresh: number });
+      setHostUsers(data ?? []);
+    } finally {
+      setHostUsersLoading(false);
     }
   }
 
@@ -427,11 +446,14 @@ export default function HostAuditPage() {
               scroll={{ x: 1280 }}
               columns={riskTimelineColumns()}
             />
-            <Typography.Title level={5}>用户分布</Typography.Title>
+            <div className="section-heading">
+              <Typography.Title level={5}>用户分布</Typography.Title>
+              <Button size="small" onClick={() => void loadHostUsers(selected)} loading={hostUsersLoading}>刷新</Button>
+            </div>
             <Table
               rowKey="username"
               size="small"
-              loading={detailLoading}
+              loading={detailLoading || hostUsersLoading}
               dataSource={hostUsers}
               className="clickable-table"
               locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无用户分布" /> }}

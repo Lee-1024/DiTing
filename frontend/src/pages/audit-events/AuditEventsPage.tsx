@@ -59,8 +59,9 @@ export default function AuditEventsPage() {
       if (seq !== requestSeq.current) {
         return;
       }
-      setGroups(data.items ?? []);
-      setTotal(data.total);
+      const items = data.items ?? [];
+      setGroups(items);
+      setTotal(effectivePagedTotal(data.total, data.hasMore, data.page, data.pageSize, items.length));
       setPage(data.page);
       setPageSize(nextPageSize);
     } finally {
@@ -255,5 +256,13 @@ function renderAuditGroupDetails(group: AuditOperationGroup, onSelect: (event: A
 // uniqueValues 处理 unique Values 相关逻辑。
 function uniqueValues(values: string[]) {
   return Array.from(new Set(values.filter(Boolean)));
+}
+
+function effectivePagedTotal(total: number | undefined, hasMore: boolean | undefined, page: number, pageSize: number, itemCount: number) {
+  if (total && total > 0) {
+    return total;
+  }
+  const previous = (Math.max(page, 1) - 1) * pageSize;
+  return hasMore ? previous + itemCount + 1 : previous + itemCount;
 }
 

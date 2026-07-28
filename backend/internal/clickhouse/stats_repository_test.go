@@ -370,6 +370,41 @@ func TestStatsRepositoryHostUsersAggregatesUsersForHost(t *testing.T) {
 	}
 }
 
+func TestStatsRepositoryHostUsersFallsBackWhenAggregateEmpty(t *testing.T) {
+	var bodies []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		data := make([]byte, r.ContentLength)
+		_, _ = r.Body.Read(data)
+		body := string(data)
+		bodies = append(bodies, body)
+		if strings.Contains(body, "FROM diting.audit_events") {
+			_, _ = w.Write([]byte(`{"username":"root","command_count":"3","high_risk_events":"1","first_seen":"2026-07-28 13:46:25.000","last_seen":"2026-07-28 13:46:38.000"}` + "\n"))
+			return
+		}
+		_, _ = w.Write([]byte(""))
+	}))
+	defer server.Close()
+
+	repository := NewStatsRepository(NewHTTPClient(HTTPConfig{URL: server.URL, Database: "diting"}), nil)
+	items, err := repository.HostUsers(context.Background(), stats.Query{
+		StartTime: time.Date(2026, 7, 28, 13, 46, 24, 0, time.UTC),
+		EndTime:   time.Date(2026, 7, 28, 13, 46, 39, 0, time.UTC),
+		HostName:  "server-001",
+		Limit:     20,
+	})
+	if err != nil {
+		t.Fatalf("HostUsers returned error: %v", err)
+	}
+
+	joined := strings.Join(bodies, "\n---\n")
+	if !strings.Contains(joined, "FROM diting.audit_host_user_stats_hourly") || !strings.Contains(joined, "FROM diting.audit_events") {
+		t.Fatalf("expected aggregate query then raw fallback, got %s", joined)
+	}
+	if len(items) != 1 || items[0].Username != "root" || items[0].CommandCount != 3 {
+		t.Fatalf("unexpected fallback host users %#v", items)
+	}
+}
+
 func TestStatsRepositoryHostBehaviorAggregatesFileNetworkAndEventTypes(t *testing.T) {
 	var bodies []string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -429,6 +464,46 @@ func TestStatsRepositoryHostBehaviorAggregatesFileNetworkAndEventTypes(t *testin
 	}
 	if len(behavior.RuleHits) != 1 || behavior.RuleHits[0].Name != "敏感文件探针访问" || behavior.RuleHits[0].Count != 2 {
 		t.Fatalf("unexpected rule hit behavior %#v", behavior.RuleHits)
+	}
+}
+
+func TestStatsRepositoryHostBehaviorFallsBackNetworkWhenAggregateEmpty(t *testing.T) {
+	var bodies []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		data := make([]byte, r.ContentLength)
+		_, _ = r.Body.Read(data)
+		body := string(data)
+		bodies = append(bodies, body)
+		switch {
+		case strings.Contains(body, "FROM diting.audit_events") && strings.Contains(body, "event_type = 'network_connect'"):
+			_, _ = w.Write([]byte(`{"name":"10.0.0.1:443","count":"2","first_seen":"2026-07-28 13:56:51.000","last_seen":"2026-07-28 13:56:51.000"}` + "\n"))
+		case strings.Contains(body, "behavior_type = 'file_path'"):
+			_, _ = w.Write([]byte(`{"name":"/etc/passwd","count":"1","first_seen":"2026-07-28 13:56:51.000","last_seen":"2026-07-28 13:56:51.000"}` + "\n"))
+		case strings.Contains(body, "behavior_type = 'event_type'"):
+			_, _ = w.Write([]byte(`{"name":"file_access","count":"1","first_seen":"2026-07-28 13:56:51.000","last_seen":"2026-07-28 13:56:51.000"}` + "\n"))
+		default:
+			_, _ = w.Write([]byte(""))
+		}
+	}))
+	defer server.Close()
+
+	repository := NewStatsRepository(NewHTTPClient(HTTPConfig{URL: server.URL, Database: "diting"}), nil)
+	behavior, err := repository.HostBehavior(context.Background(), stats.Query{
+		StartTime: time.Date(2026, 7, 28, 13, 56, 50, 0, time.UTC),
+		EndTime:   time.Date(2026, 7, 28, 13, 56, 52, 0, time.UTC),
+		HostName:  "server-001",
+		Limit:     10,
+	})
+	if err != nil {
+		t.Fatalf("HostBehavior returned error: %v", err)
+	}
+
+	joined := strings.Join(bodies, "\n---\n")
+	if !strings.Contains(joined, "behavior_type = 'network'") || !strings.Contains(joined, "FROM diting.audit_events") {
+		t.Fatalf("expected network aggregate query then raw fallback, got %s", joined)
+	}
+	if len(behavior.Network) != 1 || behavior.Network[0].Name != "10.0.0.1:443" {
+		t.Fatalf("unexpected fallback network behavior %#v", behavior.Network)
 	}
 }
 

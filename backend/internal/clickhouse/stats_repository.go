@@ -464,6 +464,58 @@ FORMAT JSONEachRow`, r.hostUserStatsTable(), strings.Join(conditions, " AND "), 
 	if err != nil {
 		return nil, err
 	}
+	if len(rows) == 0 {
+		return r.hostUsersRaw(ctx, query)
+	}
+	return hostUserRowsToItems(rows), nil
+}
+
+func (r *StatsRepository) hostUsersRaw(ctx context.Context, query stats.Query) ([]stats.HostUserItem, error) {
+	limit := query.Limit
+	if limit <= 0 {
+		limit = 20
+	}
+	conditions := []string{"event_type = 'process_exec'", "audit_user != ''"}
+	if query.HostName != "" {
+		hostName := escapeSQL(query.HostName)
+		conditions = append(conditions, "(host_id = '"+hostName+"' OR node_name = '"+hostName+"' OR host_name = '"+hostName+"')")
+	}
+	sql := fmt.Sprintf(`SELECT
+	audit_user AS username,
+	count() AS command_count,
+	countIf(severity IN ('high', 'critical')) AS high_risk_events,
+	min(event_time) AS first_seen,
+	max(event_time) AS last_seen
+FROM
+(
+	SELECT
+		host_id,
+		node_name,
+		host_name,
+		if(login_username != '', login_username, username) AS audit_user,
+		severity,
+		event_time,
+		event_type
+	FROM %s
+	WHERE %s
+)
+WHERE %s
+GROUP BY audit_user
+ORDER BY command_count DESC, last_seen DESC
+LIMIT %d
+FORMAT JSONEachRow`, r.table(), statsWhere(query), strings.Join(conditions, " AND "), limit)
+	data, err := r.client.Query(ctx, sql)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := decodeJSONRows[hostUserRow](data)
+	if err != nil {
+		return nil, err
+	}
+	return hostUserRowsToItems(rows), nil
+}
+
+func hostUserRowsToItems(rows []hostUserRow) []stats.HostUserItem {
 	items := make([]stats.HostUserItem, 0, len(rows))
 	for _, row := range rows {
 		items = append(items, stats.HostUserItem{
@@ -474,7 +526,7 @@ FORMAT JSONEachRow`, r.hostUserStatsTable(), strings.Join(conditions, " AND "), 
 			LastSeen:       row.LastSeen,
 		})
 	}
-	return items, nil
+	return items
 }
 
 // HostBehavior 处理 Host Behavior 相关逻辑。
@@ -497,6 +549,12 @@ func (r *StatsRepository) HostBehavior(ctx context.Context, query stats.Query) (
 	if err != nil {
 		return stats.HostBehavior{}, err
 	}
+	if len(network) == 0 {
+		network, err = r.rawNetworkBehaviorItems(ctx, query, limit)
+		if err != nil {
+			return stats.HostBehavior{}, err
+		}
+	}
 	eventTypes, err := r.hostBehaviorItems(ctx, baseWhere, "event_type", "", limit)
 	if err != nil {
 		return stats.HostBehavior{}, err
@@ -507,6 +565,26 @@ func (r *StatsRepository) HostBehavior(ctx context.Context, query stats.Query) (
 	}
 
 	return stats.HostBehavior{FilePaths: filePaths, Network: network, EventTypes: eventTypes, RuleHits: ruleHits}, nil
+}
+
+func (r *StatsRepository) rawNetworkBehaviorItems(ctx context.Context, query stats.Query, limit int) ([]stats.BehaviorItem, error) {
+	hostFilter := ""
+	if query.HostName != "" {
+		hostName := escapeSQL(query.HostName)
+		hostFilter = " AND (host_id = '" + hostName + "' OR node_name = '" + hostName + "' OR host_name = '" + hostName + "')"
+	}
+	sql := fmt.Sprintf(`SELECT
+	concat(if(position(dst_ip, ':') > 0, concat('[', dst_ip, ']'), dst_ip), if(dst_port = 0, '', concat(':', toString(dst_port)))) AS name,
+	count() AS count,
+	min(event_time) AS first_seen,
+	max(event_time) AS last_seen
+FROM %s
+WHERE %s%s AND event_type = 'network_connect' AND dst_ip != '' AND dst_ip != 'invalid IP' AND (IPv4StringToNumOrNull(dst_ip) IS NOT NULL OR IPv6StringToNumOrNull(dst_ip) IS NOT NULL)
+GROUP BY name
+ORDER BY count DESC, last_seen DESC
+LIMIT %d
+FORMAT JSONEachRow`, r.table(), statsWhere(query), hostFilter, limit)
+	return r.behaviorItems(ctx, sql)
 }
 
 func (r *StatsRepository) hostBehaviorItems(ctx context.Context, baseWhere string, behaviorType string, extraWhere string, limit int) ([]stats.BehaviorItem, error) {
