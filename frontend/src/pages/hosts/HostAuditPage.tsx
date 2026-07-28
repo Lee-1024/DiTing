@@ -135,13 +135,12 @@ export default function HostAuditPage() {
 
   // loadDetailEvents 加载页面所需数据。
   async function loadDetailEvents(item: HostAuditItem, filters: DetailFilters, nextPage = detailPage, nextPageSize = detailPageSize) {
-    const values = form.getFieldsValue();
-    const range = values.timeRange ?? defaultRange;
+    const range = detailTimeRange(item, form.getFieldsValue().timeRange ?? defaultRange);
     setDetailLoading(true);
     try {
       const data = await queryAuditEvents({
-        start_time: range?.[0]?.startOf('day').toISOString(),
-        end_time: range?.[1]?.endOf('day').toISOString(),
+        start_time: range.start,
+        end_time: range.end,
         event_type: 'process_exec',
         host_name: item.hostId || item.nodeName || item.hostName,
         username: filters.username,
@@ -161,13 +160,12 @@ export default function HostAuditPage() {
   }
 
   async function loadRiskEvents(item: HostAuditItem) {
-    const values = form.getFieldsValue();
-    const range = values.timeRange ?? defaultRange;
+    const range = detailTimeRange(item, form.getFieldsValue().timeRange ?? defaultRange);
     setRiskLoading(true);
     try {
       const data = await queryAuditEvents({
-        start_time: range?.[0]?.startOf('day').toISOString(),
-        end_time: range?.[1]?.endOf('day').toISOString(),
+        start_time: range.start,
+        end_time: range.end,
         event_type: 'process_exec',
         host_name: item.hostId || item.nodeName || item.hostName,
         severity_in: 'high,critical',
@@ -182,13 +180,12 @@ export default function HostAuditPage() {
   }
 
   async function loadRiskTimeline(item: HostAuditItem) {
-    const values = form.getFieldsValue();
-    const range = values.timeRange ?? defaultRange;
+    const range = detailTimeRange(item, form.getFieldsValue().timeRange ?? defaultRange);
     setTimelineLoading(true);
     try {
       const data = await queryAuditEvents({
-        start_time: range?.[0]?.startOf('day').toISOString(),
-        end_time: range?.[1]?.endOf('day').toISOString(),
+        start_time: range.start,
+        end_time: range.end,
         host_name: item.hostId || item.nodeName || item.hostName,
         severity_in: 'medium,high,critical',
         page: 1,
@@ -203,15 +200,14 @@ export default function HostAuditPage() {
 
   // loadNetworkEvents 加载页面所需数据。
   async function loadNetworkEvents(item: HostAuditItem, target: BehaviorItem) {
-    const values = form.getFieldsValue();
-    const range = values.timeRange ?? defaultRange;
+    const range = detailTimeRange(item, form.getFieldsValue().timeRange ?? defaultRange);
     const parsed = parseNetworkTarget(target.name);
     setSelectedNetworkTarget(target);
     setNetworkLoading(true);
     try {
       const data = await queryAuditEvents({
-        start_time: range?.[0]?.startOf('day').toISOString(),
-        end_time: range?.[1]?.endOf('day').toISOString(),
+        start_time: range.start,
+        end_time: range.end,
         event_type: 'network_connect',
         host_name: item.hostId || item.nodeName || item.hostName,
         dst_ip: parsed.ip,
@@ -227,14 +223,13 @@ export default function HostAuditPage() {
 
   // loadFileEvents 加载页面所需数据。
   async function loadFileEvents(item: HostAuditItem, target: BehaviorItem) {
-    const values = form.getFieldsValue();
-    const range = values.timeRange ?? defaultRange;
+    const range = detailTimeRange(item, form.getFieldsValue().timeRange ?? defaultRange);
     setSelectedFileTarget(target);
     setFileLoading(true);
     try {
       const data = await queryAuditEvents({
-        start_time: range?.[0]?.startOf('day').toISOString(),
-        end_time: range?.[1]?.endOf('day').toISOString(),
+        start_time: range.start,
+        end_time: range.end,
         event_type: 'file_access',
         host_name: item.hostId || item.nodeName || item.hostName,
         file_path: target.name,
@@ -252,11 +247,10 @@ export default function HostAuditPage() {
     if (!selected) {
       return;
     }
-    const values = form.getFieldsValue();
-    const range = values.timeRange ?? defaultRange;
+    const range = detailTimeRange(selected, form.getFieldsValue().timeRange ?? defaultRange);
     const blob = await exportAuditEvents({
-      start_time: range?.[0]?.startOf('day').toISOString(),
-      end_time: range?.[1]?.endOf('day').toISOString(),
+      start_time: range.start,
+      end_time: range.end,
       event_type: 'process_exec',
       host_name: selected.hostId || selected.nodeName || selected.hostName,
       username: detailFilters.username,
@@ -650,6 +644,29 @@ function DetailModalTitle({ title, target }: { title: string; target?: string })
       )}
     </div>
   );
+}
+
+function detailTimeRange(item: HostAuditItem, fallbackRange: readonly [dayjs.Dayjs, dayjs.Dayjs]) {
+  const firstSeen = parseBackendDateTime(item.firstSeen);
+  const lastSeen = parseBackendDateTime(item.lastSeen);
+  if (firstSeen.isValid() && lastSeen.isValid()) {
+    return {
+      start: firstSeen.subtract(1, 'second').toISOString(),
+      end: lastSeen.add(1, 'second').toISOString(),
+    };
+  }
+  return {
+    start: fallbackRange[0]?.startOf('day').toISOString(),
+    end: fallbackRange[1]?.endOf('day').toISOString(),
+  };
+}
+
+function parseBackendDateTime(value?: string) {
+  if (!value) {
+    return dayjs('');
+  }
+  const normalized = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(value) ? `${value.replace(' ', 'T')}Z` : value;
+  return dayjs(normalized);
 }
 
 function NetworkTargetText({ value }: { value: string }) {
