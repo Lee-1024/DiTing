@@ -95,6 +95,51 @@ FROM diting.audit_events
 WHERE event_type = 'process_exec' AND audit_user != ''
 GROUP BY hour, audit_user;
 
+CREATE TABLE IF NOT EXISTS diting.audit_host_user_stats_hourly
+(
+    hour DateTime,
+    host_key String,
+    host_name String,
+    node_name String,
+    audit_user String,
+    command_count AggregateFunction(count),
+    high_risk_events AggregateFunction(countIf, UInt8),
+    first_seen AggregateFunction(min, DateTime64(3)),
+    last_seen AggregateFunction(max, DateTime64(3))
+)
+ENGINE = AggregatingMergeTree
+PARTITION BY toYYYYMM(hour)
+ORDER BY (hour, host_key, audit_user);
+
+CREATE MATERIALIZED VIEW IF NOT EXISTS diting.mv_audit_host_user_stats_hourly
+TO diting.audit_host_user_stats_hourly
+AS
+SELECT
+    hour,
+    host_key,
+    anyLast(raw_host_name) AS host_name,
+    anyLast(raw_node_name) AS node_name,
+    audit_user,
+    countState() AS command_count,
+    countIfState(is_high_risk) AS high_risk_events,
+    minState(event_time) AS first_seen,
+    maxState(event_time) AS last_seen
+FROM
+(
+    SELECT
+        toStartOfHour(event_time) AS hour,
+        if(host_id != '', host_id, if(node_name != '', node_name, host_name)) AS host_key,
+        host_name AS raw_host_name,
+        node_name AS raw_node_name,
+        if(login_username != '', login_username, username) AS audit_user,
+        severity IN ('high', 'critical') AS is_high_risk,
+        event_time
+    FROM diting.audit_events
+    WHERE event_type = 'process_exec'
+)
+WHERE audit_user != ''
+GROUP BY hour, host_key, audit_user;
+
 CREATE TABLE IF NOT EXISTS diting.audit_command_stats_hourly
 (
     hour DateTime,
@@ -249,6 +294,8 @@ CREATE TABLE IF NOT EXISTS diting.audit_host_behavior_hourly
 (
     hour DateTime,
     host_key String,
+    host_name String,
+    node_name String,
     behavior_type LowCardinality(String),
     behavior_name String,
     hit_count AggregateFunction(count),
@@ -259,47 +306,113 @@ ENGINE = AggregatingMergeTree
 PARTITION BY toYYYYMM(hour)
 ORDER BY (hour, host_key, behavior_type, cityHash64(behavior_name));
 
+ALTER TABLE diting.audit_host_behavior_hourly ADD COLUMN IF NOT EXISTS host_name String AFTER host_key;
+ALTER TABLE diting.audit_host_behavior_hourly ADD COLUMN IF NOT EXISTS node_name String AFTER host_name;
+
 CREATE MATERIALIZED VIEW IF NOT EXISTS diting.mv_audit_host_behavior_file_hourly
 TO diting.audit_host_behavior_hourly
 AS
 SELECT
-    toStartOfHour(event_time) AS hour,
-    if(host_id != '', host_id, if(node_name != '', node_name, host_name)) AS host_key,
+    hour,
+    host_key,
+    anyLast(raw_host_name) AS host_name,
+    anyLast(raw_node_name) AS node_name,
     'file_path' AS behavior_type,
-    file_path AS behavior_name,
+    behavior_name,
     countState() AS hit_count,
     minState(event_time) AS first_seen,
     maxState(event_time) AS last_seen
-FROM diting.audit_events
-WHERE event_type = 'file_access' AND file_path != ''
+FROM
+(
+    SELECT
+        toStartOfHour(event_time) AS hour,
+        if(host_id != '', host_id, if(node_name != '', node_name, host_name)) AS host_key,
+        host_name AS raw_host_name,
+        node_name AS raw_node_name,
+        file_path AS behavior_name,
+        event_time
+    FROM diting.audit_events
+    WHERE event_type = 'file_access' AND file_path != ''
+)
 GROUP BY hour, host_key, behavior_type, behavior_name;
 
 CREATE MATERIALIZED VIEW IF NOT EXISTS diting.mv_audit_host_behavior_network_hourly
 TO diting.audit_host_behavior_hourly
 AS
 SELECT
-    toStartOfHour(event_time) AS hour,
-    if(host_id != '', host_id, if(node_name != '', node_name, host_name)) AS host_key,
+    hour,
+    host_key,
+    anyLast(raw_host_name) AS host_name,
+    anyLast(raw_node_name) AS node_name,
     'network' AS behavior_type,
-    concat(if(position(dst_ip, ':') > 0, concat('[', dst_ip, ']'), dst_ip), if(dst_port = 0, '', concat(':', toString(dst_port)))) AS behavior_name,
+    behavior_name,
     countState() AS hit_count,
     minState(event_time) AS first_seen,
     maxState(event_time) AS last_seen
-FROM diting.audit_events
-WHERE event_type = 'network_connect' AND dst_ip != ''
+FROM
+(
+    SELECT
+        toStartOfHour(event_time) AS hour,
+        if(host_id != '', host_id, if(node_name != '', node_name, host_name)) AS host_key,
+        host_name AS raw_host_name,
+        node_name AS raw_node_name,
+        concat(if(position(dst_ip, ':') > 0, concat('[', dst_ip, ']'), dst_ip), if(dst_port = 0, '', concat(':', toString(dst_port)))) AS behavior_name,
+        event_time
+    FROM diting.audit_events
+    WHERE event_type = 'network_connect' AND dst_ip != '' AND dst_ip != 'invalid IP' AND (IPv4StringToNumOrNull(dst_ip) IS NOT NULL OR IPv6StringToNumOrNull(dst_ip) IS NOT NULL)
+)
 GROUP BY hour, host_key, behavior_type, behavior_name;
 
 CREATE MATERIALIZED VIEW IF NOT EXISTS diting.mv_audit_host_behavior_event_type_hourly
 TO diting.audit_host_behavior_hourly
 AS
 SELECT
-    toStartOfHour(event_time) AS hour,
-    if(host_id != '', host_id, if(node_name != '', node_name, host_name)) AS host_key,
+    hour,
+    host_key,
+    anyLast(raw_host_name) AS host_name,
+    anyLast(raw_node_name) AS node_name,
     'event_type' AS behavior_type,
-    event_type AS behavior_name,
+    behavior_name,
     countState() AS hit_count,
     minState(event_time) AS first_seen,
     maxState(event_time) AS last_seen
-FROM diting.audit_events
-WHERE event_type != ''
+FROM
+(
+    SELECT
+        toStartOfHour(event_time) AS hour,
+        if(host_id != '', host_id, if(node_name != '', node_name, host_name)) AS host_key,
+        host_name AS raw_host_name,
+        node_name AS raw_node_name,
+        event_type AS behavior_name,
+        event_time
+    FROM diting.audit_events
+    WHERE event_type != '' AND event_type != 'process_exec'
+)
+GROUP BY hour, host_key, behavior_type, behavior_name;
+
+CREATE MATERIALIZED VIEW IF NOT EXISTS diting.mv_audit_host_behavior_rule_hourly
+TO diting.audit_host_behavior_hourly
+AS
+SELECT
+    hour,
+    host_key,
+    anyLast(raw_host_name) AS host_name,
+    anyLast(raw_node_name) AS node_name,
+    'rule_hit' AS behavior_type,
+    behavior_name,
+    countState() AS hit_count,
+    minState(event_time) AS first_seen,
+    maxState(event_time) AS last_seen
+FROM
+(
+    SELECT
+        toStartOfHour(event_time) AS hour,
+        if(host_id != '', host_id, if(node_name != '', node_name, host_name)) AS host_key,
+        host_name AS raw_host_name,
+        node_name AS raw_node_name,
+        arrayJoin(rule_names) AS behavior_name,
+        event_time
+    FROM diting.audit_events
+    WHERE length(rule_names) > 0
+)
 GROUP BY hour, host_key, behavior_type, behavior_name;

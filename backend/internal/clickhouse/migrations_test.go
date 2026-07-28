@@ -16,6 +16,7 @@ func TestQueryAccelerationMigrationDefinesAggregateTables(t *testing.T) {
 		"audit_overview_hourly",
 		"audit_host_stats_hourly",
 		"audit_user_stats_hourly",
+		"audit_host_user_stats_hourly",
 		"audit_command_stats_hourly",
 		"audit_rule_hit_stats_hourly",
 		"audit_operation_groups_hourly",
@@ -91,6 +92,8 @@ func TestManualQueryAccelerationResetScriptRecreatesAggregateObjects(t *testing.
 		"CREATE TABLE IF NOT EXISTS diting.audit_operation_groups_hourly",
 		"CREATE MATERIALIZED VIEW IF NOT EXISTS diting.mv_audit_operation_groups_hourly",
 		"CREATE MATERIALIZED VIEW IF NOT EXISTS diting.mv_audit_host_stats_hourly",
+		"CREATE MATERIALIZED VIEW IF NOT EXISTS diting.mv_audit_host_user_stats_hourly",
+		"CREATE MATERIALIZED VIEW IF NOT EXISTS diting.mv_audit_host_behavior_rule_hourly",
 	} {
 		if !strings.Contains(sql, expected) {
 			t.Fatalf("expected manual reset script to contain %q", expected)

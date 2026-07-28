@@ -358,10 +358,12 @@ func TestStatsRepositoryHostUsersAggregatesUsersForHost(t *testing.T) {
 		t.Fatalf("HostUsers returned error: %v", err)
 	}
 
-	if !strings.Contains(body, "event_type = 'process_exec'") ||
-		!strings.Contains(body, "(host_id = 'host-001' OR node_name = 'host-001' OR host_name = 'host-001')") ||
-		!strings.Contains(body, "if(login_username != '', login_username, username) AS audit_user") {
-		t.Fatalf("expected host user query filters, got %s", body)
+	if !strings.Contains(body, "FROM diting.audit_host_user_stats_hourly") ||
+		!strings.Contains(body, "(host_key = 'host-001' OR host_name = 'host-001' OR node_name = 'host-001')") ||
+		!strings.Contains(body, "audit_user AS username") ||
+		!strings.Contains(body, "countMerge(command_count) AS command_count") ||
+		!strings.Contains(body, "countIfMerge(high_risk_events) AS high_risk_events") {
+		t.Fatalf("expected host user aggregate query filters, got %s", body)
 	}
 	if len(items) != 1 || items[0].Username != "ubuntu" || items[0].CommandCount != 6 || items[0].HighRiskEvents != 1 {
 		t.Fatalf("unexpected items %#v", items)
@@ -376,11 +378,11 @@ func TestStatsRepositoryHostBehaviorAggregatesFileNetworkAndEventTypes(t *testin
 		body := string(data)
 		bodies = append(bodies, body)
 		switch {
-		case strings.Contains(body, "file_path AS name"):
+		case strings.Contains(body, "behavior_type = 'file_path'"):
 			_, _ = w.Write([]byte(`{"name":"/etc/passwd","count":"2","first_seen":"2026-07-15 01:59:58.000","last_seen":"2026-07-15 02:26:45.000"}` + "\n"))
-		case strings.Contains(body, "event_type = 'network_connect'"):
+		case strings.Contains(body, "behavior_type = 'network'"):
 			_, _ = w.Write([]byte(`{"name":"93.184.216.34:443","count":"1","first_seen":"2026-07-15 02:10:00.000","last_seen":"2026-07-15 02:10:00.000"}` + "\n"))
-		case strings.Contains(body, "arrayJoin(rule_names) AS name"):
+		case strings.Contains(body, "behavior_type = 'rule_hit'"):
 			_, _ = w.Write([]byte(`{"name":"敏感文件探针访问","count":"2","first_seen":"2026-07-15 01:59:58.000","last_seen":"2026-07-15 02:26:45.000"}` + "\n"))
 		default:
 			_, _ = w.Write([]byte(`{"name":"file_access","count":"2","first_seen":"2026-07-15 01:59:58.000","last_seen":"2026-07-15 02:26:45.000"}` + "\n"))
@@ -401,23 +403,20 @@ func TestStatsRepositoryHostBehaviorAggregatesFileNetworkAndEventTypes(t *testin
 
 	joined := strings.Join(bodies, "\n---\n")
 	for _, expected := range []string{
-		"(host_id = 'host-001' OR node_name = 'host-001' OR host_name = 'host-001')",
-		"event_type = 'file_access'",
-		"file_path IN ('/etc/passwd', '/etc/shadow', '/etc/sudoers'",
-		"file_path LIKE '/root/%'",
-		"file_path NOT LIKE '/proc/%'",
-		"file_path NOT IN ('/etc', '/proc', '/sys', '/dev')",
-		"event_type = 'network_connect'",
-		"IPv4StringToNumOrNull(dst_ip) IS NOT NULL",
-		"IPv6StringToNumOrNull(dst_ip) IS NOT NULL",
-		"dst_ip != 'invalid IP'",
-		"event_type != 'process_exec'",
-		"arrayJoin(rule_names) AS name",
-		"length(rule_names) > 0",
+		"FROM diting.audit_host_behavior_hourly",
+		"(host_key = 'host-001' OR host_name = 'host-001' OR node_name = 'host-001')",
+		"behavior_type = 'file_path'",
+		"behavior_type = 'network'",
+		"behavior_type = 'event_type'",
+		"behavior_type = 'rule_hit'",
+		"countMerge(hit_count) AS count",
 	} {
 		if !strings.Contains(joined, expected) {
 			t.Fatalf("expected %q in host behavior queries, got %s", expected, joined)
 		}
+	}
+	if strings.Contains(joined, "FROM diting.audit_events") {
+		t.Fatalf("expected host behavior to avoid raw audit_events queries, got %s", joined)
 	}
 	if len(behavior.FilePaths) != 1 || behavior.FilePaths[0].Name != "/etc/passwd" || behavior.FilePaths[0].Count != 2 {
 		t.Fatalf("unexpected file behavior %#v", behavior.FilePaths)

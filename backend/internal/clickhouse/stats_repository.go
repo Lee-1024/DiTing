@@ -439,35 +439,23 @@ func (r *StatsRepository) HostUsers(ctx context.Context, query stats.Query) ([]s
 	if limit <= 0 {
 		limit = 20
 	}
-	conditions := []string{"event_type = 'process_exec'", "audit_user != ''"}
+	conditions := []string{statsHourWhere(query), "audit_user != ''"}
 	if query.HostName != "" {
 		hostName := escapeSQL(query.HostName)
-		conditions = append(conditions, "(host_id = '"+hostName+"' OR node_name = '"+hostName+"' OR host_name = '"+hostName+"')")
+		conditions = append(conditions, "(host_key = '"+hostName+"' OR host_name = '"+hostName+"' OR node_name = '"+hostName+"')")
 	}
 	sql := fmt.Sprintf(`SELECT
 	audit_user AS username,
-	count() AS command_count,
-	countIf(severity IN ('high', 'critical')) AS high_risk_events,
-	min(event_time) AS first_seen,
-	max(event_time) AS last_seen
-FROM
-(
-	SELECT
-		host_id,
-		node_name,
-		host_name,
-		if(login_username != '', login_username, username) AS audit_user,
-		severity,
-		event_time,
-		event_type
-	FROM %s
-	WHERE %s
-)
+	countMerge(command_count) AS command_count,
+	countIfMerge(high_risk_events) AS high_risk_events,
+	minMerge(first_seen) AS first_seen,
+	maxMerge(last_seen) AS last_seen
+FROM %s
 WHERE %s
 GROUP BY audit_user
 ORDER BY command_count DESC, last_seen DESC
 LIMIT %d
-FORMAT JSONEachRow`, r.table(), statsWhere(query), strings.Join(conditions, " AND "), limit)
+FORMAT JSONEachRow`, r.hostUserStatsTable(), strings.Join(conditions, " AND "), limit)
 	data, err := r.client.Query(ctx, sql)
 	if err != nil {
 		return nil, err
@@ -495,77 +483,53 @@ func (r *StatsRepository) HostBehavior(ctx context.Context, query stats.Query) (
 	if limit <= 0 {
 		limit = 10
 	}
-	hostFilter := ""
+	conditions := []string{statsHourWhere(query)}
 	if query.HostName != "" {
 		hostName := escapeSQL(query.HostName)
-		hostFilter = " AND (host_id = '" + hostName + "' OR node_name = '" + hostName + "' OR host_name = '" + hostName + "')"
+		conditions = append(conditions, "(host_key = '"+hostName+"' OR host_name = '"+hostName+"' OR node_name = '"+hostName+"')")
 	}
-	sensitiveFilePath := `(file_path IN ('/etc/passwd', '/etc/shadow', '/etc/sudoers', '/etc/group', '/etc/gshadow', '/etc/ssh/sshd_config') OR file_path LIKE '/etc/sudoers.d/%' OR file_path LIKE '/etc/ssh/%' OR file_path LIKE '/root/%' OR file_path LIKE '/home/%/.ssh/%' OR file_path LIKE '/var/log/auth.log%' OR file_path LIKE '/var/log/secure%')`
-	fileSQL := fmt.Sprintf(`SELECT
-	file_path AS name,
-	count() AS count,
-	min(event_time) AS first_seen,
-	max(event_time) AS last_seen
-FROM %s
-WHERE %s%s AND event_type = 'file_access' AND file_path != '' AND file_path NOT IN ('/etc', '/proc', '/sys', '/dev') AND file_path NOT LIKE '/proc/%%' AND file_path NOT LIKE '/sys/%%' AND file_path NOT LIKE '/dev/%%' AND %s
-GROUP BY file_path
-ORDER BY count DESC, last_seen DESC
-LIMIT %d
-FORMAT JSONEachRow`, r.table(), statsWhere(query), hostFilter, sensitiveFilePath, limit)
-	filePaths, err := r.behaviorItems(ctx, fileSQL)
+	baseWhere := strings.Join(conditions, " AND ")
+	filePaths, err := r.hostBehaviorItems(ctx, baseWhere, "file_path", sensitiveBehaviorNameFilter(), limit)
 	if err != nil {
 		return stats.HostBehavior{}, err
 	}
-
-	networkSQL := fmt.Sprintf(`SELECT
-	concat(if(position(dst_ip, ':') > 0, concat('[', dst_ip, ']'), dst_ip), if(dst_port = 0, '', concat(':', toString(dst_port)))) AS name,
-	count() AS count,
-	min(event_time) AS first_seen,
-	max(event_time) AS last_seen
-FROM %s
-WHERE %s%s AND event_type = 'network_connect' AND dst_ip != '' AND dst_ip != 'invalid IP' AND (IPv4StringToNumOrNull(dst_ip) IS NOT NULL OR IPv6StringToNumOrNull(dst_ip) IS NOT NULL)
-GROUP BY name
-ORDER BY count DESC, last_seen DESC
-LIMIT %d
-FORMAT JSONEachRow`, r.table(), statsWhere(query), hostFilter, limit)
-	network, err := r.behaviorItems(ctx, networkSQL)
+	network, err := r.hostBehaviorItems(ctx, baseWhere, "network", "", limit)
 	if err != nil {
 		return stats.HostBehavior{}, err
 	}
-
-	eventTypeSQL := fmt.Sprintf(`SELECT
-	event_type AS name,
-	count() AS count,
-	min(event_time) AS first_seen,
-	max(event_time) AS last_seen
-FROM %s
-WHERE %s%s AND event_type != 'process_exec' AND event_type != ''
-GROUP BY event_type
-ORDER BY count DESC, last_seen DESC
-LIMIT %d
-FORMAT JSONEachRow`, r.table(), statsWhere(query), hostFilter, limit)
-	eventTypes, err := r.behaviorItems(ctx, eventTypeSQL)
+	eventTypes, err := r.hostBehaviorItems(ctx, baseWhere, "event_type", "", limit)
 	if err != nil {
 		return stats.HostBehavior{}, err
 	}
-
-	ruleHitSQL := fmt.Sprintf(`SELECT
-	arrayJoin(rule_names) AS name,
-	count() AS count,
-	min(event_time) AS first_seen,
-	max(event_time) AS last_seen
-FROM %s
-WHERE %s%s AND length(rule_names) > 0
-GROUP BY name
-ORDER BY count DESC, last_seen DESC
-LIMIT %d
-FORMAT JSONEachRow`, r.table(), statsWhere(query), hostFilter, limit)
-	ruleHits, err := r.behaviorItems(ctx, ruleHitSQL)
+	ruleHits, err := r.hostBehaviorItems(ctx, baseWhere, "rule_hit", "", limit)
 	if err != nil {
 		return stats.HostBehavior{}, err
 	}
 
 	return stats.HostBehavior{FilePaths: filePaths, Network: network, EventTypes: eventTypes, RuleHits: ruleHits}, nil
+}
+
+func (r *StatsRepository) hostBehaviorItems(ctx context.Context, baseWhere string, behaviorType string, extraWhere string, limit int) ([]stats.BehaviorItem, error) {
+	conditions := []string{baseWhere, "behavior_type = '" + escapeSQL(behaviorType) + "'", "behavior_name != ''"}
+	if extraWhere != "" {
+		conditions = append(conditions, extraWhere)
+	}
+	sql := fmt.Sprintf(`SELECT
+	behavior_name AS name,
+	countMerge(hit_count) AS count,
+	minMerge(first_seen) AS first_seen,
+	maxMerge(last_seen) AS last_seen
+FROM %s
+WHERE %s
+GROUP BY behavior_name
+ORDER BY count DESC, last_seen DESC
+LIMIT %d
+FORMAT JSONEachRow`, r.hostBehaviorTable(), strings.Join(conditions, " AND "), limit)
+	return r.behaviorItems(ctx, sql)
+}
+
+func sensitiveBehaviorNameFilter() string {
+	return `(behavior_name IN ('/etc/passwd', '/etc/shadow', '/etc/sudoers', '/etc/group', '/etc/gshadow', '/etc/ssh/sshd_config') OR behavior_name LIKE '/etc/sudoers.d/%' OR behavior_name LIKE '/etc/ssh/%' OR behavior_name LIKE '/root/%' OR behavior_name LIKE '/home/%/.ssh/%' OR behavior_name LIKE '/var/log/auth.log%' OR behavior_name LIKE '/var/log/secure%') AND behavior_name NOT IN ('/etc', '/proc', '/sys', '/dev') AND behavior_name NOT LIKE '/proc/%' AND behavior_name NOT LIKE '/sys/%' AND behavior_name NOT LIKE '/dev/%'`
 }
 
 // behaviorItems 处理 behavior Items 相关逻辑。
@@ -742,11 +706,25 @@ func (r *StatsRepository) userStatsTable() string {
 	return r.client.config.Database + ".audit_user_stats_hourly"
 }
 
+func (r *StatsRepository) hostUserStatsTable() string {
+	if r.client.config.Database == "" {
+		return "audit_host_user_stats_hourly"
+	}
+	return r.client.config.Database + ".audit_host_user_stats_hourly"
+}
+
 func (r *StatsRepository) commandStatsTable() string {
 	if r.client.config.Database == "" {
 		return "audit_command_stats_hourly"
 	}
 	return r.client.config.Database + ".audit_command_stats_hourly"
+}
+
+func (r *StatsRepository) hostBehaviorTable() string {
+	if r.client.config.Database == "" {
+		return "audit_host_behavior_hourly"
+	}
+	return r.client.config.Database + ".audit_host_behavior_hourly"
 }
 
 func (r *StatsRepository) ruleHitStatsTable() string {
