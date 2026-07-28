@@ -1,9 +1,15 @@
 import { apiClient } from './client';
-import type { AuditEvent, AuditEventQuery, PagedAuditEvents } from '../types/audit';
+import type { AuditEvent, AuditEventQuery, PagedAuditEvents, PagedAuditOperationGroups } from '../types/audit';
 
 // queryAuditEvents 处理 query Audit Events 相关逻辑。
 export async function queryAuditEvents(params: AuditEventQuery): Promise<PagedAuditEvents> {
   const response = await apiClient.get<PagedAuditEvents>('/audit/events', { params });
+  return response.data;
+}
+
+// queryAuditOperations 查询按同次操作聚合后的审计事件。
+export async function queryAuditOperations(params: AuditEventQuery): Promise<PagedAuditOperationGroups> {
+  const response = await apiClient.get<PagedAuditOperationGroups>('/audit/operations', { params });
   return response.data;
 }
 

@@ -299,6 +299,14 @@ func main() {
 	}
 	go ingestWriter.RefreshLoop(context.Background(), 30*time.Second)
 
+	responseCache, responseCacheTTL, err := newRequiredResponseCache(context.Background(), cfg.Redis)
+	if err != nil {
+		slog.Error("redis response cache required", "error", err)
+		fmt.Fprintf(os.Stderr, "redis response cache: %v\n", err)
+		os.Exit(1)
+	}
+	slog.Info("redis response cache enabled", "addr", cfg.Redis.Addr, "db", cfg.Redis.DB, "ttl_seconds", int(responseCacheTTL.Seconds()))
+
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
 	slog.Info("api server listening", "addr", addr)
 	if err := http.ListenAndServe(addr, server.NewRouter(
@@ -315,6 +323,7 @@ func main() {
 		server.WithIngestWriter(ingestWriter),
 		server.WithCollectorToken(cfg.Collector.Token),
 		server.WithEnforcementRepository(enforcementRepository),
+		server.WithResponseCache(responseCache, responseCacheTTL),
 	)); err != nil {
 		slog.Error("api server stopped with error", "addr", addr, "error", err)
 		fmt.Fprintf(os.Stderr, "listen: %v\n", err)

@@ -12,7 +12,9 @@ import (
 
 	"diting/backend/internal/audit"
 	"diting/backend/internal/auth"
+	"diting/backend/internal/cache"
 	"diting/backend/internal/collectorhealth"
+	"diting/backend/internal/stats"
 	"diting/backend/internal/systemconfig"
 )
 
@@ -23,6 +25,45 @@ type fakeIngestWriter struct {
 func (f *fakeIngestWriter) WriteEvents(_ context.Context, events []audit.Event) error {
 	f.events = append(f.events, events...)
 	return nil
+}
+
+type fakeStatsRepository struct {
+	overviewCalls int
+}
+
+func (f *fakeStatsRepository) Overview(context.Context, stats.Query) (stats.Overview, error) {
+	f.overviewCalls++
+	return stats.Overview{TotalEvents: uint64(f.overviewCalls)}, nil
+}
+func (f *fakeStatsRepository) EventTrend(context.Context, stats.Query) ([]stats.TrendPoint, error) {
+	return nil, nil
+}
+func (f *fakeStatsRepository) TopCommands(context.Context, stats.Query) ([]stats.TopItem, error) {
+	return nil, nil
+}
+func (f *fakeStatsRepository) TopHosts(context.Context, stats.Query) ([]stats.TopItem, error) {
+	return nil, nil
+}
+func (f *fakeStatsRepository) TopNamespaces(context.Context, stats.Query) ([]stats.TopItem, error) {
+	return nil, nil
+}
+func (f *fakeStatsRepository) CommandStats(context.Context, stats.Query) ([]stats.CommandItem, error) {
+	return nil, nil
+}
+func (f *fakeStatsRepository) UserAudits(context.Context, stats.Query) ([]stats.UserAuditItem, error) {
+	return nil, nil
+}
+func (f *fakeStatsRepository) HostAudits(context.Context, stats.Query) ([]stats.HostAuditItem, error) {
+	return nil, nil
+}
+func (f *fakeStatsRepository) HostUsers(context.Context, stats.Query) ([]stats.HostUserItem, error) {
+	return nil, nil
+}
+func (f *fakeStatsRepository) HostBehavior(context.Context, stats.Query) (stats.HostBehavior, error) {
+	return stats.HostBehavior{}, nil
+}
+func (f *fakeStatsRepository) RuleHits(context.Context, stats.Query) ([]stats.RuleHitItem, error) {
+	return nil, nil
 }
 
 func TestHealthzReturnsOK(t *testing.T) {
@@ -70,6 +111,27 @@ func TestAuditEventsRouteReturnsListEnvelope(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+}
+
+func TestStatsRoutesUseResponseCacheWhenConfigured(t *testing.T) {
+	repository := &fakeStatsRepository{}
+	router := NewRouter(nil, nil, repository, nil, nil, nil, nil, nil, nil, nil, WithResponseCache(cache.NewMemory(), time.Minute))
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/stats/overview?limit=10", nil)
+
+	first := httptest.NewRecorder()
+	router.ServeHTTP(first, req)
+	second := httptest.NewRecorder()
+	router.ServeHTTP(second, req)
+
+	if repository.overviewCalls != 1 {
+		t.Fatalf("expected stats repository to be called once, got %d", repository.overviewCalls)
+	}
+	if second.Header().Get("X-DiTing-Cache") != "HIT" {
+		t.Fatalf("expected cache hit header, got %q", second.Header().Get("X-DiTing-Cache"))
+	}
+	if first.Body.String() != second.Body.String() {
+		t.Fatalf("expected identical cached body, got first=%s second=%s", first.Body.String(), second.Body.String())
 	}
 }
 

@@ -1,6 +1,7 @@
 package audit
 
 import (
+	"diting/backend/internal/queryguard"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -27,6 +28,7 @@ type Query struct {
 	DstIP         string
 	DstPort       int
 	EventIDs      []string
+	IncludeTotal  bool
 	Page          int
 	PageSize      int
 }
@@ -56,6 +58,7 @@ func ParseQuery(r *http.Request) (Query, error) {
 		DstIP:         strings.TrimSpace(values.Get("dst_ip")),
 		DstPort:       parsePositiveInt(values.Get("dst_port"), 0),
 		EventIDs:      parseCSV(values.Get("event_ids")),
+		IncludeTotal:  strings.EqualFold(strings.TrimSpace(values.Get("include_total")), "true"),
 	}
 	if query.PageSize > 500 {
 		query.PageSize = 500
@@ -74,6 +77,9 @@ func ParseQuery(r *http.Request) (Query, error) {
 			return Query{}, fmt.Errorf("invalid end_time: %w", err)
 		}
 		query.EndTime = parsed
+	}
+	if err := queryguard.ValidateTimeRange(query.StartTime, query.EndTime, 31*24*time.Hour); err != nil {
+		return Query{}, err
 	}
 	return query, nil
 }

@@ -13,6 +13,7 @@ type Config struct {
 	JWT        JWTConfig
 	Postgres   PostgresConfig
 	ClickHouse ClickHouseConfig
+	Redis      RedisConfig
 	Collector  CollectorConfig
 }
 
@@ -40,6 +41,14 @@ type ClickHouseConfig struct {
 	Database string
 	Username string
 	Password string
+}
+
+type RedisConfig struct {
+	Enabled                 bool
+	Addr                    string
+	Password                string
+	DB                      int
+	ResponseCacheTTLSeconds int
 }
 
 type CollectorConfig struct {
@@ -140,6 +149,19 @@ func assignValue(cfg *Config, section, key, value string) error {
 			cfg.ClickHouse.Username = value
 		case "password":
 			cfg.ClickHouse.Password = value
+		}
+	case "redis":
+		switch key {
+		case "enabled":
+			cfg.Redis.Enabled = mustBool(value)
+		case "addr":
+			cfg.Redis.Addr = value
+		case "password":
+			cfg.Redis.Password = value
+		case "db":
+			cfg.Redis.DB = mustInt(key, value)
+		case "response_cache_ttl_seconds":
+			cfg.Redis.ResponseCacheTTLSeconds = mustInt(key, value)
 		}
 	case "collector":
 		switch key {

@@ -30,11 +30,11 @@ func TestStatsRepositoryOverviewQueriesClickHouse(t *testing.T) {
 		t.Fatalf("Overview returned error: %v", err)
 	}
 
-	if !strings.Contains(body, "count() AS total_events") {
+	if !strings.Contains(body, "FROM diting.audit_overview_hourly") || !strings.Contains(body, "countMerge(event_count) AS total_events") {
 		t.Fatalf("expected overview query, got %s", body)
 	}
-	if !strings.Contains(body, "uniqExact(if(host_name != '', host_name, if(host_id != '', host_id, node_name))) AS active_hosts") {
-		t.Fatalf("expected active hosts to use stable host identity, got %s", body)
+	if !strings.Contains(body, "uniqMerge(active_hosts) AS active_hosts") {
+		t.Fatalf("expected active hosts to use aggregate state, got %s", body)
 	}
 	if overview.TotalEvents != 10 || overview.ActiveRules != 4 {
 		t.Fatalf("unexpected overview %#v", overview)
@@ -60,7 +60,7 @@ func TestStatsRepositoryEventTrendUsesShanghaiTimezone(t *testing.T) {
 		t.Fatalf("EventTrend returned error: %v", err)
 	}
 
-	if !strings.Contains(body, "toTimeZone(event_time, 'Asia/Shanghai')") {
+	if !strings.Contains(body, "FROM diting.audit_overview_hourly") || !strings.Contains(body, "toTimeZone(hour, 'Asia/Shanghai')") {
 		t.Fatalf("expected event trend to use Asia/Shanghai timezone, got %s", body)
 	}
 	if len(points) != 1 || points[0].Time != "2026-07-14 11:00:00" || points[0].Count != 5 {
@@ -68,7 +68,7 @@ func TestStatsRepositoryEventTrendUsesShanghaiTimezone(t *testing.T) {
 	}
 }
 
-func TestStatsRepositoryTopCommandsOnlyCountsProcessExec(t *testing.T) {
+func TestStatsRepositoryTopCommandsUsesCommandAggregate(t *testing.T) {
 	var body string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		data := make([]byte, r.ContentLength)
@@ -88,8 +88,10 @@ func TestStatsRepositoryTopCommandsOnlyCountsProcessExec(t *testing.T) {
 		t.Fatalf("TopCommands returned error: %v", err)
 	}
 
-	if !strings.Contains(body, "event_type = 'process_exec'") {
-		t.Fatalf("expected process_exec filter in query, got %s", body)
+	if !strings.Contains(body, "FROM diting.audit_command_stats_hourly") ||
+		!strings.Contains(body, "process_name != ''") ||
+		!strings.Contains(body, "countMerge(command_count) AS count") {
+		t.Fatalf("expected command aggregate query, got %s", body)
 	}
 	if len(items) != 1 || items[0].Name != "whoami" {
 		t.Fatalf("unexpected items %#v", items)
@@ -116,8 +118,8 @@ func TestStatsRepositoryTopHostsUsesStableHostIdentity(t *testing.T) {
 		t.Fatalf("TopHosts returned error: %v", err)
 	}
 
-	if !strings.Contains(body, "if(host_name != '', host_name, if(host_id != '', host_id, node_name)) AS name") || !strings.Contains(body, "name != ''") {
-		t.Fatalf("expected stable host identity in query, got %s", body)
+	if !strings.Contains(body, "FROM diting.audit_host_stats_hourly") || !strings.Contains(body, "countMerge(command_count) AS count") {
+		t.Fatalf("expected host aggregate query, got %s", body)
 	}
 	if len(items) != 1 || items[0].Name != "server-1" || items[0].Count != 9 {
 		t.Fatalf("unexpected items %#v", items)
@@ -262,8 +264,12 @@ func TestStatsRepositoryUserAuditsAggregatesLinuxUsers(t *testing.T) {
 		t.Fatalf("UserAudits returned error: %v", err)
 	}
 
-	if !strings.Contains(body, "event_type = 'process_exec'") || !strings.Contains(body, "if(login_username != '', login_username, username) AS audit_user") || !strings.Contains(body, "positionCaseInsensitive(audit_user, 'root')") {
-		t.Fatalf("expected user audit query filters, got %s", body)
+	if !strings.Contains(body, "FROM diting.audit_user_stats_hourly") ||
+		!strings.Contains(body, "audit_user != ''") ||
+		!strings.Contains(body, "positionCaseInsensitive(audit_user, 'root')") ||
+		!strings.Contains(body, "countMerge(command_count) AS command_count") ||
+		!strings.Contains(body, "countIfMerge(high_risk_events) AS high_risk_events") {
+		t.Fatalf("expected user aggregate query filters, got %s", body)
 	}
 	if len(items) != 1 || items[0].Username != "root" || items[0].CommandCount != 8 {
 		t.Fatalf("unexpected items %#v", items)
@@ -293,6 +299,9 @@ func TestStatsRepositoryUserAuditsFiltersHostName(t *testing.T) {
 	if !strings.Contains(body, "(host_id = 'host-001' OR node_name = 'host-001' OR host_name = 'host-001')") {
 		t.Fatalf("expected host filter, got %s", body)
 	}
+	if !strings.Contains(body, "if(login_username != '', login_username, username) AS audit_user") {
+		t.Fatalf("expected host-filtered user audit to fall back to raw events, got %s", body)
+	}
 }
 
 func TestStatsRepositoryHostAuditsAggregatesHosts(t *testing.T) {
@@ -316,8 +325,12 @@ func TestStatsRepositoryHostAuditsAggregatesHosts(t *testing.T) {
 		t.Fatalf("HostAudits returned error: %v", err)
 	}
 
-	if !strings.Contains(body, "event_type = 'process_exec'") || !strings.Contains(body, "if(host_id != '', host_id, if(node_name != '', node_name, host_name)) AS audit_host_key") || !strings.Contains(body, "positionCaseInsensitive(audit_host, 'node')") {
-		t.Fatalf("expected host audit query filters, got %s", body)
+	if !strings.Contains(body, "FROM diting.audit_host_stats_hourly") ||
+		!strings.Contains(body, "host_key AS host_id") ||
+		!strings.Contains(body, "positionCaseInsensitive(host_key, 'node')") ||
+		!strings.Contains(body, "countMerge(command_count) AS command_count") ||
+		!strings.Contains(body, "countIfMerge(high_risk_events) AS high_risk_events") {
+		t.Fatalf("expected host aggregate query filters, got %s", body)
 	}
 	if len(items) != 1 || items[0].HostID != "host-001" || items[0].HostName != "prod-web-01" || items[0].NodeName != "node-1" || items[0].CommandCount != 12 {
 		t.Fatalf("unexpected items %#v", items)
@@ -441,10 +454,11 @@ func TestStatsRepositoryRuleHitsAggregatesRules(t *testing.T) {
 		t.Fatalf("RuleHits returned error: %v", err)
 	}
 
-	if !strings.Contains(body, "arrayJoin(rule_names) AS rule_name") ||
+	if !strings.Contains(body, "FROM diting.audit_rule_hit_stats_hourly") ||
 		!strings.Contains(body, "positionCaseInsensitive(rule_name, '反弹')") ||
-		!strings.Contains(body, "uniqExact(audit_host) AS active_hosts") {
-		t.Fatalf("expected rule hit query, got %s", body)
+		!strings.Contains(body, "countMerge(hit_count) AS hit_count") ||
+		!strings.Contains(body, "uniqMerge(active_hosts) AS active_hosts") {
+		t.Fatalf("expected rule hit aggregate query, got %s", body)
 	}
 	if len(items) != 1 || items[0].RuleName != "反弹 Shell 命令" || items[0].HitCount != 5 || items[0].ActiveHosts != 2 {
 		t.Fatalf("unexpected items %#v", items)

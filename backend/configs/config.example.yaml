@@ -20,6 +20,13 @@ clickhouse:
   username: default
   password: ""
 
+redis:
+  enabled: true
+  addr: 127.0.0.1:6379
+  password: ""
+  db: 0
+  response_cache_ttl_seconds: 15
+
 collector:
   input_mode: file
   output_mode: clickhouse

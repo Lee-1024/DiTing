@@ -2,12 +2,12 @@ import { Button, Card, DatePicker, Empty, Form, Input, Select, Table, Tag, Typog
 import dayjs from 'dayjs';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { exportAuditEvents, queryAuditEvents } from '../../api/audit';
+import { exportAuditEvents, queryAuditEvents, queryAuditOperations } from '../../api/audit';
 import CommandText from '../../components/CommandText';
 import FilterToolbar from '../../components/FilterToolbar';
 import { InsightHero, LatestPanel, MetricCard } from '../../components/InsightHeader';
 import SeverityTag from '../../components/SeverityTag';
-import type { AuditEvent, AuditEventQuery } from '../../types/audit';
+import type { AuditEvent, AuditEventQuery, AuditOperationGroup } from '../../types/audit';
 import { downloadBlob } from '../../utils/download';
 import { compactNumber } from '../../utils/format';
 import { displayHostIdentity } from '../../utils/hostDisplay';
@@ -16,29 +16,17 @@ import { formatLocalDateTime } from '../../utils/time';
 import EventDetailDrawer from './EventDetailDrawer';
 
 const defaultRange = [dayjs().subtract(7, 'day'), dayjs()] as const;
-const rawPageMultiplier = 10;
-
-interface AuditEventGroup {
-  groupId: string;
-  representative: AuditEvent;
-  events: AuditEvent[];
-  eventTypes: string[];
-  filePaths: string[];
-  tags: string[];
-  maxSeverity: string;
-}
-
 // AuditEventsPage 渲染 Audit Events Page 组件。
 export default function AuditEventsPage() {
-  const [events, setEvents] = useState<AuditEvent[]>([]);
+  const [groups, setGroups] = useState<AuditOperationGroup[]>([]);
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<AuditEvent>();
+  const [relatedEvents, setRelatedEvents] = useState<AuditEvent[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [form] = Form.useForm();
   const requestSeq = useRef(0);
-  const groupedEvents = useMemo(() => groupAuditEvents(events), [events]);
 
   // buildQuery 构建 build Query 所需的数据结构。
   function buildQuery(nextPage = page, nextPageSize = pageSize, formValues = form.getFieldsValue()): AuditEventQuery {
@@ -57,7 +45,7 @@ export default function AuditEventsPage() {
       keyword: values.keyword,
       tag: values.tag,
       page: nextPage,
-      page_size: nextPageSize * rawPageMultiplier,
+      page_size: nextPageSize,
     };
   }
 
@@ -67,11 +55,11 @@ export default function AuditEventsPage() {
     requestSeq.current = seq;
     setLoading(true);
     try {
-      const data = await queryAuditEvents(buildQuery(nextPage, nextPageSize, formValues));
+      const data = await queryAuditOperations(buildQuery(nextPage, nextPageSize, formValues));
       if (seq !== requestSeq.current) {
         return;
       }
-      setEvents(data.items ?? []);
+      setGroups(data.items ?? []);
       setTotal(data.total);
       setPage(data.page);
       setPageSize(nextPageSize);
@@ -104,10 +92,10 @@ export default function AuditEventsPage() {
     void load();
   }, []);
 
-  const riskyEvents = events.filter((item) => item.severity === 'high' || item.severity === 'critical').length;
-  const criticalEvents = events.filter((item) => item.severity === 'critical').length;
-  const activeHosts = uniqueValues(events.map((item) => displayHostIdentity(item, '')).filter(Boolean)).length;
-  const latestEvent = groupedEvents[0]?.representative;
+  const riskyEvents = groups.filter((item) => item.maxSeverity === 'high' || item.maxSeverity === 'critical').length;
+  const criticalEvents = groups.filter((item) => item.maxSeverity === 'critical').length;
+  const activeHosts = uniqueValues(groups.map((item) => displayHostIdentity(item.representative, '')).filter(Boolean)).length;
+  const latestEvent = groups[0]?.representative;
 
   return (
     <>
@@ -137,8 +125,8 @@ export default function AuditEventsPage() {
         />
       </div>
       <div className="metric-grid risk-metric-grid">
-        <MetricCard label="操作分组" value={groupedEvents.length} hint={`共 ${compactNumber(total)} 条匹配结果`} tone="blue" />
-        <MetricCard label="原始事件" value={events.length} hint="当前页事件数" tone="cyan" />
+        <MetricCard label="操作分组" value={groups.length} hint={total > 0 ? `共 ${compactNumber(total)} 条匹配结果` : '按当前筛选返回'} tone="blue" />
+        <MetricCard label="原始事件" value={groups.reduce((sum, item) => sum + item.eventCount, 0)} hint="当前页聚合事件数" tone="cyan" />
         <MetricCard label="高危/严重" value={riskyEvents} hint={`${criticalEvents} 条严重事件`} tone="danger" />
         <MetricCard label="活跃主机" value={activeHosts} hint="当前页涉及主机" tone="success" />
       </div>
@@ -178,15 +166,18 @@ export default function AuditEventsPage() {
         <Table
           rowKey="groupId"
           loading={loading}
-          dataSource={groupedEvents.slice(0, pageSize)}
+          dataSource={groups}
           className="clickable-table"
           locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无审计事件" /> }}
           scroll={{ x: 1710 }}
-          onRow={(record) => ({ onClick: () => setSelected(record.representative), title: '点击查看操作详情' })}
+          onRow={(record) => ({ onClick: () => {
+            setSelected(record.representative);
+            setRelatedEvents([record.representative]);
+          }, title: '点击查看操作详情' })}
           expandable={{
             expandedRowRender: (group) => renderAuditGroupDetails(group, setSelected),
             expandedRowClassName: () => 'audit-expanded-row',
-            rowExpandable: (group) => group.events.length > 1,
+            rowExpandable: (group) => group.eventCount > 1,
           }}
           pagination={{
             current: page,
@@ -194,7 +185,7 @@ export default function AuditEventsPage() {
             total,
             showSizeChanger: true,
             pageSizeOptions: [10, 20, 50, 100],
-            showTotal: (value) => `共 ${value} 条原始事件，当前 ${groupedEvents.length} 个操作`,
+            showTotal: (value) => value > 0 ? `共 ${value} 个操作，当前 ${groups.length} 个操作` : `当前 ${groups.length} 个操作`,
             onChange: (nextPage, nextPageSize) => {
               const sizeChanged = nextPageSize !== pageSize;
               void load(sizeChanged ? 1 : nextPage, nextPageSize, form.getFieldsValue());
@@ -204,7 +195,7 @@ export default function AuditEventsPage() {
             { title: '时间', dataIndex: ['representative', 'eventTime'], width: 190, render: (value) => formatLocalDateTime(value) },
             { title: '等级', dataIndex: 'maxSeverity', width: 100, render: (value) => <SeverityTag value={value} /> },
             { title: '事件', dataIndex: 'eventTypes', width: 160, render: (values: string[]) => values.map((value) => <Tag key={value}>{eventTypeLabel(value)}</Tag>) },
-            { title: '明细数', dataIndex: ['events', 'length'], width: 104, align: 'right', className: 'number-cell', render: (_, record) => record.events.length },
+            { title: '明细数', dataIndex: 'eventCount', width: 104, align: 'right', className: 'number-cell' },
             { title: '主机/节点', dataIndex: ['representative', 'hostName'], width: 170, ellipsis: true, render: (_, record) => displayHostIdentity(record.representative) },
             { title: 'Namespace', dataIndex: ['representative', 'namespace'], width: 160, ellipsis: true },
             { title: 'Pod', dataIndex: ['representative', 'podName'], width: 200, ellipsis: true },
@@ -217,12 +208,16 @@ export default function AuditEventsPage() {
           ]}
         />
       </Card>
-      <EventDetailDrawer event={selected} relatedEvents={findRelatedEvents(groupedEvents, selected)} open={Boolean(selected)} onClose={() => setSelected(undefined)} />
+      <EventDetailDrawer event={selected} relatedEvents={relatedEvents} open={Boolean(selected)} onClose={() => {
+        setSelected(undefined);
+        setRelatedEvents([]);
+      }} />
     </>
   );
 }
 
-function renderAuditGroupDetails(group: AuditEventGroup, onSelect: (event: AuditEvent) => void) {
+function renderAuditGroupDetails(group: AuditOperationGroup, onSelect: (event: AuditEvent) => void) {
+  const event = group.representative;
   return (
     <div className="audit-detail-panel" onClick={(event) => event.stopPropagation()}>
       <div className="audit-detail-grid audit-detail-grid-head">
@@ -233,7 +228,9 @@ function renderAuditGroupDetails(group: AuditEventGroup, onSelect: (event: Audit
         <span>文件操作</span>
         <span>标签</span>
       </div>
-      {group.events.map((event) => (
+      {[
+        event,
+      ].map((event) => (
         <button
           key={event.eventId}
           type="button"
@@ -255,58 +252,8 @@ function renderAuditGroupDetails(group: AuditEventGroup, onSelect: (event: Audit
   );
 }
 
-// groupAuditEvents 处理 group Audit Events 相关逻辑。
-function groupAuditEvents(events: AuditEvent[]): AuditEventGroup[] {
-  const groups = new Map<string, AuditEvent[]>();
-  for (const event of events) {
-    const key = operationGroupKey(event);
-    groups.set(key, [...(groups.get(key) ?? []), event]);
-  }
-  return Array.from(groups.entries()).map(([groupId, groupEvents]) => {
-    const sorted = [...groupEvents].sort((a, b) => new Date(b.eventTime).getTime() - new Date(a.eventTime).getTime());
-    const representative = sorted[0];
-    return {
-      groupId,
-      representative,
-      events: sorted,
-      eventTypes: uniqueValues(sorted.map((event) => event.eventType)),
-      filePaths: uniqueValues(sorted.map((event) => event.filePath).filter(Boolean) as string[]),
-      tags: uniqueValues(sorted.flatMap((event) => event.tags ?? [])),
-      maxSeverity: maxSeverity(sorted.map((event) => event.severity)),
-    };
-  });
-}
-
-// operationGroupKey 处理 operation Group Key 相关逻辑。
-function operationGroupKey(event: AuditEvent) {
-  const second = dayjs(event.eventTime).format('YYYY-MM-DD HH:mm:ss');
-  return [
-    second,
-    event.hostId || event.nodeName || event.hostName,
-    event.namespace,
-    event.podName,
-    event.loginUsername || event.username,
-    event.username,
-    event.processName,
-    event.cmdline,
-  ].join('|');
-}
-
 // uniqueValues 处理 unique Values 相关逻辑。
 function uniqueValues(values: string[]) {
   return Array.from(new Set(values.filter(Boolean)));
 }
 
-// maxSeverity 处理 max Severity 相关逻辑。
-function maxSeverity(values: string[]) {
-  const order: Record<string, number> = { info: 1, low: 2, medium: 3, high: 4, critical: 5 };
-  return values.reduce((max, value) => (order[value] ?? 0) > (order[max] ?? 0) ? value : max, values[0] || 'info');
-}
-
-// findRelatedEvents 处理 find Related Events 相关逻辑。
-function findRelatedEvents(groups: AuditEventGroup[], selected?: AuditEvent) {
-  if (!selected) {
-    return [];
-  }
-  return groups.find((group) => group.events.some((event) => event.eventId === selected.eventId))?.events ?? [selected];
-}

@@ -7,6 +7,7 @@ import (
 
 	"diting/backend/internal/audit"
 	"diting/backend/internal/auth"
+	"diting/backend/internal/cache"
 	"diting/backend/internal/collectorhealth"
 	"diting/backend/internal/enforcement"
 	"diting/backend/internal/hostasset"
@@ -23,6 +24,8 @@ type routerOptions struct {
 	ingestWriter          ingest.EventWriter
 	collectorToken        string
 	enforcementRepository enforcement.Repository
+	responseCache         cache.Cache
+	responseCacheTTL      time.Duration
 }
 
 type RouterOption func(*routerOptions)
@@ -45,6 +48,14 @@ func WithCollectorToken(token string) RouterOption {
 func WithEnforcementRepository(repository enforcement.Repository) RouterOption {
 	return func(options *routerOptions) {
 		options.enforcementRepository = repository
+	}
+}
+
+// WithResponseCache 配置 GET 查询响应缓存。
+func WithResponseCache(store cache.Cache, ttl time.Duration) RouterOption {
+	return func(options *routerOptions) {
+		options.responseCache = store
+		options.responseCacheTTL = ttl
 	}
 }
 
@@ -112,6 +123,7 @@ func NewRouter(repository audit.Repository, ruleRepository rule.Repository, stat
 	mux.Handle("/api/v1/audit/events", protect(http.HandlerFunc(auditHandler.ListEvents)))
 	mux.Handle("/api/v1/audit/events/export", protect(http.HandlerFunc(auditHandler.ExportEvents)))
 	mux.Handle("/api/v1/audit/events/{event_id}", protect(http.HandlerFunc(auditHandler.GetEvent)))
+	mux.Handle("/api/v1/audit/operations", protect(cached(options, "audit.operations", http.HandlerFunc(auditHandler.ListOperations))))
 	mux.HandleFunc("/api/v1/ingest/events", ingestHandler.IngestEvents)
 	mux.HandleFunc("/api/v1/ingest/heartbeat", collectorHealthHandler.Report)
 	mux.HandleFunc("/api/v1/ingest/enforcement-policies", func(w http.ResponseWriter, r *http.Request) {
@@ -314,21 +326,25 @@ func NewRouter(repository audit.Repository, ruleRepository rule.Repository, stat
 		}
 	})))
 	if statsRepository != nil {
-		mux.Handle("/api/v1/stats/overview", protect(http.HandlerFunc(statsHandler.Overview)))
-		mux.Handle("/api/v1/stats/event-trend", protect(http.HandlerFunc(statsHandler.EventTrend)))
-		mux.Handle("/api/v1/stats/top-commands", protect(http.HandlerFunc(statsHandler.TopCommands)))
-		mux.Handle("/api/v1/stats/top-hosts", protect(http.HandlerFunc(statsHandler.TopHosts)))
-		mux.Handle("/api/v1/stats/top-namespaces", protect(http.HandlerFunc(statsHandler.TopNamespaces)))
-		mux.Handle("/api/v1/stats/commands", protect(http.HandlerFunc(statsHandler.CommandStats)))
+		mux.Handle("/api/v1/stats/overview", protect(cached(options, "stats.overview", http.HandlerFunc(statsHandler.Overview))))
+		mux.Handle("/api/v1/stats/event-trend", protect(cached(options, "stats.event-trend", http.HandlerFunc(statsHandler.EventTrend))))
+		mux.Handle("/api/v1/stats/top-commands", protect(cached(options, "stats.top-commands", http.HandlerFunc(statsHandler.TopCommands))))
+		mux.Handle("/api/v1/stats/top-hosts", protect(cached(options, "stats.top-hosts", http.HandlerFunc(statsHandler.TopHosts))))
+		mux.Handle("/api/v1/stats/top-namespaces", protect(cached(options, "stats.top-namespaces", http.HandlerFunc(statsHandler.TopNamespaces))))
+		mux.Handle("/api/v1/stats/commands", protect(cached(options, "stats.commands", http.HandlerFunc(statsHandler.CommandStats))))
 		mux.Handle("/api/v1/stats/commands/export", protect(http.HandlerFunc(statsHandler.ExportCommandStats)))
-		mux.Handle("/api/v1/stats/users", protect(http.HandlerFunc(statsHandler.UserAudits)))
-		mux.Handle("/api/v1/stats/hosts", protect(http.HandlerFunc(statsHandler.HostAudits)))
+		mux.Handle("/api/v1/stats/users", protect(cached(options, "stats.users", http.HandlerFunc(statsHandler.UserAudits))))
+		mux.Handle("/api/v1/stats/hosts", protect(cached(options, "stats.hosts", http.HandlerFunc(statsHandler.HostAudits))))
 		mux.Handle("/api/v1/stats/hosts/export", protect(http.HandlerFunc(statsHandler.ExportHostAudits)))
-		mux.Handle("/api/v1/stats/hosts/behavior", protect(http.HandlerFunc(statsHandler.HostBehavior)))
-		mux.Handle("/api/v1/stats/hosts/users", protect(http.HandlerFunc(statsHandler.HostUsers)))
-		mux.Handle("/api/v1/stats/rules", protect(http.HandlerFunc(statsHandler.RuleHits)))
+		mux.Handle("/api/v1/stats/hosts/behavior", protect(cached(options, "stats.hosts.behavior", http.HandlerFunc(statsHandler.HostBehavior))))
+		mux.Handle("/api/v1/stats/hosts/users", protect(cached(options, "stats.hosts.users", http.HandlerFunc(statsHandler.HostUsers))))
+		mux.Handle("/api/v1/stats/rules", protect(cached(options, "stats.rules", http.HandlerFunc(statsHandler.RuleHits))))
 	}
 	return loggingMiddleware(mux)
+}
+
+func cached(options routerOptions, namespace string, handler http.Handler) http.Handler {
+	return responseCache(options.responseCache, namespace, options.responseCacheTTL)(handler)
 }
 
 // loggingMiddleware 处理 logging Middleware 相关逻辑。

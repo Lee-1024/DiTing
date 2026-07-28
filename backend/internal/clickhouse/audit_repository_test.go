@@ -27,11 +27,12 @@ func TestAuditRepositoryQueriesEventsAsJSON(t *testing.T) {
 	defer server.Close()
 
 	repository := NewAuditRepository(NewHTTPClient(HTTPConfig{URL: server.URL, Database: "diting"}))
-	events, total, err := repository.ListEvents(context.Background(), audit.Query{
-		StartTime: time.Date(2026, 7, 9, 0, 0, 0, 0, time.UTC),
-		EndTime:   time.Date(2026, 7, 10, 0, 0, 0, 0, time.UTC),
-		Page:      1,
-		PageSize:  50,
+	events, total, hasMore, err := repository.ListEvents(context.Background(), audit.Query{
+		StartTime:    time.Date(2026, 7, 9, 0, 0, 0, 0, time.UTC),
+		EndTime:      time.Date(2026, 7, 10, 0, 0, 0, 0, time.UTC),
+		Page:         1,
+		PageSize:     50,
+		IncludeTotal: true,
 	})
 	if err != nil {
 		t.Fatalf("ListEvents returned error: %v", err)
@@ -50,6 +51,9 @@ func TestAuditRepositoryQueriesEventsAsJSON(t *testing.T) {
 	if len(events) != 1 || total != 42 {
 		t.Fatalf("expected one event, got len=%d total=%d", len(events), total)
 	}
+	if hasMore {
+		t.Fatal("expected hasMore false for a single returned row")
+	}
 	if events[0].EventID != "evt-1" {
 		t.Fatalf("expected evt-1, got %q", events[0].EventID)
 	}
@@ -58,6 +62,99 @@ func TestAuditRepositoryQueriesEventsAsJSON(t *testing.T) {
 	}
 	if len(events[0].RuleMatches) != 1 || events[0].RuleMatches[0].Field != "cmdline" || events[0].RuleMatches[0].Value != "id" {
 		t.Fatalf("expected rule matches to be decoded, got %#v", events[0].RuleMatches)
+	}
+}
+
+func TestAuditRepositorySkipsCountByDefaultAndFetchesOneExtraRow(t *testing.T) {
+	var bodies []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		data := make([]byte, r.ContentLength)
+		_, _ = r.Body.Read(data)
+		body := string(data)
+		bodies = append(bodies, body)
+		if strings.Contains(body, "count() AS total") {
+			t.Fatalf("default ListEvents must not issue count query: %s", body)
+		}
+		_, _ = w.Write([]byte(
+			`{"event_id":"evt-1","event_time":"2026-07-09 13:00:00.000","event_type":"process_exec","severity":"info","cmdline":"id","tags":[]}` + "\n" +
+				`{"event_id":"evt-2","event_time":"2026-07-09 13:00:01.000","event_type":"process_exec","severity":"info","cmdline":"whoami","tags":[]}` + "\n",
+		))
+	}))
+	defer server.Close()
+
+	repository := NewAuditRepository(NewHTTPClient(HTTPConfig{URL: server.URL, Database: "diting"}))
+	events, total, hasMore, err := repository.ListEvents(context.Background(), audit.Query{
+		StartTime: time.Date(2026, 7, 9, 0, 0, 0, 0, time.UTC),
+		EndTime:   time.Date(2026, 7, 10, 0, 0, 0, 0, time.UTC),
+		Page:      1,
+		PageSize:  1,
+	})
+	if err != nil {
+		t.Fatalf("ListEvents returned error: %v", err)
+	}
+
+	if len(bodies) != 1 {
+		t.Fatalf("expected only list query, got %d queries: %v", len(bodies), bodies)
+	}
+	if !strings.Contains(bodies[0], "LIMIT 2 OFFSET 0") {
+		t.Fatalf("expected query to fetch page_size + 1 rows, got %s", bodies[0])
+	}
+	if total != 0 {
+		t.Fatalf("expected total 0 when include_total is false, got %d", total)
+	}
+	if !hasMore {
+		t.Fatal("expected hasMore true when an extra row is returned")
+	}
+	if len(events) != 1 || events[0].EventID != "evt-1" {
+		t.Fatalf("expected one trimmed event, got %#v", events)
+	}
+}
+
+func TestAuditRepositoryQueriesOperationGroups(t *testing.T) {
+	var body string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		data := make([]byte, r.ContentLength)
+		_, _ = r.Body.Read(data)
+		body = string(data)
+		if strings.Contains(body, "count() AS total") {
+			t.Fatalf("default ListOperations must not issue count query: %s", body)
+		}
+		_, _ = w.Write([]byte(`{"group_id":"grp-1","representative_event_id":"evt-1","representative_event_time":"2026-07-09 13:00:01.000","representative_event_type":"process_exec","representative_severity":"high","representative_host_name":"prod-1","representative_host_id":"host-1","representative_node_name":"node-1","representative_namespace":"default","representative_pod_name":"pod-1","representative_username":"root","representative_login_username":"ubuntu","representative_process_name":"bash","representative_cmdline":"bash -c id","event_count":"2","event_types":["process_exec","file_access"],"file_paths":["/etc/passwd"],"tags":["sensitive"],"max_severity":"high","first_seen":"2026-07-09 13:00:00.000","last_seen":"2026-07-09 13:00:01.000"}` + "\n"))
+	}))
+	defer server.Close()
+
+	repository := NewAuditRepository(NewHTTPClient(HTTPConfig{URL: server.URL, Database: "diting"}))
+	groups, total, hasMore, err := repository.ListOperations(context.Background(), audit.Query{
+		StartTime: time.Date(2026, 7, 9, 0, 0, 0, 0, time.UTC),
+		EndTime:   time.Date(2026, 7, 10, 0, 0, 0, 0, time.UTC),
+		HostName:  "host-1",
+		Page:      1,
+		PageSize:  10,
+	})
+	if err != nil {
+		t.Fatalf("ListOperations returned error: %v", err)
+	}
+
+	for _, expected := range []string{
+		"GROUP BY event_second",
+		"audit_host_key",
+		"login_username",
+		"username",
+		"process_name",
+		"cmdline",
+		"argMax(event_id, event_time)",
+		"LIMIT 11 OFFSET 0",
+		"(host_id = 'host-1' OR node_name = 'host-1' OR host_name = 'host-1')",
+	} {
+		if !strings.Contains(body, expected) {
+			t.Fatalf("expected %q in operation query, got %s", expected, body)
+		}
+	}
+	if total != 0 || hasMore {
+		t.Fatalf("expected no total and no extra page, got total=%d hasMore=%v", total, hasMore)
+	}
+	if len(groups) != 1 || groups[0].GroupID != "grp-1" || groups[0].Representative.EventID != "evt-1" || groups[0].EventCount != 2 {
+		t.Fatalf("unexpected operation groups %#v", groups)
 	}
 }
 
@@ -72,7 +169,7 @@ func TestAuditRepositoryFiltersCommandDetails(t *testing.T) {
 	defer server.Close()
 
 	repository := NewAuditRepository(NewHTTPClient(HTTPConfig{URL: server.URL, Database: "diting"}))
-	_, _, err := repository.ListEvents(context.Background(), audit.Query{
+	_, _, _, err := repository.ListEvents(context.Background(), audit.Query{
 		StartTime: time.Date(2026, 7, 9, 0, 0, 0, 0, time.UTC),
 		EndTime:   time.Date(2026, 7, 10, 0, 0, 0, 0, time.UTC),
 		EventType: "process_exec",
@@ -138,7 +235,7 @@ func TestAuditRepositoryFiltersMultipleSeverities(t *testing.T) {
 	defer server.Close()
 
 	repository := NewAuditRepository(NewHTTPClient(HTTPConfig{URL: server.URL, Database: "diting"}))
-	_, _, err := repository.ListEvents(context.Background(), audit.Query{
+	_, _, _, err := repository.ListEvents(context.Background(), audit.Query{
 		StartTime:  time.Date(2026, 7, 9, 0, 0, 0, 0, time.UTC),
 		EndTime:    time.Date(2026, 7, 10, 0, 0, 0, 0, time.UTC),
 		SeverityIn: []string{"high", "critical"},
@@ -170,14 +267,15 @@ func TestAuditRepositoryFiltersKeywordInListAndCountQueries(t *testing.T) {
 	defer server.Close()
 
 	repository := NewAuditRepository(NewHTTPClient(HTTPConfig{URL: server.URL, Database: "diting"}))
-	_, _, err := repository.ListEvents(context.Background(), audit.Query{
-		StartTime:  time.Date(2026, 7, 9, 0, 0, 0, 0, time.UTC),
-		EndTime:    time.Date(2026, 7, 10, 0, 0, 0, 0, time.UTC),
-		EventType:  "process_exec",
-		SeverityIn: []string{"high", "critical"},
-		Keyword:    "wget",
-		Page:       1,
-		PageSize:   10,
+	_, _, _, err := repository.ListEvents(context.Background(), audit.Query{
+		StartTime:    time.Date(2026, 7, 9, 0, 0, 0, 0, time.UTC),
+		EndTime:      time.Date(2026, 7, 10, 0, 0, 0, 0, time.UTC),
+		EventType:    "process_exec",
+		SeverityIn:   []string{"high", "critical"},
+		Keyword:      "wget",
+		Page:         1,
+		PageSize:     10,
+		IncludeTotal: true,
 	})
 	if err != nil {
 		t.Fatalf("ListEvents returned error: %v", err)
@@ -214,7 +312,7 @@ func TestAuditRepositoryReturnsFileAndNetworkFields(t *testing.T) {
 	defer server.Close()
 
 	repository := NewAuditRepository(NewHTTPClient(HTTPConfig{URL: server.URL, Database: "diting"}))
-	events, _, err := repository.ListEvents(context.Background(), audit.Query{
+	events, _, _, err := repository.ListEvents(context.Background(), audit.Query{
 		StartTime: time.Date(2026, 7, 9, 0, 0, 0, 0, time.UTC),
 		EndTime:   time.Date(2026, 7, 10, 0, 0, 0, 0, time.UTC),
 		Keyword:   "/etc/passwd",
@@ -253,7 +351,7 @@ func TestAuditRepositoryDropsRowsThatDoNotMatchQuery(t *testing.T) {
 	defer server.Close()
 
 	repository := NewAuditRepository(NewHTTPClient(HTTPConfig{URL: server.URL, Database: "diting"}))
-	events, _, err := repository.ListEvents(context.Background(), audit.Query{
+	events, _, _, err := repository.ListEvents(context.Background(), audit.Query{
 		StartTime:  time.Date(2026, 7, 9, 0, 0, 0, 0, time.UTC),
 		EndTime:    time.Date(2026, 7, 10, 0, 0, 0, 0, time.UTC),
 		EventType:  "process_exec",
@@ -281,7 +379,7 @@ func TestAuditRepositoryFiltersHostName(t *testing.T) {
 	defer server.Close()
 
 	repository := NewAuditRepository(NewHTTPClient(HTTPConfig{URL: server.URL, Database: "diting"}))
-	_, _, err := repository.ListEvents(context.Background(), audit.Query{
+	_, _, _, err := repository.ListEvents(context.Background(), audit.Query{
 		StartTime: time.Date(2026, 7, 9, 0, 0, 0, 0, time.UTC),
 		EndTime:   time.Date(2026, 7, 10, 0, 0, 0, 0, time.UTC),
 		HostName:  "node-1",
@@ -308,7 +406,7 @@ func TestAuditRepositoryFiltersNamespacePodAndSeparateUsers(t *testing.T) {
 	defer server.Close()
 
 	repository := NewAuditRepository(NewHTTPClient(HTTPConfig{URL: server.URL, Database: "diting"}))
-	_, _, err := repository.ListEvents(context.Background(), audit.Query{
+	_, _, _, err := repository.ListEvents(context.Background(), audit.Query{
 		StartTime:     time.Date(2026, 7, 9, 0, 0, 0, 0, time.UTC),
 		EndTime:       time.Date(2026, 7, 10, 0, 0, 0, 0, time.UTC),
 		Namespace:     "default",
@@ -345,7 +443,7 @@ func TestAuditRepositoryFiltersNetworkTarget(t *testing.T) {
 	defer server.Close()
 
 	repository := NewAuditRepository(NewHTTPClient(HTTPConfig{URL: server.URL, Database: "diting"}))
-	_, _, err := repository.ListEvents(context.Background(), audit.Query{
+	_, _, _, err := repository.ListEvents(context.Background(), audit.Query{
 		StartTime: time.Date(2026, 7, 20, 0, 0, 0, 0, time.UTC),
 		EndTime:   time.Date(2026, 7, 21, 0, 0, 0, 0, time.UTC),
 		EventType: "network_connect",
@@ -382,7 +480,7 @@ func TestAuditRepositoryFiltersFilePath(t *testing.T) {
 	defer server.Close()
 
 	repository := NewAuditRepository(NewHTTPClient(HTTPConfig{URL: server.URL, Database: "diting"}))
-	_, _, err := repository.ListEvents(context.Background(), audit.Query{
+	_, _, _, err := repository.ListEvents(context.Background(), audit.Query{
 		StartTime: time.Date(2026, 7, 20, 0, 0, 0, 0, time.UTC),
 		EndTime:   time.Date(2026, 7, 21, 0, 0, 0, 0, time.UTC),
 		EventType: "file_access",

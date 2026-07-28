@@ -10,7 +10,8 @@ import (
 )
 
 type Repository interface {
-	ListEvents(ctx context.Context, query Query) ([]Event, int, error)
+	ListEvents(ctx context.Context, query Query) ([]Event, int, bool, error)
+	ListOperations(ctx context.Context, query Query) ([]OperationGroup, int, bool, error)
 	GetEvent(ctx context.Context, eventID string) (Event, error)
 }
 
@@ -35,9 +36,10 @@ func (h *Handler) ListEvents(w http.ResponseWriter, r *http.Request) {
 
 	items := []Event{}
 	total := 0
+	hasMore := false
 	if h.repository != nil {
 		var err error
-		items, total, err = h.repository.ListEvents(r.Context(), query)
+		items, total, hasMore, err = h.repository.ListEvents(r.Context(), query)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -50,6 +52,36 @@ func (h *Handler) ListEvents(w http.ResponseWriter, r *http.Request) {
 		"page":     query.Page,
 		"pageSize": query.PageSize,
 		"total":    total,
+		"hasMore":  hasMore,
+	})
+}
+
+// ListOperations 查询并返回按同次操作聚合后的审计事件。
+func (h *Handler) ListOperations(w http.ResponseWriter, r *http.Request) {
+	query, err := ParseQuery(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	items := []OperationGroup{}
+	total := 0
+	hasMore := false
+	if h.repository != nil {
+		items, total, hasMore, err = h.repository.ListOperations(r.Context(), query)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"items":    items,
+		"page":     query.Page,
+		"pageSize": query.PageSize,
+		"total":    total,
+		"hasMore":  hasMore,
 	})
 }
 
@@ -89,7 +121,7 @@ func (h *Handler) ExportEvents(w http.ResponseWriter, r *http.Request) {
 
 	items := []Event{}
 	if h.repository != nil {
-		items, _, err = h.repository.ListEvents(r.Context(), query)
+		items, _, _, err = h.repository.ListEvents(r.Context(), query)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return

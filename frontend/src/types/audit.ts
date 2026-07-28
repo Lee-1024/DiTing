@@ -68,6 +68,7 @@ export interface AuditEventQuery {
   dst_ip?: string;
   dst_port?: number;
   event_ids?: string;
+  include_total?: boolean;
   page?: number;
   page_size?: number;
 }
@@ -77,4 +78,25 @@ export interface PagedAuditEvents {
   page: number;
   pageSize: number;
   total: number;
+  hasMore?: boolean;
+}
+
+export interface AuditOperationGroup {
+  groupId: string;
+  representative: AuditEvent;
+  eventCount: number;
+  eventTypes: string[];
+  filePaths: string[];
+  tags: string[];
+  maxSeverity: string;
+  firstSeen: string;
+  lastSeen: string;
+}
+
+export interface PagedAuditOperationGroups {
+  items: AuditOperationGroup[];
+  page: number;
+  pageSize: number;
+  total: number;
+  hasMore?: boolean;
 }

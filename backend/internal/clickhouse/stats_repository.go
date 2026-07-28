@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"diting/backend/internal/stats"
 )
@@ -29,12 +30,12 @@ func NewStatsRepository(client *HTTPClient, ruleCounter RuleCounter) *StatsRepos
 // Overview 处理 Overview 相关逻辑。
 func (r *StatsRepository) Overview(ctx context.Context, query stats.Query) (stats.Overview, error) {
 	sql := fmt.Sprintf(`SELECT
-	count() AS total_events,
-	countIf(severity IN ('high', 'critical')) AS high_risk_events,
-	uniqExact(if(host_name != '', host_name, if(host_id != '', host_id, node_name))) AS active_hosts
+	countMerge(event_count) AS total_events,
+	countMergeIf(event_count, severity IN ('high', 'critical')) AS high_risk_events,
+	uniqMerge(active_hosts) AS active_hosts
 FROM %s
 WHERE %s
-FORMAT JSONEachRow`, r.table(), statsWhere(query))
+FORMAT JSONEachRow`, r.overviewTable(), statsHourWhere(query))
 	data, err := r.client.Query(ctx, sql)
 	if err != nil {
 		return stats.Overview{}, err
@@ -84,13 +85,13 @@ func (v *flexibleUint64) UnmarshalJSON(data []byte) error {
 // EventTrend 处理 Event Trend 相关逻辑。
 func (r *StatsRepository) EventTrend(ctx context.Context, query stats.Query) ([]stats.TrendPoint, error) {
 	sql := fmt.Sprintf(`SELECT
-	formatDateTime(toStartOfHour(toTimeZone(event_time, 'Asia/Shanghai')), '%%Y-%%m-%%d %%H:00:00') AS time,
-	count() AS count
+	formatDateTime(toStartOfHour(toTimeZone(hour, 'Asia/Shanghai')), '%%Y-%%m-%%d %%H:00:00') AS time,
+	countMerge(event_count) AS count
 FROM %s
 WHERE %s
 GROUP BY time
 ORDER BY time ASC
-FORMAT JSONEachRow`, r.table(), statsWhere(query))
+FORMAT JSONEachRow`, r.overviewTable(), statsHourWhere(query))
 	data, err := r.client.Query(ctx, sql)
 	if err != nil {
 		return nil, err
@@ -114,13 +115,13 @@ func (r *StatsRepository) TopCommands(ctx context.Context, query stats.Query) ([
 	}
 	sql := fmt.Sprintf(`SELECT
 	process_name AS name,
-	count() AS count
+	countMerge(command_count) AS count
 FROM %s
-WHERE %s AND event_type = 'process_exec' AND process_name != ''
+WHERE %s AND process_name != ''
 GROUP BY process_name
 ORDER BY count DESC
 LIMIT %d
-FORMAT JSONEachRow`, r.table(), statsWhere(query), limit)
+FORMAT JSONEachRow`, r.commandStatsTable(), statsHourWhere(query), limit)
 	data, err := r.client.Query(ctx, sql)
 	if err != nil {
 		return nil, err
@@ -143,14 +144,14 @@ func (r *StatsRepository) TopHosts(ctx context.Context, query stats.Query) ([]st
 		limit = 10
 	}
 	sql := fmt.Sprintf(`SELECT
-	if(host_name != '', host_name, if(host_id != '', host_id, node_name)) AS name,
-	count() AS count
+anyLast(host_name) AS name,
+	countMerge(command_count) AS count
 FROM %s
-WHERE %s AND event_type = 'process_exec' AND name != ''
-GROUP BY name
+WHERE %s AND host_key != ''
+GROUP BY host_key
 ORDER BY count DESC
 LIMIT %d
-FORMAT JSONEachRow`, r.table(), statsWhere(query), limit)
+FORMAT JSONEachRow`, r.hostStatsTable(), statsHourWhere(query), limit)
 	return r.topItems(ctx, sql)
 }
 
@@ -260,6 +261,61 @@ FORMAT JSONEachRow`, r.table(), strings.Join(conditions, " AND "), limit)
 
 // UserAudits 处理 User Audits 相关逻辑。
 func (r *StatsRepository) UserAudits(ctx context.Context, query stats.Query) ([]stats.UserAuditItem, error) {
+	if query.HostName != "" {
+		return r.userAuditsRaw(ctx, query)
+	}
+	limit := query.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	conditions := []string{
+		statsHourWhere(query),
+		"audit_user != ''",
+	}
+	if query.Keyword != "" {
+		keyword := escapeSQL(query.Keyword)
+		conditions = append(conditions, "positionCaseInsensitive(audit_user, '"+keyword+"') > 0")
+	}
+	if query.HostName != "" {
+		hostName := escapeSQL(query.HostName)
+		conditions = append(conditions, "(host_id = '"+hostName+"' OR node_name = '"+hostName+"' OR host_name = '"+hostName+"')")
+	}
+	sql := fmt.Sprintf(`SELECT
+	audit_user AS username,
+	countMerge(command_count) AS command_count,
+	uniqMerge(active_hosts) AS active_hosts,
+	countIfMerge(high_risk_events) AS high_risk_events,
+	minMerge(first_seen) AS first_seen,
+	maxMerge(last_seen) AS last_seen
+FROM %s
+WHERE %s
+GROUP BY audit_user
+ORDER BY command_count DESC, last_seen DESC
+LIMIT %d
+FORMAT JSONEachRow`, r.userStatsTable(), strings.Join(conditions, " AND "), limit)
+	data, err := r.client.Query(ctx, sql)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := decodeJSONRows[userAuditRow](data)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]stats.UserAuditItem, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, stats.UserAuditItem{
+			Username:       row.Username,
+			CommandCount:   uint64(row.CommandCount),
+			ActiveHosts:    uint64(row.ActiveHosts),
+			HighRiskEvents: uint64(row.HighRiskEvents),
+			FirstSeen:      row.FirstSeen,
+			LastSeen:       row.LastSeen,
+		})
+	}
+	return items, nil
+}
+
+func (r *StatsRepository) userAuditsRaw(ctx context.Context, query stats.Query) ([]stats.UserAuditItem, error) {
 	limit := query.Limit
 	if limit <= 0 {
 		limit = 50
@@ -331,40 +387,28 @@ func (r *StatsRepository) HostAudits(ctx context.Context, query stats.Query) ([]
 		limit = 50
 	}
 	conditions := []string{
-		"event_type = 'process_exec'",
-		"audit_host != ''",
+		statsHourWhere(query),
+		"host_key != ''",
 	}
 	if query.Keyword != "" {
 		keyword := escapeSQL(query.Keyword)
-		conditions = append(conditions, "positionCaseInsensitive(audit_host, '"+keyword+"') > 0")
+		conditions = append(conditions, "(positionCaseInsensitive(host_key, '"+keyword+"') > 0 OR positionCaseInsensitive(host_name, '"+keyword+"') > 0 OR positionCaseInsensitive(node_name, '"+keyword+"') > 0)")
 	}
 	sql := fmt.Sprintf(`SELECT
-	audit_host_key AS host_id,
-	anyLast(audit_host) AS host_name,
+	host_key AS host_id,
+	anyLast(host_name) AS host_name,
 	anyLast(node_name) AS node_name,
-	count() AS command_count,
-	uniqExact(audit_user) AS active_users,
-	countIf(severity IN ('high', 'critical')) AS high_risk_events,
-	min(event_time) AS first_seen,
-	max(event_time) AS last_seen
-FROM
-(
-	SELECT
-		if(host_id != '', host_id, if(node_name != '', node_name, host_name)) AS audit_host_key,
-		if(host_name != '', host_name, if(host_id != '', host_id, node_name)) AS audit_host,
-		node_name,
-		if(login_username != '', login_username, username) AS audit_user,
-		severity,
-		event_time,
-		event_type
-	FROM %s
-	WHERE %s
-)
+	countMerge(command_count) AS command_count,
+	uniqMerge(active_users) AS active_users,
+	countIfMerge(high_risk_events) AS high_risk_events,
+	minMerge(first_seen) AS first_seen,
+	maxMerge(last_seen) AS last_seen
+FROM %s
 WHERE %s
-GROUP BY audit_host_key
+GROUP BY host_key
 ORDER BY command_count DESC, last_seen DESC
 LIMIT %d
-FORMAT JSONEachRow`, r.table(), statsWhere(query), strings.Join(conditions, " AND "), limit)
+FORMAT JSONEachRow`, r.hostStatsTable(), strings.Join(conditions, " AND "), limit)
 	data, err := r.client.Query(ctx, sql)
 	if err != nil {
 		return nil, err
@@ -552,33 +596,24 @@ func (r *StatsRepository) RuleHits(ctx context.Context, query stats.Query) ([]st
 	if limit <= 0 {
 		limit = 20
 	}
-	conditions := []string{"rule_name != ''"}
+	conditions := []string{statsHourWhere(query), "rule_name != ''"}
 	if query.Keyword != "" {
 		keyword := escapeSQL(query.Keyword)
 		conditions = append(conditions, "positionCaseInsensitive(rule_name, '"+keyword+"') > 0")
 	}
 	sql := fmt.Sprintf(`SELECT
 	rule_name,
-	count() AS hit_count,
-	uniqExact(audit_host) AS active_hosts,
-	uniqExact(audit_user) AS active_users,
-	min(event_time) AS first_seen,
-	max(event_time) AS last_seen
-FROM
-(
-	SELECT
-		arrayJoin(rule_names) AS rule_name,
-		if(host_id != '', host_id, if(node_name != '', node_name, host_name)) AS audit_host,
-		if(login_username != '', login_username, username) AS audit_user,
-		event_time
-	FROM %s
-	WHERE %s AND length(rule_names) > 0
-)
+	countMerge(hit_count) AS hit_count,
+	uniqMerge(active_hosts) AS active_hosts,
+	uniqMerge(active_users) AS active_users,
+	minMerge(first_seen) AS first_seen,
+	maxMerge(last_seen) AS last_seen
+FROM %s
 WHERE %s
 GROUP BY rule_name
 ORDER BY hit_count DESC, last_seen DESC
 LIMIT %d
-FORMAT JSONEachRow`, r.table(), statsWhere(query), strings.Join(conditions, " AND "), limit)
+FORMAT JSONEachRow`, r.ruleHitStatsTable(), strings.Join(conditions, " AND "), limit)
 	data, err := r.client.Query(ctx, sql)
 	if err != nil {
 		return nil, err
@@ -686,11 +721,53 @@ func (r *StatsRepository) table() string {
 	return r.client.config.Database + ".audit_events"
 }
 
+func (r *StatsRepository) overviewTable() string {
+	if r.client.config.Database == "" {
+		return "audit_overview_hourly"
+	}
+	return r.client.config.Database + ".audit_overview_hourly"
+}
+
+func (r *StatsRepository) hostStatsTable() string {
+	if r.client.config.Database == "" {
+		return "audit_host_stats_hourly"
+	}
+	return r.client.config.Database + ".audit_host_stats_hourly"
+}
+
+func (r *StatsRepository) userStatsTable() string {
+	if r.client.config.Database == "" {
+		return "audit_user_stats_hourly"
+	}
+	return r.client.config.Database + ".audit_user_stats_hourly"
+}
+
+func (r *StatsRepository) commandStatsTable() string {
+	if r.client.config.Database == "" {
+		return "audit_command_stats_hourly"
+	}
+	return r.client.config.Database + ".audit_command_stats_hourly"
+}
+
+func (r *StatsRepository) ruleHitStatsTable() string {
+	if r.client.config.Database == "" {
+		return "audit_rule_hit_stats_hourly"
+	}
+	return r.client.config.Database + ".audit_rule_hit_stats_hourly"
+}
+
 // statsWhere 处理 stats Where 相关逻辑。
 func statsWhere(query stats.Query) string {
 	return fmt.Sprintf("event_time >= parseDateTime64BestEffort('%s', 3) AND event_time <= parseDateTime64BestEffort('%s', 3)",
 		formatDateTime64(query.StartTime),
 		formatDateTime64(query.EndTime),
+	)
+}
+
+func statsHourWhere(query stats.Query) string {
+	return fmt.Sprintf("hour >= parseDateTimeBestEffort('%s') AND hour <= parseDateTimeBestEffort('%s')",
+		query.StartTime.Format(time.RFC3339),
+		query.EndTime.Format(time.RFC3339),
 	)
 }
 

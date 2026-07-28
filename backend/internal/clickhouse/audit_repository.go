@@ -22,11 +22,11 @@ func NewAuditRepository(client *HTTPClient) *AuditRepository {
 }
 
 // ListEvents 查询并返回 List Events 列表。
-func (r *AuditRepository) ListEvents(ctx context.Context, query audit.Query) ([]audit.Event, int, error) {
+func (r *AuditRepository) ListEvents(ctx context.Context, query audit.Query) ([]audit.Event, int, bool, error) {
 	sql := buildListEventsSQL(r.client.config.Database, query)
 	data, err := r.client.Query(ctx, sql)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, false, err
 	}
 
 	events := []audit.Event{}
@@ -37,20 +37,31 @@ func (r *AuditRepository) ListEvents(ctx context.Context, query audit.Query) ([]
 		}
 		event, err := decodeEventRow(scanner.Bytes())
 		if err != nil {
-			return nil, 0, err
+			return nil, 0, false, err
 		}
 		if eventMatchesQuery(event, query) {
 			events = append(events, event)
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return nil, 0, err
+		return nil, 0, false, err
 	}
-	total, err := r.countEvents(ctx, query)
-	if err != nil {
-		return nil, 0, err
+	limit := query.PageSize
+	if limit <= 0 {
+		limit = 50
 	}
-	return events, total, nil
+	hasMore := len(events) > limit
+	if hasMore {
+		events = events[:limit]
+	}
+	total := 0
+	if query.IncludeTotal {
+		total, err = r.countEvents(ctx, query)
+		if err != nil {
+			return nil, 0, false, err
+		}
+	}
+	return events, total, hasMore, nil
 }
 
 // GetEvent 查询并返回指定的 Get Event。
@@ -71,6 +82,54 @@ func (r *AuditRepository) GetEvent(ctx context.Context, eventID string) (audit.E
 		return audit.Event{}, err
 	}
 	return audit.Event{}, audit.ErrNotFound
+}
+
+// ListOperations 查询按同次操作聚合后的审计事件。
+func (r *AuditRepository) ListOperations(ctx context.Context, query audit.Query) ([]audit.OperationGroup, int, bool, error) {
+	sql := buildListOperationsSQL(r.client.config.Database, query)
+	data, err := r.client.Query(ctx, sql)
+	if err != nil {
+		return nil, 0, false, err
+	}
+	rows, err := decodeJSONRows[operationGroupRow](data)
+	if err != nil {
+		return nil, 0, false, err
+	}
+	limit := query.PageSize
+	if limit <= 0 {
+		limit = 50
+	}
+	hasMore := len(rows) > limit
+	if hasMore {
+		rows = rows[:limit]
+	}
+	groups := make([]audit.OperationGroup, 0, len(rows))
+	for _, row := range rows {
+		groups = append(groups, row.operationGroup())
+	}
+	total := 0
+	if query.IncludeTotal {
+		total, err = r.countOperations(ctx, query)
+		if err != nil {
+			return nil, 0, false, err
+		}
+	}
+	return groups, total, hasMore, nil
+}
+
+func (r *AuditRepository) countOperations(ctx context.Context, query audit.Query) (int, error) {
+	sql := buildCountOperationsSQL(r.client.config.Database, query)
+	data, err := r.client.Query(ctx, sql)
+	if err != nil {
+		return 0, err
+	}
+	var row struct {
+		Total flexibleUint64 `json:"total"`
+	}
+	if err := firstJSONRow(data, &row); err != nil {
+		return 0, err
+	}
+	return int(row.Total), nil
 }
 
 // countEvents 处理 count Events 相关逻辑。
@@ -105,6 +164,7 @@ func buildListEventsSQL(database string, query audit.Query) string {
 	if limit <= 0 {
 		limit = 50
 	}
+	fetchLimit := limit + 1
 	offset := 0
 	if query.Page > 1 {
 		offset = (query.Page - 1) * limit
@@ -116,7 +176,7 @@ FROM %s
 WHERE %s
 ORDER BY event_time DESC
 LIMIT %d OFFSET %d
-FORMAT JSONEachRow`, auditEventListSelectFields(), table, where, limit, offset)
+FORMAT JSONEachRow`, auditEventListSelectFields(), table, where, fetchLimit, offset)
 }
 
 // buildGetEventSQL 构建 build Get Event SQL 所需的数据或表达式。
@@ -143,6 +203,73 @@ func buildCountEventsSQL(database string, query audit.Query) string {
 	return fmt.Sprintf(`SELECT count() AS total
 FROM %s
 WHERE %s
+FORMAT JSONEachRow`, auditTable(database), buildAuditWhere(query))
+}
+
+func buildListOperationsSQL(database string, query audit.Query) string {
+	limit := query.PageSize
+	if limit <= 0 {
+		limit = 50
+	}
+	fetchLimit := limit + 1
+	offset := 0
+	if query.Page > 1 {
+		offset = (query.Page - 1) * limit
+	}
+	return fmt.Sprintf(`SELECT
+	toString(cityHash64(toString(event_second), audit_host_key, namespace, pod_name, login_username, username, process_name, cmdline)) AS group_id,
+	argMax(event_id, event_time) AS representative_event_id,
+	argMax(event_time, event_time) AS representative_event_time,
+	argMax(event_type, event_time) AS representative_event_type,
+	argMax(severity, event_time) AS representative_severity,
+	argMax(host_name, event_time) AS representative_host_name,
+	argMax(host_id, event_time) AS representative_host_id,
+	argMax(node_name, event_time) AS representative_node_name,
+	argMax(namespace, event_time) AS representative_namespace,
+	argMax(pod_name, event_time) AS representative_pod_name,
+	argMax(username, event_time) AS representative_username,
+	argMax(login_username, event_time) AS representative_login_username,
+	argMax(process_name, event_time) AS representative_process_name,
+	argMax(cmdline, event_time) AS representative_cmdline,
+	count() AS event_count,
+	groupUniqArray(event_type) AS event_types,
+	groupUniqArrayIf(file_path, file_path != '') AS file_paths,
+	arrayDistinct(arrayFlatten(groupArray(tags))) AS tags,
+	arrayElement(['info', 'low', 'medium', 'high', 'critical'], max(indexOf(['info', 'low', 'medium', 'high', 'critical'], severity))) AS max_severity,
+	min(event_time) AS first_seen,
+	max(event_time) AS last_seen
+FROM
+(
+	SELECT
+		toStartOfSecond(event_time) AS event_second,
+		if(host_id != '', host_id, if(node_name != '', node_name, host_name)) AS audit_host_key,
+		%s
+	FROM %s
+	WHERE %s
+)
+GROUP BY event_second, audit_host_key, namespace, pod_name, login_username, username, process_name, cmdline
+ORDER BY last_seen DESC
+LIMIT %d OFFSET %d
+FORMAT JSONEachRow`, auditEventListSelectFields(), auditTable(database), buildAuditWhere(query), fetchLimit, offset)
+}
+
+func buildCountOperationsSQL(database string, query audit.Query) string {
+	return fmt.Sprintf(`SELECT count() AS total
+FROM
+(
+	SELECT
+		toStartOfSecond(event_time) AS event_second,
+		if(host_id != '', host_id, if(node_name != '', node_name, host_name)) AS audit_host_key,
+		namespace,
+		pod_name,
+		login_username,
+		username,
+		process_name,
+		cmdline
+	FROM %s
+	WHERE %s
+	GROUP BY event_second, audit_host_key, namespace, pod_name, login_username, username, process_name, cmdline
+)
 FORMAT JSONEachRow`, auditTable(database), buildAuditWhere(query))
 }
 
@@ -350,6 +477,53 @@ type eventRow struct {
 	RuleNames         []string `json:"rule_names"`
 	RuleMatches       string   `json:"rule_matches"`
 	RawEvent          string   `json:"raw_event"`
+}
+
+type operationGroupRow struct {
+	GroupID                     string         `json:"group_id"`
+	RepresentativeEventID       string         `json:"representative_event_id"`
+	RepresentativeEventTime     string         `json:"representative_event_time"`
+	RepresentativeEventType     string         `json:"representative_event_type"`
+	RepresentativeSeverity      string         `json:"representative_severity"`
+	RepresentativeHostName      string         `json:"representative_host_name"`
+	RepresentativeHostID        string         `json:"representative_host_id"`
+	RepresentativeNodeName      string         `json:"representative_node_name"`
+	RepresentativeNamespace     string         `json:"representative_namespace"`
+	RepresentativePodName       string         `json:"representative_pod_name"`
+	RepresentativeUsername      string         `json:"representative_username"`
+	RepresentativeLoginUsername string         `json:"representative_login_username"`
+	RepresentativeProcessName   string         `json:"representative_process_name"`
+	RepresentativeCmdline       string         `json:"representative_cmdline"`
+	EventCount                  flexibleUint64 `json:"event_count"`
+	EventTypes                  []string       `json:"event_types"`
+	FilePaths                   []string       `json:"file_paths"`
+	Tags                        []string       `json:"tags"`
+	MaxSeverity                 string         `json:"max_severity"`
+	FirstSeen                   string         `json:"first_seen"`
+	LastSeen                    string         `json:"last_seen"`
+}
+
+func (row operationGroupRow) operationGroup() audit.OperationGroup {
+	eventTime, _ := time.Parse("2006-01-02 15:04:05.000", row.RepresentativeEventTime)
+	firstSeen, _ := time.Parse("2006-01-02 15:04:05.000", row.FirstSeen)
+	lastSeen, _ := time.Parse("2006-01-02 15:04:05.000", row.LastSeen)
+	return audit.OperationGroup{
+		GroupID: row.GroupID,
+		Representative: audit.Event{
+			EventID: row.RepresentativeEventID, EventTime: eventTime, EventType: row.RepresentativeEventType, Severity: row.RepresentativeSeverity,
+			HostName: row.RepresentativeHostName, HostID: row.RepresentativeHostID, NodeName: row.RepresentativeNodeName,
+			Namespace: row.RepresentativeNamespace, PodName: row.RepresentativePodName,
+			Username: row.RepresentativeUsername, LoginUsername: row.RepresentativeLoginUsername,
+			ProcessName: row.RepresentativeProcessName, Cmdline: row.RepresentativeCmdline,
+		},
+		EventCount:  uint64(row.EventCount),
+		EventTypes:  row.EventTypes,
+		FilePaths:   row.FilePaths,
+		Tags:        row.Tags,
+		MaxSeverity: row.MaxSeverity,
+		FirstSeen:   firstSeen,
+		LastSeen:    lastSeen,
+	}
 }
 
 // decodeEventRow 处理 decode Event Row 相关逻辑。

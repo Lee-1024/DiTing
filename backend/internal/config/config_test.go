@@ -38,4 +38,16 @@ func TestLoadReadsServerAndDatabaseConfig(t *testing.T) {
 	if cfg.Collector.IngestURL != "http://127.0.0.1:8080/api/v1/ingest/events" {
 		t.Fatalf("expected ingest url from config, got %q", cfg.Collector.IngestURL)
 	}
+	if !cfg.Redis.Enabled {
+		t.Fatal("expected redis to be enabled in example config")
+	}
+	if cfg.Redis.Addr != "127.0.0.1:6379" {
+		t.Fatalf("expected redis addr 127.0.0.1:6379, got %q", cfg.Redis.Addr)
+	}
+	if cfg.Redis.DB != 0 {
+		t.Fatalf("expected redis db 0, got %d", cfg.Redis.DB)
+	}
+	if cfg.Redis.ResponseCacheTTLSeconds != 15 {
+		t.Fatalf("expected redis response cache ttl 15, got %d", cfg.Redis.ResponseCacheTTLSeconds)
+	}
 }
