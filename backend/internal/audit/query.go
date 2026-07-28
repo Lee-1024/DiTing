@@ -60,8 +60,8 @@ func ParseQuery(r *http.Request) (Query, error) {
 		EventIDs:      parseCSV(values.Get("event_ids")),
 		IncludeTotal:  strings.EqualFold(strings.TrimSpace(values.Get("include_total")), "true"),
 	}
-	if query.PageSize > 500 {
-		query.PageSize = 500
+	if query.PageSize > 100 {
+		query.PageSize = 100
 	}
 
 	if raw := values.Get("start_time"); raw != "" {
@@ -81,7 +81,29 @@ func ParseQuery(r *http.Request) (Query, error) {
 	if err := queryguard.ValidateTimeRange(query.StartTime, query.EndTime, 31*24*time.Hour); err != nil {
 		return Query{}, err
 	}
+	if query.Page > 100 {
+		return Query{}, fmt.Errorf("deep pagination is limited to the first 100 pages; narrow the time range or filters")
+	}
+	if err := validateKeywordGovernance(query); err != nil {
+		return Query{}, err
+	}
 	return query, nil
+}
+
+func validateKeywordGovernance(query Query) error {
+	if query.Keyword == "" {
+		return nil
+	}
+	if len([]rune(query.Keyword)) < 2 {
+		return fmt.Errorf("keyword must contain at least 2 characters")
+	}
+	if query.EndTime.Sub(query.StartTime) <= 3*24*time.Hour {
+		return nil
+	}
+	if query.HostName != "" || query.EventType != "" || query.Username != "" || query.LoginUsername != "" || query.ExecUsername != "" || query.Namespace != "" || query.PodName != "" || query.FilePath != "" || query.DstIP != "" || query.Tag != "" {
+		return nil
+	}
+	return fmt.Errorf("keyword search over more than 3 days requires host, user, event, namespace, file, network, or tag filter")
 }
 
 // parseCSV 解析 parse CSV 并返回结构化结果。

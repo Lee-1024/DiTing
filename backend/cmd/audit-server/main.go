@@ -305,7 +305,8 @@ func main() {
 		fmt.Fprintf(os.Stderr, "redis response cache: %v\n", err)
 		os.Exit(1)
 	}
-	slog.Info("redis response cache enabled", "addr", cfg.Redis.Addr, "db", cfg.Redis.DB, "ttl_seconds", int(responseCacheTTL.Seconds()))
+	hostProfileCacheTTL := hostProfileCacheTTL(cfg.Redis)
+	slog.Info("redis response cache enabled", "addr", cfg.Redis.Addr, "db", cfg.Redis.DB, "ttl_seconds", int(responseCacheTTL.Seconds()), "host_profile_ttl_seconds", int(hostProfileCacheTTL.Seconds()))
 
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
 	slog.Info("api server listening", "addr", addr)
@@ -324,6 +325,9 @@ func main() {
 		server.WithCollectorToken(cfg.Collector.Token),
 		server.WithEnforcementRepository(enforcementRepository),
 		server.WithResponseCache(responseCache, responseCacheTTL),
+		server.WithResponseCacheTTL("stats.hosts", hostProfileCacheTTL),
+		server.WithResponseCacheTTL("stats.hosts.users", hostProfileCacheTTL),
+		server.WithResponseCacheTTL("stats.hosts.behavior", hostProfileCacheTTL),
 	)); err != nil {
 		slog.Error("api server stopped with error", "addr", addr, "error", err)
 		fmt.Fprintf(os.Stderr, "listen: %v\n", err)

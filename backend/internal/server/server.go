@@ -26,6 +26,8 @@ type routerOptions struct {
 	enforcementRepository enforcement.Repository
 	responseCache         cache.Cache
 	responseCacheTTL      time.Duration
+	responseCacheTTLs     map[string]time.Duration
+	responseCacheFlights  *cache.Singleflight
 }
 
 type RouterOption func(*routerOptions)
@@ -56,6 +58,17 @@ func WithResponseCache(store cache.Cache, ttl time.Duration) RouterOption {
 	return func(options *routerOptions) {
 		options.responseCache = store
 		options.responseCacheTTL = ttl
+		options.responseCacheFlights = cache.NewSingleflight()
+	}
+}
+
+// WithResponseCacheTTL 为指定缓存命名空间配置独立 TTL。
+func WithResponseCacheTTL(namespace string, ttl time.Duration) RouterOption {
+	return func(options *routerOptions) {
+		if options.responseCacheTTLs == nil {
+			options.responseCacheTTLs = map[string]time.Duration{}
+		}
+		options.responseCacheTTLs[namespace] = ttl
 	}
 }
 
@@ -344,7 +357,14 @@ func NewRouter(repository audit.Repository, ruleRepository rule.Repository, stat
 }
 
 func cached(options routerOptions, namespace string, handler http.Handler) http.Handler {
-	return responseCache(options.responseCache, namespace, options.responseCacheTTL)(handler)
+	return responseCache(options.responseCache, options.responseCacheFlights, namespace, cacheTTL(options, namespace))(handler)
+}
+
+func cacheTTL(options routerOptions, namespace string) time.Duration {
+	if ttl, ok := options.responseCacheTTLs[namespace]; ok {
+		return ttl
+	}
+	return options.responseCacheTTL
 }
 
 // loggingMiddleware 处理 logging Middleware 相关逻辑。

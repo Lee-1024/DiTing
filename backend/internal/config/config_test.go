@@ -50,4 +50,7 @@ func TestLoadReadsServerAndDatabaseConfig(t *testing.T) {
 	if cfg.Redis.ResponseCacheTTLSeconds != 15 {
 		t.Fatalf("expected redis response cache ttl 15, got %d", cfg.Redis.ResponseCacheTTLSeconds)
 	}
+	if cfg.Redis.HostProfileCacheTTLSeconds != 300 {
+		t.Fatalf("expected host profile cache ttl 300, got %d", cfg.Redis.HostProfileCacheTTLSeconds)
+	}
 }

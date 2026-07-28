@@ -26,6 +26,7 @@ redis:
   password: ""
   db: 0
   response_cache_ttl_seconds: 15
+  host_profile_cache_ttl_seconds: 300
 
 collector:
   input_mode: file

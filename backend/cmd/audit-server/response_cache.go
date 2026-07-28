@@ -32,3 +32,10 @@ func responseCacheTTL(cfg config.RedisConfig) time.Duration {
 	}
 	return time.Duration(cfg.ResponseCacheTTLSeconds) * time.Second
 }
+
+func hostProfileCacheTTL(cfg config.RedisConfig) time.Duration {
+	if cfg.HostProfileCacheTTLSeconds <= 0 {
+		return 5 * time.Minute
+	}
+	return time.Duration(cfg.HostProfileCacheTTLSeconds) * time.Second
+}

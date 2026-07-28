@@ -35,8 +35,44 @@ func TestParseQueryCapsPageSizeAt500(t *testing.T) {
 		t.Fatalf("ParseQuery returned error: %v", err)
 	}
 
-	if query.PageSize != 500 {
-		t.Fatalf("expected page size capped at 500, got %d", query.PageSize)
+	if query.PageSize != 100 {
+		t.Fatalf("expected page size capped at 100, got %d", query.PageSize)
+	}
+}
+
+func TestParseQueryRejectsDeepPagination(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/audit/events?page=101&page_size=100", nil)
+
+	_, err := ParseQuery(req)
+	if err == nil {
+		t.Fatal("expected deep pagination to be rejected")
+	}
+	if !strings.Contains(err.Error(), "deep pagination") {
+		t.Fatalf("expected deep pagination error, got %v", err)
+	}
+}
+
+func TestParseQueryRejectsBroadKeywordSearch(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/audit/events?start_time=2026-07-01T00:00:00Z&end_time=2026-07-10T00:00:00Z&keyword=wget", nil)
+
+	_, err := ParseQuery(req)
+	if err == nil {
+		t.Fatal("expected broad keyword search to be rejected")
+	}
+	if !strings.Contains(err.Error(), "keyword") {
+		t.Fatalf("expected keyword governance error, got %v", err)
+	}
+}
+
+func TestParseQueryAllowsKeywordSearchWithHostFilter(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/audit/events?start_time=2026-07-01T00:00:00Z&end_time=2026-07-10T00:00:00Z&keyword=wget&host_name=host-001", nil)
+
+	query, err := ParseQuery(req)
+	if err != nil {
+		t.Fatalf("expected host-scoped keyword search to pass, got %v", err)
+	}
+	if query.Keyword != "wget" || query.HostName != "host-001" {
+		t.Fatalf("unexpected query %#v", query)
 	}
 }
 

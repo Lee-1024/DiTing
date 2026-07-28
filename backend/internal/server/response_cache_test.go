@@ -5,6 +5,8 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -14,7 +16,7 @@ import (
 func TestResponseCacheServesRepeatedGETFromCache(t *testing.T) {
 	store := cache.NewMemory()
 	calls := 0
-	handler := responseCache(store, "test", time.Minute)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := responseCache(store, cache.NewSingleflight(), "test", time.Minute)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls++
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"calls":` + strconv.Itoa(calls) + `}`))
@@ -41,7 +43,7 @@ func TestResponseCacheServesRepeatedGETFromCache(t *testing.T) {
 func TestResponseCacheDoesNotCacheNonGET(t *testing.T) {
 	store := cache.NewMemory()
 	calls := 0
-	handler := responseCache(store, "test", time.Minute)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := responseCache(store, cache.NewSingleflight(), "test", time.Minute)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls++
 		_, _ = w.Write([]byte("call"))
 	}))
@@ -58,7 +60,7 @@ func TestResponseCacheDoesNotCacheNonGET(t *testing.T) {
 func TestResponseCacheDoesNotStoreErrors(t *testing.T) {
 	store := cache.NewMemory()
 	calls := 0
-	handler := responseCache(store, "test", time.Minute)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := responseCache(store, cache.NewSingleflight(), "test", time.Minute)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls++
 		http.Error(w, "failed", http.StatusInternalServerError)
 	}))
@@ -69,5 +71,48 @@ func TestResponseCacheDoesNotStoreErrors(t *testing.T) {
 
 	if calls != 2 {
 		t.Fatalf("expected error responses to bypass cache storage, got %d calls", calls)
+	}
+}
+
+func TestCacheTTLUsesNamespaceOverride(t *testing.T) {
+	options := routerOptions{
+		responseCacheTTL: 15 * time.Second,
+		responseCacheTTLs: map[string]time.Duration{
+			"stats.hosts.behavior": 5 * time.Minute,
+		},
+	}
+	if got := cacheTTL(options, "stats.hosts.behavior"); got != 5*time.Minute {
+		t.Fatalf("expected namespace ttl override, got %v", got)
+	}
+	if got := cacheTTL(options, "stats.overview"); got != 15*time.Second {
+		t.Fatalf("expected default ttl, got %v", got)
+	}
+}
+
+func TestResponseCacheSuppressesConcurrentMisses(t *testing.T) {
+	store := cache.NewMemory()
+	var calls int32
+	start := make(chan struct{})
+	handler := responseCache(store, cache.NewSingleflight(), "test", time.Minute)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&calls, 1)
+		<-start
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/stats/hosts?host_name=host-1", nil)
+	var wg sync.WaitGroup
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			handler.ServeHTTP(httptest.NewRecorder(), req)
+		}()
+	}
+	time.Sleep(50 * time.Millisecond)
+	close(start)
+	wg.Wait()
+
+	if got := atomic.LoadInt32(&calls); got != 1 {
+		t.Fatalf("expected single backend call for concurrent cache miss, got %d", got)
 	}
 }

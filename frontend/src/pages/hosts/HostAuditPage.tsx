@@ -32,6 +32,8 @@ export default function HostAuditPage() {
   const [items, setItems] = useState<HostAuditItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [riskLoading, setRiskLoading] = useState(false);
+  const [timelineLoading, setTimelineLoading] = useState(false);
   const [selected, setSelected] = useState<HostAuditItem>();
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [riskEvents, setRiskEvents] = useState<AuditEvent[]>([]);
@@ -48,6 +50,9 @@ export default function HostAuditPage() {
   const [detailPage, setDetailPage] = useState(1);
   const [detailPageSize, setDetailPageSize] = useState(10);
   const [detailTotal, setDetailTotal] = useState(0);
+  const [commandsLoaded, setCommandsLoaded] = useState(false);
+  const [riskLoaded, setRiskLoaded] = useState(false);
+  const [timelineLoaded, setTimelineLoaded] = useState(false);
   const [tablePageSize, setTablePageSize] = useState(10);
   const [form] = Form.useForm();
 
@@ -108,35 +113,21 @@ export default function HostAuditPage() {
         host_name: hostName,
         limit: 20,
       };
-      const [data, riskData, timelineData, usersData, behaviorData] = await Promise.all([
-        queryAuditEvents({
-          ...baseQuery,
-          page_size: detailPageSize,
-        }),
-        queryAuditEvents({
-          ...baseQuery,
-          severity_in: 'high,critical',
-          page_size: 10,
-        }),
-        queryAuditEvents({
-          start_time: baseQuery.start_time,
-          end_time: baseQuery.end_time,
-          host_name: hostName,
-          severity_in: 'medium,high,critical',
-          page: 1,
-          page_size: 12,
-        }),
+      const [usersData, behaviorData] = await Promise.all([
         getHostUsers(hostUserQuery),
         getHostBehavior(hostUserQuery),
       ]);
-      setEvents(data.items ?? []);
-      setDetailPage(data.page);
-      setDetailTotal(data.total);
-      setRiskEvents(riskData.items ?? []);
-      setRiskTimeline(timelineData.items ?? []);
+      setEvents([]);
+      setRiskEvents([]);
+      setRiskTimeline([]);
+      setDetailPage(1);
+      setDetailTotal(0);
       setHostUsers(usersData ?? []);
       setHostBehavior(behaviorData ?? emptyBehavior);
       setDetailFilters({});
+      setCommandsLoaded(false);
+      setRiskLoaded(false);
+      setTimelineLoaded(false);
     } finally {
       setDetailLoading(false);
     }
@@ -163,8 +154,50 @@ export default function HostAuditPage() {
       setDetailPage(data.page);
       setDetailPageSize(nextPageSize);
       setDetailTotal(data.total);
+      setCommandsLoaded(true);
     } finally {
       setDetailLoading(false);
+    }
+  }
+
+  async function loadRiskEvents(item: HostAuditItem) {
+    const values = form.getFieldsValue();
+    const range = values.timeRange ?? defaultRange;
+    setRiskLoading(true);
+    try {
+      const data = await queryAuditEvents({
+        start_time: range?.[0]?.startOf('day').toISOString(),
+        end_time: range?.[1]?.endOf('day').toISOString(),
+        event_type: 'process_exec',
+        host_name: item.hostId || item.nodeName || item.hostName,
+        severity_in: 'high,critical',
+        page: 1,
+        page_size: 10,
+      });
+      setRiskEvents(data.items ?? []);
+      setRiskLoaded(true);
+    } finally {
+      setRiskLoading(false);
+    }
+  }
+
+  async function loadRiskTimeline(item: HostAuditItem) {
+    const values = form.getFieldsValue();
+    const range = values.timeRange ?? defaultRange;
+    setTimelineLoading(true);
+    try {
+      const data = await queryAuditEvents({
+        start_time: range?.[0]?.startOf('day').toISOString(),
+        end_time: range?.[1]?.endOf('day').toISOString(),
+        host_name: item.hostId || item.nodeName || item.hostName,
+        severity_in: 'medium,high,critical',
+        page: 1,
+        page_size: 12,
+      });
+      setRiskTimeline(data.items ?? []);
+      setTimelineLoaded(true);
+    } finally {
+      setTimelineLoading(false);
     }
   }
 
@@ -337,6 +370,9 @@ export default function HostAuditPage() {
           setDetailFilters({});
           setDetailPage(1);
           setDetailTotal(0);
+          setCommandsLoaded(false);
+          setRiskLoaded(false);
+          setTimelineLoaded(false);
         }}
       >
         {selected && (
@@ -366,23 +402,33 @@ export default function HostAuditPage() {
                 <Card className="stat-card stat-card-danger" size="small"><Statistic title="高危事件" value={selected.highRiskEvents} /></Card>
               </Col>
             </Row>
-            <Typography.Title level={5}>高危命令</Typography.Title>
+            <div className="section-heading">
+              <Typography.Title level={5}>高危命令</Typography.Title>
+              <Button size="small" onClick={() => void loadRiskEvents(selected)} loading={riskLoading}>
+                {riskLoaded ? '刷新' : '加载'}
+              </Button>
+            </div>
             <Table
               rowKey="eventId"
               size="small"
-              loading={detailLoading}
+              loading={riskLoading}
               dataSource={riskEvents}
-              locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无高危命令" /> }}
+              locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={riskLoaded ? '暂无高危命令' : '点击加载高危命令'} /> }}
               pagination={false}
               columns={commandColumns()}
             />
-            <Typography.Title level={5}>最近风险时间线</Typography.Title>
+            <div className="section-heading">
+              <Typography.Title level={5}>最近风险时间线</Typography.Title>
+              <Button size="small" onClick={() => void loadRiskTimeline(selected)} loading={timelineLoading}>
+                {timelineLoaded ? '刷新' : '加载'}
+              </Button>
+            </div>
             <Table
               rowKey="eventId"
               size="small"
-              loading={detailLoading}
+              loading={timelineLoading}
               dataSource={riskTimeline}
-              locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无风险事件" /> }}
+              locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={timelineLoaded ? '暂无风险事件' : '点击加载风险时间线'} /> }}
               pagination={false}
               scroll={{ x: 1280 }}
               columns={riskTimelineColumns()}
@@ -510,7 +556,7 @@ export default function HostAuditPage() {
                 onChange={(value) => setDetailFilters((current) => ({ ...current, severity: value }))}
                 options={severityOptions}
               />
-              <Button type="primary" onClick={() => selected && void loadDetailEvents(selected, detailFilters, 1, detailPageSize)}>查询</Button>
+              <Button type="primary" onClick={() => selected && void loadDetailEvents(selected, detailFilters, 1, detailPageSize)}>{commandsLoaded ? '查询' : '加载明细'}</Button>
               <Button onClick={() => {
                 setDetailFilters({});
                 if (selected) {
@@ -526,7 +572,7 @@ export default function HostAuditPage() {
           size="small"
           loading={detailLoading}
           dataSource={events}
-          locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无命令明细" /> }}
+          locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={commandsLoaded ? '暂无命令明细' : '点击加载命令明细'} /> }}
           pagination={{
             current: detailPage,
             pageSize: detailPageSize,

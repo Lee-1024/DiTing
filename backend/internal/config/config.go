@@ -44,11 +44,12 @@ type ClickHouseConfig struct {
 }
 
 type RedisConfig struct {
-	Enabled                 bool
-	Addr                    string
-	Password                string
-	DB                      int
-	ResponseCacheTTLSeconds int
+	Enabled                    bool
+	Addr                       string
+	Password                   string
+	DB                         int
+	ResponseCacheTTLSeconds    int
+	HostProfileCacheTTLSeconds int
 }
 
 type CollectorConfig struct {
@@ -162,6 +163,8 @@ func assignValue(cfg *Config, section, key, value string) error {
 			cfg.Redis.DB = mustInt(key, value)
 		case "response_cache_ttl_seconds":
 			cfg.Redis.ResponseCacheTTLSeconds = mustInt(key, value)
+		case "host_profile_cache_ttl_seconds":
+			cfg.Redis.HostProfileCacheTTLSeconds = mustInt(key, value)
 		}
 	case "collector":
 		switch key {

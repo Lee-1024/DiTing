@@ -43,4 +43,13 @@ func TestResponseCacheTTLDefault(t *testing.T) {
 	}
 }
 
+func TestHostProfileCacheTTLDefault(t *testing.T) {
+	if got := hostProfileCacheTTL(config.RedisConfig{}); got != 5*time.Minute {
+		t.Fatalf("expected default host profile ttl 5m, got %s", got)
+	}
+	if got := hostProfileCacheTTL(config.RedisConfig{HostProfileCacheTTLSeconds: 120}); got != 2*time.Minute {
+		t.Fatalf("expected host profile ttl 2m, got %s", got)
+	}
+}
+
 var _ cache.Cache
