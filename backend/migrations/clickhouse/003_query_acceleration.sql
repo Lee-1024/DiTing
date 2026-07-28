@@ -42,17 +42,28 @@ CREATE MATERIALIZED VIEW IF NOT EXISTS diting.mv_audit_host_stats_hourly
 TO diting.audit_host_stats_hourly
 AS
 SELECT
-    toStartOfHour(event_time) AS hour,
-    if(host_id != '', host_id, if(node_name != '', node_name, host_name)) AS host_key,
-    anyLast(host_name) AS host_name,
-    anyLast(node_name) AS node_name,
+    hour,
+    host_key,
+    anyLast(raw_host_name) AS host_name,
+    anyLast(raw_node_name) AS node_name,
     countState() AS command_count,
-    uniqState(if(login_username != '', login_username, username)) AS active_users,
-    countIfState(severity IN ('high', 'critical')) AS high_risk_events,
+    uniqState(audit_user) AS active_users,
+    countIfState(is_high_risk) AS high_risk_events,
     minState(event_time) AS first_seen,
     maxState(event_time) AS last_seen
-FROM diting.audit_events
-WHERE event_type = 'process_exec'
+FROM
+(
+    SELECT
+        toStartOfHour(event_time) AS hour,
+        if(host_id != '', host_id, if(node_name != '', node_name, host_name)) AS host_key,
+        host_name AS raw_host_name,
+        node_name AS raw_node_name,
+        if(login_username != '', login_username, username) AS audit_user,
+        severity IN ('high', 'critical') AS is_high_risk,
+        event_time
+    FROM diting.audit_events
+    WHERE event_type = 'process_exec'
+)
 GROUP BY hour, host_key;
 
 CREATE TABLE IF NOT EXISTS diting.audit_user_stats_hourly
