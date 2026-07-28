@@ -18,6 +18,7 @@ func TestQueryAccelerationMigrationDefinesAggregateTables(t *testing.T) {
 		"audit_user_stats_hourly",
 		"audit_command_stats_hourly",
 		"audit_rule_hit_stats_hourly",
+		"audit_operation_groups_hourly",
 		"audit_host_behavior_hourly",
 		"CREATE MATERIALIZED VIEW IF NOT EXISTS diting.mv_audit_overview_hourly",
 		"AggregatingMergeTree",
@@ -45,6 +46,29 @@ func TestQueryAccelerationMigrationAvoidsHostAliasSubstitution(t *testing.T) {
 	} {
 		if !strings.Contains(sql, expected) {
 			t.Fatalf("expected host stats view to contain %q", expected)
+		}
+	}
+}
+
+func TestQueryAccelerationMigrationBackfillsOperationGroups(t *testing.T) {
+	data, err := os.ReadFile("../../migrations/clickhouse/003_query_acceleration.sql")
+	if err != nil {
+		t.Fatalf("read migration: %v", err)
+	}
+	sql := string(data)
+	for _, expected := range []string{
+		"CREATE MATERIALIZED VIEW IF NOT EXISTS diting.mv_audit_operation_groups_hourly",
+		"TRUNCATE TABLE IF EXISTS diting.audit_operation_groups_hourly",
+		"INSERT INTO diting.audit_operation_groups_hourly",
+		"host_name AS raw_host_name",
+		"node_name AS raw_node_name",
+		"anyLast(raw_host_name) AS host_name",
+		"anyLast(raw_node_name) AS node_name",
+		"WHERE event_time >= now() - INTERVAL 31 DAY",
+		"GROUP BY hour, event_second, audit_host_key",
+	} {
+		if !strings.Contains(sql, expected) {
+			t.Fatalf("expected operation group backfill to contain %q", expected)
 		}
 	}
 }

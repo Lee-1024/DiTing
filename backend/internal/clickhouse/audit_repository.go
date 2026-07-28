@@ -157,6 +157,14 @@ func auditTable(database string) string {
 	return table
 }
 
+func auditOperationGroupsTable(database string) string {
+	table := "audit_operation_groups_hourly"
+	if database != "" {
+		table = database + "." + table
+	}
+	return table
+}
+
 // buildListEventsSQL 构建 build List Events SQL 所需的数据或表达式。
 func buildListEventsSQL(database string, query audit.Query) string {
 	table := auditTable(database)
@@ -216,61 +224,124 @@ func buildListOperationsSQL(database string, query audit.Query) string {
 	if query.Page > 1 {
 		offset = (query.Page - 1) * limit
 	}
+	where, having := buildOperationGroupFilters(query)
+	havingSQL := ""
+	if having != "" {
+		havingSQL = "\nHAVING " + having
+	}
 	return fmt.Sprintf(`SELECT
 	toString(cityHash64(toString(event_second), audit_host_key, namespace, pod_name, login_username, username, process_name, cmdline)) AS group_id,
-	argMax(event_id, event_time) AS representative_event_id,
-	argMax(event_time, event_time) AS representative_event_time,
-	argMax(event_type, event_time) AS representative_event_type,
-	argMax(severity, event_time) AS representative_severity,
-	argMax(host_name, event_time) AS representative_host_name,
-	argMax(host_id, event_time) AS representative_host_id,
-	argMax(node_name, event_time) AS representative_node_name,
-	argMax(namespace, event_time) AS representative_namespace,
-	argMax(pod_name, event_time) AS representative_pod_name,
-	argMax(username, event_time) AS representative_username,
-	argMax(login_username, event_time) AS representative_login_username,
-	argMax(process_name, event_time) AS representative_process_name,
-	argMax(cmdline, event_time) AS representative_cmdline,
-	count() AS event_count,
-	groupUniqArray(event_type) AS event_types,
-	groupUniqArrayIf(file_path, file_path != '') AS file_paths,
-	arrayDistinct(arrayFlatten(groupArray(tags))) AS tags,
-	arrayElement(['info', 'low', 'medium', 'high', 'critical'], max(indexOf(['info', 'low', 'medium', 'high', 'critical'], severity))) AS max_severity,
-	min(event_time) AS first_seen,
-	max(event_time) AS last_seen
-FROM
-(
-	SELECT
-		toStartOfSecond(event_time) AS event_second,
-		if(host_id != '', host_id, if(node_name != '', node_name, host_name)) AS audit_host_key,
-		%s
-	FROM %s
-	WHERE %s
-)
+	argMaxMerge(representative_event_id) AS representative_event_id,
+	argMaxMerge(representative_event_time) AS representative_event_time,
+	argMaxMerge(representative_event_type) AS representative_event_type,
+	argMaxMerge(representative_severity) AS representative_severity,
+	anyLast(host_name) AS representative_host_name,
+	anyLast(host_id) AS representative_host_id,
+	anyLast(node_name) AS representative_node_name,
+	namespace AS representative_namespace,
+	pod_name AS representative_pod_name,
+	username AS representative_username,
+	login_username AS representative_login_username,
+	process_name AS representative_process_name,
+	cmdline AS representative_cmdline,
+	sumMerge(event_count) AS event_count,
+	groupUniqArrayMerge(event_types) AS event_types,
+	groupUniqArrayMerge(severities) AS severities,
+	groupUniqArrayMerge(file_paths) AS file_paths,
+	argMaxMerge(representative_tags) AS tags,
+	arrayElement(['info', 'low', 'medium', 'high', 'critical'], maxMerge(max_severity_rank)) AS max_severity,
+	minMerge(first_seen) AS first_seen,
+	maxMerge(last_seen) AS last_seen
+FROM %s
+WHERE %s
 GROUP BY event_second, audit_host_key, namespace, pod_name, login_username, username, process_name, cmdline
+%s
 ORDER BY last_seen DESC
 LIMIT %d OFFSET %d
-FORMAT JSONEachRow`, auditEventListSelectFields(), auditTable(database), buildAuditWhere(query), fetchLimit, offset)
+FORMAT JSONEachRow`, auditOperationGroupsTable(database), where, havingSQL, fetchLimit, offset)
 }
 
 func buildCountOperationsSQL(database string, query audit.Query) string {
+	where, having := buildOperationGroupFilters(query)
+	havingSQL := ""
+	if having != "" {
+		havingSQL = "\nHAVING " + having
+	}
 	return fmt.Sprintf(`SELECT count() AS total
 FROM
 (
 	SELECT
-		toStartOfSecond(event_time) AS event_second,
-		if(host_id != '', host_id, if(node_name != '', node_name, host_name)) AS audit_host_key,
+		event_second,
+		audit_host_key,
 		namespace,
 		pod_name,
 		login_username,
 		username,
 		process_name,
-		cmdline
+		cmdline,
+		groupUniqArrayMerge(event_types) AS event_types,
+		groupUniqArrayMerge(severities) AS severities,
+		argMaxMerge(representative_tags) AS tags
 	FROM %s
 	WHERE %s
 	GROUP BY event_second, audit_host_key, namespace, pod_name, login_username, username, process_name, cmdline
+	%s
 )
-FORMAT JSONEachRow`, auditTable(database), buildAuditWhere(query))
+FORMAT JSONEachRow`, auditOperationGroupsTable(database), where, havingSQL)
+}
+
+func buildOperationGroupFilters(query audit.Query) (string, string) {
+	where := []string{
+		fmt.Sprintf("hour >= parseDateTimeBestEffort('%s')", query.StartTime.Format(time.RFC3339)),
+		fmt.Sprintf("hour <= parseDateTimeBestEffort('%s')", query.EndTime.Format(time.RFC3339)),
+		fmt.Sprintf("event_second >= parseDateTimeBestEffort('%s')", query.StartTime.Format(time.RFC3339)),
+		fmt.Sprintf("event_second <= parseDateTimeBestEffort('%s')", query.EndTime.Format(time.RFC3339)),
+	}
+	having := []string{}
+	if query.EventType != "" {
+		having = append(having, "has(event_types, '"+escapeSQL(query.EventType)+"')")
+	}
+	if query.Severity != "" {
+		having = append(having, "has(severities, '"+escapeSQL(query.Severity)+"')")
+	}
+	if len(query.SeverityIn) > 0 {
+		values := make([]string, 0, len(query.SeverityIn))
+		for _, severity := range query.SeverityIn {
+			values = append(values, "'"+escapeSQL(severity)+"'")
+		}
+		having = append(having, "arrayExists(severity -> has(["+strings.Join(values, ", ")+"], severity), severities)")
+	}
+	if query.HostName != "" {
+		hostName := escapeSQL(query.HostName)
+		where = append(where, "(audit_host_key = '"+hostName+"' OR node_name = '"+hostName+"' OR host_name = '"+hostName+"')")
+	}
+	if query.Namespace != "" {
+		where = append(where, "namespace = '"+escapeSQL(query.Namespace)+"'")
+	}
+	if query.PodName != "" {
+		where = append(where, "pod_name = '"+escapeSQL(query.PodName)+"'")
+	}
+	if query.Username != "" {
+		username := escapeSQL(query.Username)
+		where = append(where, "(username = '"+username+"' OR login_username = '"+username+"')")
+	}
+	if query.LoginUsername != "" {
+		where = append(where, "login_username = '"+escapeSQL(query.LoginUsername)+"'")
+	}
+	if query.ExecUsername != "" {
+		where = append(where, "username = '"+escapeSQL(query.ExecUsername)+"'")
+	}
+	if query.Cmdline != "" {
+		where = append(where, "cmdline = '"+escapeSQL(query.Cmdline)+"'")
+	}
+	if query.Tag != "" {
+		having = append(having, "has(tags, '"+escapeSQL(query.Tag)+"')")
+	}
+	if query.Keyword != "" {
+		keyword := escapeSQL(query.Keyword)
+		where = append(where, "(positionCaseInsensitive(cmdline, '"+keyword+"') > 0 OR positionCaseInsensitive(process_name, '"+keyword+"') > 0 OR positionCaseInsensitive(username, '"+keyword+"') > 0 OR positionCaseInsensitive(login_username, '"+keyword+"') > 0 OR positionCaseInsensitive(host_name, '"+keyword+"') > 0 OR positionCaseInsensitive(node_name, '"+keyword+"') > 0)")
+	}
+	return strings.Join(where, " AND "), strings.Join(having, " AND ")
 }
 
 // buildAuditWhere 构建 build Audit Where 所需的数据或表达式。

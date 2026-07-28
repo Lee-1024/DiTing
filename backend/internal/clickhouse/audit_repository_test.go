@@ -136,19 +136,23 @@ func TestAuditRepositoryQueriesOperationGroups(t *testing.T) {
 	}
 
 	for _, expected := range []string{
-		"GROUP BY event_second",
+		"FROM diting.audit_operation_groups_hourly",
 		"audit_host_key",
 		"login_username",
 		"username",
 		"process_name",
 		"cmdline",
-		"argMax(event_id, event_time)",
+		"argMaxMerge(representative_event_id)",
+		"sumMerge(event_count)",
 		"LIMIT 11 OFFSET 0",
-		"(host_id = 'host-1' OR node_name = 'host-1' OR host_name = 'host-1')",
+		"(audit_host_key = 'host-1' OR node_name = 'host-1' OR host_name = 'host-1')",
 	} {
 		if !strings.Contains(body, expected) {
 			t.Fatalf("expected %q in operation query, got %s", expected, body)
 		}
+	}
+	if strings.Contains(body, "FROM diting.audit_events") {
+		t.Fatalf("expected operation query to avoid raw audit_events grouping, got %s", body)
 	}
 	if total != 0 || hasMore {
 		t.Fatalf("expected no total and no extra page, got total=%d hasMore=%v", total, hasMore)

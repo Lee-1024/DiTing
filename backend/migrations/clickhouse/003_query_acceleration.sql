@@ -161,6 +161,144 @@ FROM diting.audit_events
 WHERE length(rule_names) > 0
 GROUP BY hour, rule_name;
 
+CREATE TABLE IF NOT EXISTS diting.audit_operation_groups_hourly
+(
+    hour DateTime,
+    event_second DateTime,
+    audit_host_key String,
+    namespace String,
+    pod_name String,
+    login_username String,
+    username String,
+    process_name String,
+    cmdline String,
+    host_name String,
+    host_id String,
+    node_name String,
+    representative_event_id AggregateFunction(argMax, String, DateTime64(3)),
+    representative_event_time AggregateFunction(argMax, DateTime64(3), DateTime64(3)),
+    representative_event_type AggregateFunction(argMax, String, DateTime64(3)),
+    representative_severity AggregateFunction(argMax, String, DateTime64(3)),
+    representative_tags AggregateFunction(argMax, Array(String), DateTime64(3)),
+    event_count AggregateFunction(sum, UInt64),
+    event_types AggregateFunction(groupUniqArray, String),
+    severities AggregateFunction(groupUniqArray, String),
+    file_paths AggregateFunction(groupUniqArray, String),
+    max_severity_rank AggregateFunction(max, UInt8),
+    first_seen AggregateFunction(min, DateTime64(3)),
+    last_seen AggregateFunction(max, DateTime64(3))
+)
+ENGINE = AggregatingMergeTree
+PARTITION BY toYYYYMM(hour)
+ORDER BY (hour, event_second, audit_host_key, namespace, pod_name, login_username, username, process_name, cityHash64(cmdline));
+
+CREATE MATERIALIZED VIEW IF NOT EXISTS diting.mv_audit_operation_groups_hourly
+TO diting.audit_operation_groups_hourly
+AS
+SELECT
+    hour,
+    event_second,
+    audit_host_key,
+    namespace,
+    pod_name,
+    login_username,
+    username,
+    process_name,
+    cmdline,
+    anyLast(raw_host_name) AS host_name,
+    anyLast(raw_host_id) AS host_id,
+    anyLast(raw_node_name) AS node_name,
+    argMaxState(event_id, event_time) AS representative_event_id,
+    argMaxState(event_time, event_time) AS representative_event_time,
+    argMaxState(event_type, event_time) AS representative_event_type,
+    argMaxState(severity, event_time) AS representative_severity,
+    argMaxState(tags, event_time) AS representative_tags,
+    sumState(toUInt64(1)) AS event_count,
+    groupUniqArrayState(event_type) AS event_types,
+    groupUniqArrayState(severity) AS severities,
+    groupUniqArrayStateIf(file_path, file_path != '') AS file_paths,
+    maxState(toUInt8(indexOf(['info', 'low', 'medium', 'high', 'critical'], severity))) AS max_severity_rank,
+    minState(event_time) AS first_seen,
+    maxState(event_time) AS last_seen
+FROM
+(
+    SELECT
+        toStartOfHour(event_time) AS hour,
+        toStartOfSecond(event_time) AS event_second,
+        if(host_id != '', host_id, if(node_name != '', node_name, host_name)) AS audit_host_key,
+        namespace,
+        pod_name,
+        login_username,
+        username,
+        process_name,
+        cmdline,
+        host_name AS raw_host_name,
+        host_id AS raw_host_id,
+        node_name AS raw_node_name,
+        event_id,
+        event_time,
+        event_type,
+        severity,
+        tags,
+        file_path
+    FROM diting.audit_events
+)
+GROUP BY hour, event_second, audit_host_key, namespace, pod_name, login_username, username, process_name, cmdline;
+
+TRUNCATE TABLE IF EXISTS diting.audit_operation_groups_hourly;
+
+INSERT INTO diting.audit_operation_groups_hourly
+SELECT
+    hour,
+    event_second,
+    audit_host_key,
+    namespace,
+    pod_name,
+    login_username,
+    username,
+    process_name,
+    cmdline,
+    anyLast(raw_host_name) AS host_name,
+    anyLast(raw_host_id) AS host_id,
+    anyLast(raw_node_name) AS node_name,
+    argMaxState(event_id, event_time) AS representative_event_id,
+    argMaxState(event_time, event_time) AS representative_event_time,
+    argMaxState(event_type, event_time) AS representative_event_type,
+    argMaxState(severity, event_time) AS representative_severity,
+    argMaxState(tags, event_time) AS representative_tags,
+    sumState(toUInt64(1)) AS event_count,
+    groupUniqArrayState(event_type) AS event_types,
+    groupUniqArrayState(severity) AS severities,
+    groupUniqArrayStateIf(file_path, file_path != '') AS file_paths,
+    maxState(toUInt8(indexOf(['info', 'low', 'medium', 'high', 'critical'], severity))) AS max_severity_rank,
+    minState(event_time) AS first_seen,
+    maxState(event_time) AS last_seen
+FROM
+(
+    SELECT
+        toStartOfHour(event_time) AS hour,
+        toStartOfSecond(event_time) AS event_second,
+        if(host_id != '', host_id, if(node_name != '', node_name, host_name)) AS audit_host_key,
+        namespace,
+        pod_name,
+        login_username,
+        username,
+        process_name,
+        cmdline,
+        host_name AS raw_host_name,
+        host_id AS raw_host_id,
+        node_name AS raw_node_name,
+        event_id,
+        event_time,
+        event_type,
+        severity,
+        tags,
+        file_path
+    FROM diting.audit_events
+    WHERE event_time >= now() - INTERVAL 31 DAY
+)
+GROUP BY hour, event_second, audit_host_key, namespace, pod_name, login_username, username, process_name, cmdline;
+
 CREATE TABLE IF NOT EXISTS diting.audit_host_behavior_hourly
 (
     hour DateTime,
