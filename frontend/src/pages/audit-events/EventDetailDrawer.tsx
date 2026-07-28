@@ -1,10 +1,11 @@
 import { Card, Descriptions, Drawer, Empty, Space, Spin, Table, Tabs, Tag, Typography, message } from 'antd';
+import dayjs from 'dayjs';
 import { useEffect, useState } from 'react';
-import { getAuditEvent } from '../../api/audit';
+import { getAuditEvent, queryAuditEvents } from '../../api/audit';
 import { InvestigationBrief } from '../../components/InsightHeader';
 import ProcessChain from '../../components/ProcessChain';
 import SeverityTag from '../../components/SeverityTag';
-import type { AuditEvent } from '../../types/audit';
+import type { AuditEvent, AuditEventQuery } from '../../types/audit';
 import { formatJSON } from '../../utils/format';
 import { displayHostIdentity } from '../../utils/hostDisplay';
 import { eventTypeLabel, ruleFieldLabel, ruleOperatorLabel } from '../../utils/labels';
@@ -22,6 +23,8 @@ interface Props {
 export default function EventDetailDrawer({ event, eventId, relatedEvents = [], open, onClose }: Props) {
   const [detail, setDetail] = useState<AuditEvent>();
   const [selectedInlineEvent, setSelectedInlineEvent] = useState<AuditEvent>();
+  const [autoRelatedEvents, setAutoRelatedEvents] = useState<AuditEvent[]>([]);
+  const [relatedLoading, setRelatedLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const selectedEventId = eventId || selectedInlineEvent?.eventId || event?.eventId;
 
@@ -56,6 +59,40 @@ export default function EventDetailDrawer({ event, eventId, relatedEvents = [], 
   }, [event, open, selectedEventId, selectedInlineEvent]);
 
   const current = detail || event;
+  const mergedRelatedEvents = current ? mergeRelatedEvents(current, relatedEvents, autoRelatedEvents) : relatedEvents;
+
+  useEffect(() => {
+    if (!open || !current?.eventId) {
+      setAutoRelatedEvents([]);
+      return;
+    }
+    const query = buildRelatedQuery(current);
+    if (!query) {
+      setAutoRelatedEvents([current]);
+      return;
+    }
+    let ignore = false;
+    setRelatedLoading(true);
+    queryAuditEvents(query)
+      .then((data) => {
+        if (!ignore) {
+          setAutoRelatedEvents(data.items || []);
+        }
+      })
+      .catch(() => {
+        if (!ignore) {
+          setAutoRelatedEvents([current]);
+        }
+      })
+      .finally(() => {
+        if (!ignore) {
+          setRelatedLoading(false);
+        }
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [current?.eventId, open]);
 
   return (
     <Drawer title={drawerTitle(current)} width={920} open={open} onClose={onClose} className="investigation-drawer">
@@ -75,7 +112,7 @@ export default function EventDetailDrawer({ event, eventId, relatedEvents = [], 
               { key: 'overview', label: '概览', children: <OverviewTab event={current} /> },
               { key: 'process', label: '进程与身份', children: <ProcessTab event={current} /> },
               { key: 'rules', label: '规则命中', children: <RulesTab event={current} /> },
-              { key: 'related', label: `关联事件 ${relatedEvents.length > 1 ? relatedEvents.length : ''}`, children: <RelatedTab current={current} relatedEvents={relatedEvents} onSelect={setSelectedInlineEvent} /> },
+              { key: 'related', label: `关联事件 ${mergedRelatedEvents.length > 1 ? mergedRelatedEvents.length : ''}`, children: <RelatedTab current={current} relatedEvents={mergedRelatedEvents} loading={relatedLoading} onSelect={setSelectedInlineEvent} /> },
               { key: 'raw', label: '原始数据', children: <pre className="detail-json">{formatJSON(current.rawEvent)}</pre> },
             ]}
           />
@@ -167,15 +204,16 @@ function RulesTab({ event }: { event: AuditEvent }) {
 }
 
 // RelatedTab 渲染同次操作事件。
-function RelatedTab({ current, relatedEvents, onSelect }: { current: AuditEvent; relatedEvents: AuditEvent[]; onSelect: (event: AuditEvent) => void }) {
+function RelatedTab({ current, relatedEvents, loading, onSelect }: { current: AuditEvent; relatedEvents: AuditEvent[]; loading: boolean; onSelect: (event: AuditEvent) => void }) {
   if (relatedEvents.length <= 1) {
-    return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无关联事件" />;
+    return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={loading ? '正在查找关联事件' : '同主机、相邻时间内暂无关联事件'} />;
   }
   return (
     <Table
       rowKey="eventId"
       size="small"
       pagination={false}
+      loading={loading}
       dataSource={relatedEvents}
       className="clickable-table"
       rowClassName={(record) => record.eventId === current.eventId ? 'ant-table-row-selected' : ''}
@@ -188,6 +226,41 @@ function RelatedTab({ current, relatedEvents, onSelect }: { current: AuditEvent;
       ]}
     />
   );
+}
+
+function buildRelatedQuery(event: AuditEvent): AuditEventQuery | undefined {
+  const eventAt = parseEventTime(event.eventTime);
+  const hostName = event.hostId || event.nodeName || event.hostName;
+  if (!eventAt.isValid() || !hostName) {
+    return undefined;
+  }
+  const query: AuditEventQuery = {
+    start_time: eventAt.subtract(3, 'second').toISOString(),
+    end_time: eventAt.add(3, 'second').toISOString(),
+    host_name: hostName,
+    page: 1,
+    page_size: 20,
+    include_total: false,
+  };
+  return query;
+}
+
+function parseEventTime(value?: string) {
+  if (!value) {
+    return dayjs('');
+  }
+  const normalized = /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(value) ? `${value.replace(' ', 'T')}Z` : value;
+  return dayjs(normalized);
+}
+
+function mergeRelatedEvents(current: AuditEvent, propRelated: AuditEvent[], autoRelated: AuditEvent[]) {
+  const merged = new Map<string, AuditEvent>();
+  [current, ...propRelated, ...autoRelated].forEach((item) => {
+    if (item?.eventId) {
+      merged.set(item.eventId, item);
+    }
+  });
+  return Array.from(merged.values()).sort((left, right) => parseEventTime(left.eventTime).valueOf() - parseEventTime(right.eventTime).valueOf());
 }
 
 // drawerTitle 生成抽屉标题。
