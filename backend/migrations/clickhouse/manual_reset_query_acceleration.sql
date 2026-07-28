@@ -1,3 +1,21 @@
+DROP VIEW IF EXISTS diting.mv_audit_host_behavior_event_type_hourly;
+DROP VIEW IF EXISTS diting.mv_audit_host_behavior_network_hourly;
+DROP VIEW IF EXISTS diting.mv_audit_host_behavior_file_hourly;
+DROP VIEW IF EXISTS diting.mv_audit_operation_groups_hourly;
+DROP VIEW IF EXISTS diting.mv_audit_rule_hit_stats_hourly;
+DROP VIEW IF EXISTS diting.mv_audit_command_stats_hourly;
+DROP VIEW IF EXISTS diting.mv_audit_user_stats_hourly;
+DROP VIEW IF EXISTS diting.mv_audit_host_stats_hourly;
+DROP VIEW IF EXISTS diting.mv_audit_overview_hourly;
+
+DROP TABLE IF EXISTS diting.audit_host_behavior_hourly;
+DROP TABLE IF EXISTS diting.audit_operation_groups_hourly;
+DROP TABLE IF EXISTS diting.audit_rule_hit_stats_hourly;
+DROP TABLE IF EXISTS diting.audit_command_stats_hourly;
+DROP TABLE IF EXISTS diting.audit_user_stats_hourly;
+DROP TABLE IF EXISTS diting.audit_host_stats_hourly;
+DROP TABLE IF EXISTS diting.audit_overview_hourly;
+
 CREATE TABLE IF NOT EXISTS diting.audit_overview_hourly
 (
     hour DateTime,

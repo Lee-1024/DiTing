@@ -50,7 +50,7 @@ func TestQueryAccelerationMigrationAvoidsHostAliasSubstitution(t *testing.T) {
 	}
 }
 
-func TestQueryAccelerationMigrationBackfillsOperationGroups(t *testing.T) {
+func TestQueryAccelerationMigrationDefinesOperationGroupsWithoutStartupBackfill(t *testing.T) {
 	data, err := os.ReadFile("../../migrations/clickhouse/003_query_acceleration.sql")
 	if err != nil {
 		t.Fatalf("read migration: %v", err)
@@ -58,17 +58,42 @@ func TestQueryAccelerationMigrationBackfillsOperationGroups(t *testing.T) {
 	sql := string(data)
 	for _, expected := range []string{
 		"CREATE MATERIALIZED VIEW IF NOT EXISTS diting.mv_audit_operation_groups_hourly",
-		"TRUNCATE TABLE IF EXISTS diting.audit_operation_groups_hourly",
-		"INSERT INTO diting.audit_operation_groups_hourly",
 		"host_name AS raw_host_name",
 		"node_name AS raw_node_name",
 		"anyLast(raw_host_name) AS host_name",
 		"anyLast(raw_node_name) AS node_name",
-		"WHERE event_time >= now() - INTERVAL 31 DAY",
 		"GROUP BY hour, event_second, audit_host_key",
 	} {
 		if !strings.Contains(sql, expected) {
-			t.Fatalf("expected operation group backfill to contain %q", expected)
+			t.Fatalf("expected operation group migration to contain %q", expected)
+		}
+	}
+	for _, forbidden := range []string{
+		"TRUNCATE TABLE IF EXISTS diting.audit_operation_groups_hourly",
+		"INSERT INTO diting.audit_operation_groups_hourly",
+		"WHERE event_time >= now() - INTERVAL 31 DAY",
+	} {
+		if strings.Contains(sql, forbidden) {
+			t.Fatalf("auto migration must not run startup backfill statement %q", forbidden)
+		}
+	}
+}
+
+func TestManualQueryAccelerationResetScriptRecreatesAggregateObjects(t *testing.T) {
+	data, err := os.ReadFile("../../migrations/clickhouse/manual_reset_query_acceleration.sql")
+	if err != nil {
+		t.Fatalf("read manual reset script: %v", err)
+	}
+	sql := string(data)
+	for _, expected := range []string{
+		"DROP VIEW IF EXISTS diting.mv_audit_operation_groups_hourly",
+		"DROP TABLE IF EXISTS diting.audit_operation_groups_hourly",
+		"CREATE TABLE IF NOT EXISTS diting.audit_operation_groups_hourly",
+		"CREATE MATERIALIZED VIEW IF NOT EXISTS diting.mv_audit_operation_groups_hourly",
+		"CREATE MATERIALIZED VIEW IF NOT EXISTS diting.mv_audit_host_stats_hourly",
+	} {
+		if !strings.Contains(sql, expected) {
+			t.Fatalf("expected manual reset script to contain %q", expected)
 		}
 	}
 }
