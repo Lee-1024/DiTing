@@ -1,5 +1,6 @@
 import { DeleteOutlined, PlusOutlined, SaveOutlined } from '@ant-design/icons';
-import { Button, Card, Divider, Form, Input, Select, Space, Switch, Typography, message } from 'antd';
+import { Button, Card, Divider, Form, Input, Select, Space, Switch, Table, Tag, Typography, message } from 'antd';
+import type { FormListFieldData } from 'antd';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getCollectorFilterConfig, saveCollectorFilterConfig } from '../../api/systemConfig';
@@ -105,65 +106,54 @@ export default function CollectorConfigPage() {
           <Form.List name="rules">
             {(fields, { add, remove }) => (
               <Space direction="vertical" size={16} style={{ width: '100%' }}>
-                {fields.map((field, index) => (
-                  <Card
-                    key={field.key}
-                    size="small"
-                    title={`过滤规则 ${index + 1}`}
-                    extra={<Button danger type="text" icon={<DeleteOutlined />} onClick={() => remove(field.name)} />}
-                  >
-                    <Space direction="vertical" size={12} style={{ width: '100%' }}>
-                      <Form.Item name={[field.name, 'id']} hidden>
-                        <Input />
-                      </Form.Item>
-                      <Space align="start" wrap>
-                        <Form.Item name={[field.name, 'enabled']} label="启用" valuePropName="checked" initialValue>
+                <Table
+                  rowKey="key"
+                  size="small"
+                  pagination={false}
+                  dataSource={fields}
+                  locale={{ emptyText: '暂无过滤规则' }}
+                  expandable={{
+                    expandedRowRender: (field) => renderConditionTable(field),
+                    rowExpandable: () => true,
+                    defaultExpandAllRows: true,
+                  }}
+                  columns={[
+                    {
+                      title: '启用',
+                      width: 90,
+                      render: (_, field) => (
+                        <Form.Item name={[field.name, 'enabled']} valuePropName="checked" initialValue noStyle>
                           <Switch />
                         </Form.Item>
-                        <Form.Item name={[field.name, 'name']} label="规则名称" rules={[{ required: true, message: '请输入规则名称' }]}>
-                          <Input style={{ width: 260 }} placeholder="例如：忽略 vite node" />
-                        </Form.Item>
-                      </Space>
-                      <Form.List name={[field.name, 'conditions']}>
-                        {(conditionFields, conditionOps) => (
-                          <Space direction="vertical" size={10} style={{ width: '100%' }}>
-                            {conditionFields.map((conditionField) => (
-                              <Space key={conditionField.key} align="start" wrap>
-                                <Form.Item name={[conditionField.name, 'field']} label="字段" rules={[{ required: true, message: '请选择字段' }]}>
-                                  <Select style={{ width: 180 }} options={collectorFilterFieldOptions} />
-                                </Form.Item>
-                                <Form.Item name={[conditionField.name, 'op']} label="条件" rules={[{ required: true, message: '请选择条件' }]}>
-                                  <Select style={{ width: 120 }} options={collectorFilterOpOptions} />
-                                </Form.Item>
-                                <Form.Item noStyle shouldUpdate>
-                                  {({ getFieldValue }) => {
-                                    const op = getFieldValue(['rules', field.name, 'conditions', conditionField.name, 'op']);
-                                    return op === 'in' ? (
-                                      <Form.Item name={[conditionField.name, 'values']} label="取值" rules={[{ required: true, message: '请输入取值' }]}>
-                                        <Select mode="tags" tokenSeparators={[',']} style={{ width: 320 }} options={[]} />
-                                      </Form.Item>
-                                    ) : (
-                                      <Form.Item name={[conditionField.name, 'value']} label="取值" rules={[{ required: true, message: '请输入取值' }]}>
-                                        <Input style={{ width: 320 }} placeholder="支持精确匹配或包含匹配" />
-                                      </Form.Item>
-                                    );
-                                  }}
-                                </Form.Item>
-                                <Button danger type="text" icon={<DeleteOutlined />} onClick={() => conditionOps.remove(conditionField.name)} />
-                              </Space>
-                            ))}
-                            <Button
-                              icon={<PlusOutlined />}
-                              onClick={() => conditionOps.add({ field: 'process_name', op: 'eq', value: '' })}
-                            >
-                              添加条件
-                            </Button>
-                          </Space>
-                        )}
-                      </Form.List>
-                    </Space>
-                  </Card>
-                ))}
+                      ),
+                    },
+                    {
+                      title: '规则名称',
+                      width: 300,
+                      render: (_, field) => (
+                        <>
+                          <Form.Item name={[field.name, 'id']} hidden>
+                            <Input />
+                          </Form.Item>
+                          <Form.Item name={[field.name, 'name']} rules={[{ required: true, message: '请输入规则名称' }]} style={{ marginBottom: 0 }}>
+                            <Input placeholder="例如：忽略 vite node" />
+                          </Form.Item>
+                        </>
+                      ),
+                    },
+                    {
+                      title: '条件',
+                      render: (_, field) => <ConditionSummary rule={rules[field.name]} />,
+                    },
+                    {
+                      title: '操作',
+                      width: 90,
+                      render: (_, field) => (
+                        <Button danger type="text" icon={<DeleteOutlined />} onClick={() => remove(field.name)} />
+                      ),
+                    },
+                  ]}
+                />
                 <Button
                   icon={<PlusOutlined />}
                   onClick={() => add({ id: newRuleID(), name: '新过滤规则', enabled: true, conditions: [{ field: 'process_name', op: 'eq', value: '' }] })}
@@ -176,6 +166,86 @@ export default function CollectorConfigPage() {
         </Form>
       </Card>
     </>
+  );
+}
+
+function renderConditionTable(ruleField: FormListFieldData) {
+  return (
+    <Form.List name={[ruleField.name, 'conditions']}>
+      {(conditionFields, conditionOps) => (
+        <Space direction="vertical" size={10} style={{ width: '100%' }}>
+          <Table
+            rowKey="key"
+            size="small"
+            pagination={false}
+            dataSource={conditionFields}
+            locale={{ emptyText: '暂无条件' }}
+            columns={[
+              {
+                title: '字段',
+                width: 220,
+                render: (_, conditionField) => (
+                  <Form.Item name={[conditionField.name, 'field']} rules={[{ required: true, message: '请选择字段' }]} style={{ marginBottom: 0 }}>
+                    <Select options={collectorFilterFieldOptions} />
+                  </Form.Item>
+                ),
+              },
+              {
+                title: '条件',
+                width: 160,
+                render: (_, conditionField) => (
+                  <Form.Item name={[conditionField.name, 'op']} rules={[{ required: true, message: '请选择条件' }]} style={{ marginBottom: 0 }}>
+                    <Select options={collectorFilterOpOptions} />
+                  </Form.Item>
+                ),
+              },
+              {
+                title: '取值',
+                render: (_, conditionField) => (
+                  <Form.Item noStyle shouldUpdate>
+                    {({ getFieldValue }) => {
+                      const op = getFieldValue(['rules', ruleField.name, 'conditions', conditionField.name, 'op']);
+                      return op === 'in' ? (
+                        <Form.Item name={[conditionField.name, 'values']} rules={[{ required: true, message: '请输入取值' }]} style={{ marginBottom: 0 }}>
+                          <Select mode="tags" tokenSeparators={[',']} options={[]} />
+                        </Form.Item>
+                      ) : (
+                        <Form.Item name={[conditionField.name, 'value']} rules={[{ required: true, message: '请输入取值' }]} style={{ marginBottom: 0 }}>
+                          <Input placeholder="支持精确匹配或包含匹配" />
+                        </Form.Item>
+                      );
+                    }}
+                  </Form.Item>
+                ),
+              },
+              {
+                title: '操作',
+                width: 80,
+                render: (_, conditionField) => (
+                  <Button danger type="text" icon={<DeleteOutlined />} onClick={() => conditionOps.remove(conditionField.name)} />
+                ),
+              },
+            ]}
+          />
+          <Button icon={<PlusOutlined />} onClick={() => conditionOps.add({ field: 'process_name', op: 'eq', value: '' })}>
+            添加条件
+          </Button>
+        </Space>
+      )}
+    </Form.List>
+  );
+}
+
+function ConditionSummary({ rule }: { rule?: CollectorFilterConfig['rules'][number] }) {
+  const count = rule?.conditions?.length ?? 0;
+  if (count === 0) {
+    return <Typography.Text type="secondary">暂无条件</Typography.Text>;
+  }
+  return (
+    <Space size={6} wrap>
+      <Tag color="blue">{count} 个条件</Tag>
+      <Typography.Text type="secondary">规则内全部满足才过滤</Typography.Text>
+    </Space>
   );
 }
 
