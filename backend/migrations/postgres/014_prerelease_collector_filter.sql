@@ -57,6 +57,16 @@ VALUES (
             {"field": "process_name", "op": "in", "values": ["kube-probe", "node_exporter", "prometheus", "telegraf", "grafana-agent"]},
             {"field": "severity", "op": "in", "values": ["info", "low", "medium"]}
           ]
+        },
+        {
+          "id": "pre-diting-self-vite-noise",
+          "name": "预发忽略 DiTing 自身 Vite 服务噪声",
+          "enabled": true,
+          "conditions": [
+            {"field": "cmdline", "op": "contains", "value": "/data/DiTing/"},
+            {"field": "cmdline", "op": "regex", "value": "(?i)(node_modules/.bin/vite|\\bnode\\b.*\\bvite\\b)"},
+            {"field": "severity", "op": "in", "values": ["info", "low", "medium"]}
+          ]
         }
       ]
     }'::jsonb,

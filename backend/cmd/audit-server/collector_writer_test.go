@@ -288,6 +288,18 @@ func TestCollectorNoiseFilterSupportsPreReleaseRootBaseline(t *testing.T) {
 	if !filter.ShouldDrop(audit.Event{EventType: "file_access", Username: "ubuntu", LoginUsername: "ubuntu", FilePath: "/proc/123/status", FileOperation: "open", Severity: "info"}) {
 		t.Fatalf("expected normal-user proc read noise to be dropped")
 	}
+	if !filter.ShouldDrop(audit.Event{EventType: "process_exec", Username: "diting", ProcessName: "node", Cmdline: "/usr/local/bin/node /data/DiTing/frontend/node_modules/.bin/vite --host 0.0.0.0 --port 5174 --strictPort", Severity: "info"}) {
+		t.Fatalf("expected DiTing vite process noise to be dropped")
+	}
+	if !filter.ShouldDrop(audit.Event{EventType: "network_connect", Username: "diting", ProcessName: "node", Cmdline: "/usr/local/bin/node /data/DiTing/frontend/node_modules/.bin/vite --host 0.0.0.0 --port 5174 --strictPort", DstIP: "127.0.0.1", DstPort: 5174, Protocol: "tcp", Severity: "info"}) {
+		t.Fatalf("expected DiTing vite network noise to be dropped")
+	}
+	if !filter.ShouldDrop(audit.Event{EventType: "file_access", Username: "diting", ProcessName: "node", Cmdline: "/usr/local/bin/node /data/DiTing/frontend/node_modules/.bin/vite --host 0.0.0.0 --port 5174 --strictPort", FilePath: "/data/DiTing/frontend/src/main.tsx", FileOperation: "open", Severity: "info"}) {
+		t.Fatalf("expected DiTing vite file access noise to be dropped")
+	}
+	if filter.ShouldDrop(audit.Event{EventType: "network_connect", Username: "diting", ProcessName: "node", Cmdline: "/usr/local/bin/node /data/DiTing/frontend/node_modules/.bin/vite --host 0.0.0.0 --port 5174 --strictPort", Severity: "high"}) {
+		t.Fatalf("expected high severity DiTing vite event to be preserved")
+	}
 }
 
 func TestCollectorNoiseFilterSupportsExtendedFieldsAndOperators(t *testing.T) {

@@ -100,6 +100,16 @@ func PreReleaseCollectorFilterConfig() CollectorFilterConfig {
 					{Field: "severity", Op: "in", Values: []string{"info", "low", "medium"}},
 				},
 			},
+			{
+				ID:      "pre-diting-self-vite-noise",
+				Name:    "预发忽略 DiTing 自身 Vite 服务噪声",
+				Enabled: true,
+				Conditions: []CollectorFilterCondition{
+					{Field: "cmdline", Op: "contains", Value: "/data/DiTing/"},
+					{Field: "cmdline", Op: "regex", Value: "(?i)(node_modules/.bin/vite|\\bnode\\b.*\\bvite\\b)"},
+					{Field: "severity", Op: "in", Values: []string{"info", "low", "medium"}},
+				},
+			},
 		},
 	})
 }
