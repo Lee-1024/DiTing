@@ -94,3 +94,14 @@ func TestBootstrapAddsDefaultProcessChainRiskRules(t *testing.T) {
 		}
 	}
 }
+
+func TestProductionPreReleaseBaselineContainsCollectorFilterAndProductionRules(t *testing.T) {
+	for _, expected := range []string{"'collector_filter'", "pre-root-process-low-risk", "生产-反弹 Shell 命令", "生产-敏感文件写入", "生产-Web 服务拉起 Shell"} {
+		if !strings.Contains(ProductionPreReleaseBaselineSQL, expected) {
+			t.Fatalf("expected production pre-release baseline SQL to include %q", expected)
+		}
+	}
+	if got := len(splitStatements(ProductionPreReleaseBaselineSQL)); got != 2 {
+		t.Fatalf("expected production pre-release baseline SQL to split into 2 statements, got %d", got)
+	}
+}

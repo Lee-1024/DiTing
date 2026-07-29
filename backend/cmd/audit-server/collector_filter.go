@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"diting/backend/internal/audit"
@@ -80,6 +81,11 @@ func conditionMatches(condition systemconfig.CollectorFilterCondition, event aud
 		return strings.EqualFold(strings.TrimSpace(actual), strings.TrimSpace(condition.Value))
 	case "contains":
 		return strings.Contains(strings.ToLower(actual), strings.ToLower(strings.TrimSpace(condition.Value)))
+	case "prefix":
+		return strings.HasPrefix(strings.ToLower(strings.TrimSpace(actual)), strings.ToLower(strings.TrimSpace(condition.Value)))
+	case "regex":
+		matched, err := regexp.MatchString(condition.Value, actual)
+		return err == nil && matched
 	case "in":
 		return containsFold(condition.Values, actual)
 	default:
@@ -97,12 +103,16 @@ func collectorFilterFieldValue(event audit.Event, field string) string {
 		return event.ProcessName
 	case "cmdline":
 		return event.Cmdline
+	case "parent_process_name":
+		return event.ParentProcessName
 	case "username":
 		return event.Username
 	case "login_username":
 		return event.LoginUsername
 	case "file_path":
 		return event.FilePath
+	case "file_operation":
+		return event.FileOperation
 	case "dst_ip":
 		return event.DstIP
 	case "dst_port":
@@ -110,6 +120,10 @@ func collectorFilterFieldValue(event audit.Event, field string) string {
 			return ""
 		}
 		return fmt.Sprintf("%d", event.DstPort)
+	case "protocol":
+		return event.Protocol
+	case "domain":
+		return event.Domain
 	default:
 		return ""
 	}

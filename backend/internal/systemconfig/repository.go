@@ -44,6 +44,66 @@ func DefaultCollectorFilterConfig() CollectorFilterConfig {
 	}
 }
 
+// PreReleaseCollectorFilterConfig returns a practical baseline for pre-release data collection.
+func PreReleaseCollectorFilterConfig() CollectorFilterConfig {
+	return normalizeCollectorFilterConfig(CollectorFilterConfig{
+		Enabled:        true,
+		KeepSeverities: []string{"high", "critical"},
+		Rules: []CollectorFilterRule{
+			{
+				ID:      "pre-root-process-low-risk",
+				Name:    "预发忽略 root 常规命令",
+				Enabled: true,
+				Conditions: []CollectorFilterCondition{
+					{Field: "event_type", Op: "eq", Value: "process_exec"},
+					{Field: "username", Op: "eq", Value: "root"},
+					{Field: "severity", Op: "in", Values: []string{"info", "low", "medium"}},
+				},
+			},
+			{
+				ID:      "pre-root-file-low-risk",
+				Name:    "预发忽略 root 常规文件访问",
+				Enabled: true,
+				Conditions: []CollectorFilterCondition{
+					{Field: "event_type", Op: "eq", Value: "file_access"},
+					{Field: "username", Op: "eq", Value: "root"},
+					{Field: "severity", Op: "in", Values: []string{"info", "low", "medium"}},
+				},
+			},
+			{
+				ID:      "pre-root-network-low-risk",
+				Name:    "预发忽略 root 低风险网络连接",
+				Enabled: true,
+				Conditions: []CollectorFilterCondition{
+					{Field: "event_type", Op: "eq", Value: "network_connect"},
+					{Field: "username", Op: "eq", Value: "root"},
+					{Field: "severity", Op: "in", Values: []string{"info", "low", "medium"}},
+				},
+			},
+			{
+				ID:      "pre-proc-sys-read-noise",
+				Name:    "预发忽略 proc/sys/dev 高频读取",
+				Enabled: true,
+				Conditions: []CollectorFilterCondition{
+					{Field: "event_type", Op: "eq", Value: "file_access"},
+					{Field: "file_path", Op: "regex", Value: "^/(proc|sys)/|^/dev/(null|zero|random|urandom)$"},
+					{Field: "file_operation", Op: "regex", Value: "(?i)(open|read|security_file_open|security_file_permission)"},
+					{Field: "severity", Op: "in", Values: []string{"info", "low", "medium"}},
+				},
+			},
+			{
+				ID:      "pre-monitoring-agent-noise",
+				Name:    "预发忽略监控探针噪声",
+				Enabled: true,
+				Conditions: []CollectorFilterCondition{
+					{Field: "process_name", Op: "in", Values: []string{"kube-probe", "node_exporter", "prometheus", "telegraf", "grafana-agent"}},
+					{Field: "severity", Op: "in", Values: []string{"info", "low", "medium"}},
+				},
+			},
+		},
+	})
+}
+
 type MemoryRepository struct {
 	mu              sync.Mutex
 	collectorFilter CollectorFilterConfig

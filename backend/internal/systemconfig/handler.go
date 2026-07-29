@@ -68,7 +68,7 @@ func validCollectorFilterRules(rules []CollectorFilterRule) bool {
 
 func validCollectorFilterField(field string) bool {
 	switch field {
-	case "event_type", "severity", "process_name", "cmdline", "username", "login_username", "file_path", "dst_ip", "dst_port":
+	case "event_type", "severity", "process_name", "cmdline", "parent_process_name", "username", "login_username", "file_path", "file_operation", "dst_ip", "dst_port", "protocol", "domain":
 		return true
 	default:
 		return false
@@ -77,7 +77,7 @@ func validCollectorFilterField(field string) bool {
 
 func validCollectorFilterOp(op string) bool {
 	switch op {
-	case "eq", "contains", "in":
+	case "eq", "contains", "in", "prefix", "regex":
 		return true
 	default:
 		return false

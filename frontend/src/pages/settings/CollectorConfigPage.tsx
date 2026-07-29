@@ -279,17 +279,23 @@ const collectorFilterFieldOptions = [
   { value: 'severity', label: '风险等级' },
   { value: 'process_name', label: '进程名' },
   { value: 'cmdline', label: '命令行' },
+  { value: 'parent_process_name', label: '父进程名' },
   { value: 'username', label: '执行用户' },
   { value: 'login_username', label: '登录用户' },
   { value: 'file_path', label: '文件路径' },
+  { value: 'file_operation', label: '文件操作' },
   { value: 'dst_ip', label: '目标 IP' },
   { value: 'dst_port', label: '目标端口' },
+  { value: 'protocol', label: '协议' },
+  { value: 'domain', label: '域名' },
 ];
 
 const collectorFilterOpOptions = [
   { value: 'eq', label: '等于' },
   { value: 'contains', label: '包含' },
   { value: 'in', label: '属于' },
+  { value: 'prefix', label: '前缀' },
+  { value: 'regex', label: '正则' },
 ];
 
 function newRuleID() {

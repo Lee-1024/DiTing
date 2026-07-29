@@ -273,6 +273,47 @@ func TestCollectorNoiseFilterIgnoresDisabledRule(t *testing.T) {
 	}
 }
 
+func TestCollectorNoiseFilterSupportsPreReleaseRootBaseline(t *testing.T) {
+	filter := collectorNoiseFilterFromSystemConfig(systemconfig.PreReleaseCollectorFilterConfig())
+
+	if !filter.ShouldDrop(audit.Event{EventType: "process_exec", Username: "root", LoginUsername: "root", ProcessName: "ls", Cmdline: "ls /var/log", Severity: "info"}) {
+		t.Fatalf("expected root low-risk process exec to be dropped")
+	}
+	if filter.ShouldDrop(audit.Event{EventType: "file_access", Username: "root", LoginUsername: "root", ProcessName: "vim", FilePath: "/etc/shadow", FileOperation: "write", Severity: "critical"}) {
+		t.Fatalf("expected critical root sensitive-file event to be preserved")
+	}
+	if filter.ShouldDrop(audit.Event{EventType: "process_exec", Username: "ubuntu", LoginUsername: "ubuntu", ProcessName: "ls", Cmdline: "ls /var/log", Severity: "info"}) {
+		t.Fatalf("expected normal-user process exec to be preserved")
+	}
+	if !filter.ShouldDrop(audit.Event{EventType: "file_access", Username: "ubuntu", LoginUsername: "ubuntu", FilePath: "/proc/123/status", FileOperation: "open", Severity: "info"}) {
+		t.Fatalf("expected normal-user proc read noise to be dropped")
+	}
+}
+
+func TestCollectorNoiseFilterSupportsExtendedFieldsAndOperators(t *testing.T) {
+	filter := collectorNoiseFilterFromSystemConfig(systemconfig.CollectorFilterConfig{
+		Enabled:        true,
+		KeepSeverities: []string{"high", "critical"},
+		Rules: []systemconfig.CollectorFilterRule{{
+			ID:      "proc-read",
+			Name:    "ignore proc reads",
+			Enabled: true,
+			Conditions: []systemconfig.CollectorFilterCondition{
+				{Field: "event_type", Op: "eq", Value: "file_access"},
+				{Field: "file_path", Op: "prefix", Value: "/proc/"},
+				{Field: "file_operation", Op: "regex", Value: "(?i)open|read"},
+			},
+		}},
+	})
+
+	if !filter.ShouldDrop(audit.Event{EventType: "file_access", FilePath: "/proc/123/status", FileOperation: "security_file_open", Severity: "info"}) {
+		t.Fatalf("expected prefix and regex conditions to drop proc read")
+	}
+	if filter.ShouldDrop(audit.Event{EventType: "file_access", FilePath: "/etc/shadow", FileOperation: "security_file_open", Severity: "info"}) {
+		t.Fatalf("expected non-matching prefix to keep event")
+	}
+}
+
 func TestRuleApplyingWriterRefreshesCollectorFilterFromProvider(t *testing.T) {
 	sink := &fakeEventSink{}
 	provider := &fakeCollectorFilterProvider{sets: []systemconfig.CollectorFilterConfig{

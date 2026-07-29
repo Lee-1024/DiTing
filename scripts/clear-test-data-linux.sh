@@ -16,9 +16,13 @@ Options:
   --yes               Confirm destructive cleanup
   -h, --help          Show this help
 
-This clears collected audit test data:
+This clears collected runtime data, collector config, and audit rules, then seeds the production pre-release baseline:
   - ClickHouse diting.audit_events
   - PostgreSQL diting_risk_dispositions
+  - PostgreSQL diting_collector_heartbeats
+  - PostgreSQL diting_host_assets
+  - PostgreSQL diting_system_configs collector_filter
+  - PostgreSQL diting_audit_rules
 EOF
 }
 
@@ -50,7 +54,9 @@ case "$CONFIG" in
 esac
 
 if [[ "$YES" != "1" ]]; then
-  echo "This will delete collected audit test data from ClickHouse and risk dispositions from PostgreSQL." >&2
+  echo "This will delete collected runtime data, collector config, and audit rules." >&2
+  echo "It then seeds the production pre-release collector filter and audit rules." >&2
+  echo "It preserves users, roles, operation logs, and enforcement policies." >&2
   echo "Re-run with --yes to continue." >&2
   exit 1
 fi

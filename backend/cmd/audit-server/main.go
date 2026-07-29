@@ -244,13 +244,21 @@ func main() {
 			fmt.Fprintf(os.Stderr, "auto postgres migrations: %v\n", err)
 			os.Exit(1)
 		}
-		slog.Warn("clearing postgres risk dispositions", "table", "diting_risk_dispositions")
-		if _, err := pool.Exec(context.Background(), "DELETE FROM diting_risk_dispositions"); err != nil {
-			slog.Error("clear postgres risk dispositions failed", "error", err)
-			fmt.Fprintf(os.Stderr, "clear postgres risk dispositions: %v\n", err)
+		for _, statement := range postgresRuntimeDataCleanupStatements() {
+			slog.Warn("clearing postgres runtime data", "statement", statement)
+			if _, err := pool.Exec(context.Background(), statement); err != nil {
+				slog.Error("clear postgres runtime data failed", "statement", statement, "error", err)
+				fmt.Fprintf(os.Stderr, "clear postgres runtime data: %v\n", err)
+				os.Exit(1)
+			}
+		}
+		slog.Warn("seeding production pre-release collector filter and audit rules")
+		if err := postgres.ExecuteSQL(context.Background(), pool, postgres.ProductionPreReleaseBaselineSQL); err != nil {
+			slog.Error("seed production pre-release baseline failed", "error", err)
+			fmt.Fprintf(os.Stderr, "seed production pre-release baseline: %v\n", err)
 			os.Exit(1)
 		}
-		slog.Info("test data cleared")
+		slog.Info("test data cleared and production pre-release baseline seeded")
 		return
 	}
 
@@ -459,6 +467,16 @@ func resolveMigrationDir(kind string) (string, error) {
 func hasSQLFiles(dir string) bool {
 	files, err := filepath.Glob(filepath.Join(dir, "*.sql"))
 	return err == nil && len(files) > 0
+}
+
+func postgresRuntimeDataCleanupStatements() []string {
+	return []string{
+		"DELETE FROM diting_risk_dispositions",
+		"DELETE FROM diting_collector_heartbeats",
+		"DELETE FROM diting_host_assets",
+		"DELETE FROM diting_system_configs WHERE key = 'collector_filter'",
+		"DELETE FROM diting_audit_rules",
+	}
 }
 
 // parseArgs 解析 parse Args 并返回结构化结果。

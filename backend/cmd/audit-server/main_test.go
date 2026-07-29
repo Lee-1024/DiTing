@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"diting/backend/internal/postgres"
 )
 
 func TestParseArgsReadsModeAndConfigPath(t *testing.T) {
@@ -55,6 +57,49 @@ func TestParseArgsSupportsClearTestDataMode(t *testing.T) {
 	if mode != "clear-test-data" {
 		t.Fatalf("expected clear-test-data mode, got %q", mode)
 	}
+}
+
+func TestPostgresRuntimeDataCleanupStatements(t *testing.T) {
+	statements := postgresRuntimeDataCleanupStatements()
+
+	expected := []string{
+		"DELETE FROM diting_risk_dispositions",
+		"DELETE FROM diting_collector_heartbeats",
+		"DELETE FROM diting_host_assets",
+		"DELETE FROM diting_system_configs WHERE key = 'collector_filter'",
+		"DELETE FROM diting_audit_rules",
+	}
+	for _, statement := range expected {
+		if !containsString(statements, statement) {
+			t.Fatalf("expected cleanup statement %q in %#v", statement, statements)
+		}
+	}
+}
+
+func TestProductionPreReleaseBaselineSeedsCollectorFilterAndAuditRules(t *testing.T) {
+	for _, expected := range []string{
+		"INSERT INTO diting_system_configs",
+		"'collector_filter'",
+		"pre-root-process-low-risk",
+		"INSERT INTO diting_audit_rules",
+		"生产-反弹 Shell 命令",
+		"生产-敏感文件写入",
+		"生产-Web 服务拉起 Shell",
+		"ON CONFLICT (id) DO UPDATE",
+	} {
+		if !strings.Contains(postgres.ProductionPreReleaseBaselineSQL, expected) {
+			t.Fatalf("expected production pre-release baseline SQL to include %q", expected)
+		}
+	}
+}
+
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
 }
 
 func TestCollectorInputModeDefaultsAndNormalizes(t *testing.T) {
