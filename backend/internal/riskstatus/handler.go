@@ -190,7 +190,9 @@ func ignoredSimilarCollectorRule(fingerprint string, event ignoredSimilarEvent) 
 	}
 	addCondition("event_type", "eq", event.EventType)
 	addCondition("process_name", "eq", event.ProcessName)
-	addCondition("cmdline", "eq", event.Cmdline)
+	if op, value := similarCommandCondition(event); value != "" {
+		addCondition("cmdline", op, value)
+	}
 	addCondition("file_path", "eq", event.FilePath)
 	addCondition("file_operation", "eq", event.FileOperation)
 	addCondition("dst_ip", "eq", event.DstIP)
@@ -199,6 +201,17 @@ func ignoredSimilarCollectorRule(fingerprint string, event ignoredSimilarEvent) 
 	}
 	addCondition("protocol", "eq", event.Protocol)
 	return rule
+}
+
+func similarCommandCondition(event ignoredSimilarEvent) (string, string) {
+	cmdline := strings.TrimSpace(event.Cmdline)
+	if cmdline == "" {
+		return "", ""
+	}
+	if strings.EqualFold(strings.TrimSpace(event.ProcessName), "runc") && strings.Contains(cmdline, " exec ") {
+		return "regex", `(^|.*/)\brunc\b.*\bexec\b`
+	}
+	return "eq", cmdline
 }
 
 func stableRuleID(value string) string {

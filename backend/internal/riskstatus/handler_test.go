@@ -52,6 +52,27 @@ func TestHandlerAddsCollectorFilterRuleForIgnoredSimilarEvent(t *testing.T) {
 	}
 }
 
+func TestIgnoredSimilarCollectorRuleNormalizesRuncVolatileCommand(t *testing.T) {
+	rule := ignoredSimilarCollectorRule("fp-runc", ignoredSimilarEvent{
+		EventType:   "process_exec",
+		ProcessName: "runc",
+		Cmdline:     "/usr/bin/runc --root /var/run/docker/runtime-runc/moby --log /var/run/docker/containerd/daemon/io.containerd.runtime.v2.task/moby/4799b5c8d705acec661e8d5ec3a86f7d69c67fe96f875bd95a9a12d528679f1c/log.json --log-format json exec --process /tmp/runc-process17961974 --detach --pid-file /var/run/docker/containerd/daemon/io.containerd.runtime.v2.task/moby/4799b5c8d705acec661e8d5ec3a86f7d69c67fe96f875bd95a9a12d528679f1c/4411b8e924f20c62b1d24c68f4dfdfd0f9369a0fc5f690765e0d83cb0abec79f.pid 4799b5c8d705acec661e8d5ec3a86f7d69c67fe96f875bd95a9a12d528679f1c",
+	})
+
+	for _, condition := range rule.Conditions {
+		if condition.Field == "cmdline" {
+			if condition.Op != "regex" {
+				t.Fatalf("expected runc cmdline condition to use regex, got %#v", condition)
+			}
+			if !bytes.Contains([]byte(condition.Value), []byte(`runc\b.*\bexec\b`)) || bytes.Contains([]byte(condition.Value), []byte("4799b5c8")) || bytes.Contains([]byte(condition.Value), []byte("17961974")) {
+				t.Fatalf("expected normalized runc regex, got %q", condition.Value)
+			}
+			return
+		}
+	}
+	t.Fatalf("expected cmdline condition in %#v", rule.Conditions)
+}
+
 type fakeDispositionRepository struct {
 	disposition Disposition
 }

@@ -369,6 +369,32 @@ func TestRuleApplyingWriterFiltersIgnoredSimilarBeforeAuditRuleMatches(t *testin
 	}
 }
 
+func TestRuleApplyingWriterFiltersIgnoredSimilarRuncExecWithVolatileIDs(t *testing.T) {
+	filter := collectorNoiseFilterFromSystemConfig(systemconfig.CollectorFilterConfig{
+		Enabled:        true,
+		KeepSeverities: []string{"high", "critical"},
+		Rules: []systemconfig.CollectorFilterRule{{
+			ID:      "risk-ignore-similar-runc-exec",
+			Name:    "风险处置忽略同类",
+			Enabled: true,
+			Conditions: []systemconfig.CollectorFilterCondition{
+				{Field: "event_type", Op: "eq", Value: "process_exec"},
+				{Field: "process_name", Op: "eq", Value: "runc"},
+				{Field: "cmdline", Op: "regex", Value: `(^|.*/)\brunc\b.*\bexec\b`},
+			},
+		}},
+	})
+
+	if !filter.ShouldDropBeforeEnrichment(audit.Event{
+		EventType:   "process_exec",
+		ProcessName: "runc",
+		Cmdline:     "/usr/bin/runc --root /var/run/docker/runtime-runc/moby --log /var/run/docker/containerd/daemon/io.containerd.runtime.v2.task/moby/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/log.json --log-format json exec --process /tmp/runc-process42 --detach --pid-file /var/run/docker/containerd/daemon/io.containerd.runtime.v2.task/moby/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/123.pid aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		Severity:    "info",
+	}) {
+		t.Fatalf("expected ignored-similar runc exec regex to drop command with volatile IDs")
+	}
+}
+
 func TestRuleApplyingWriterPreservesRootExplicitHighRiskBeforeRulePromotion(t *testing.T) {
 	sink := &fakeEventSink{}
 	writer := newRefreshingRuleWriter(sink, &fakeRuleProvider{sets: [][]rule.Rule{{

@@ -66,13 +66,15 @@ func TestPostgresRuntimeDataCleanupStatements(t *testing.T) {
 		"DELETE FROM diting_risk_dispositions",
 		"DELETE FROM diting_collector_heartbeats",
 		"DELETE FROM diting_host_assets",
-		"DELETE FROM diting_system_configs WHERE key = 'collector_filter'",
 		"DELETE FROM diting_audit_rules",
 	}
 	for _, statement := range expected {
 		if !containsString(statements, statement) {
 			t.Fatalf("expected cleanup statement %q in %#v", statement, statements)
 		}
+	}
+	if containsString(statements, "DELETE FROM diting_system_configs WHERE key = 'collector_filter'") {
+		t.Fatalf("collector filter config must be preserved during cleanup: %#v", statements)
 	}
 }
 

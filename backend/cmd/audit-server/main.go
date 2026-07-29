@@ -252,13 +252,7 @@ func main() {
 				os.Exit(1)
 			}
 		}
-		slog.Warn("seeding production pre-release collector filter and audit rules")
-		if err := postgres.ExecuteSQL(context.Background(), pool, postgres.ProductionPreReleaseBaselineSQL); err != nil {
-			slog.Error("seed production pre-release baseline failed", "error", err)
-			fmt.Fprintf(os.Stderr, "seed production pre-release baseline: %v\n", err)
-			os.Exit(1)
-		}
-		slog.Info("test data cleared and production pre-release baseline seeded")
+		slog.Info("test data cleared")
 		return
 	}
 
@@ -474,7 +468,6 @@ func postgresRuntimeDataCleanupStatements() []string {
 		"DELETE FROM diting_risk_dispositions",
 		"DELETE FROM diting_collector_heartbeats",
 		"DELETE FROM diting_host_assets",
-		"DELETE FROM diting_system_configs WHERE key = 'collector_filter'",
 		"DELETE FROM diting_audit_rules",
 	}
 }

@@ -38,7 +38,7 @@ export function riskFingerprint(event: AuditEvent): string {
     event.eventType,
     [...(event.ruleIds ?? [])].sort().join(','),
     event.processName,
-    event.cmdline,
+    normalizedRiskCommand(event),
     event.filePath,
     event.fileOperation,
     event.dstIp,
@@ -46,4 +46,12 @@ export function riskFingerprint(event: AuditEvent): string {
     event.protocol,
     event.username,
   ].map((value) => String(value ?? '').trim().toLowerCase()).join('|');
+}
+
+function normalizedRiskCommand(event: AuditEvent): string {
+  const cmdline = event.cmdline ?? '';
+  if (event.processName === 'runc' && /\sexec\s/.test(cmdline)) {
+    return 'runc exec';
+  }
+  return cmdline;
 }
