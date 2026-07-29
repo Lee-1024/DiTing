@@ -321,6 +321,54 @@ func TestRuleApplyingWriterPreservesIgnoredLoginUserWhenAuditRuleMatches(t *test
 	}
 }
 
+func TestRuleApplyingWriterFiltersIgnoredSimilarBeforeAuditRuleMatches(t *testing.T) {
+	sink := &fakeEventSink{}
+	writer := newRefreshingRuleWriter(sink, &fakeRuleProvider{sets: [][]rule.Rule{{{
+		ID:        "known-risk",
+		Name:      "known risk",
+		EventType: "process_exec",
+		Enabled:   true,
+		Severity:  "high",
+		RiskScore: 80,
+		MatchExpr: rule.Expression{
+			Operator:   "and",
+			Conditions: []rule.Condition{{Field: "cmdline", Op: "contains", Value: "custom-risk-token"}},
+		},
+	}}}})
+	writer.SetNoiseFilter(collectorNoiseFilterFromSystemConfig(systemconfig.CollectorFilterConfig{
+		Enabled:        true,
+		KeepSeverities: []string{"high", "critical"},
+		Rules: []systemconfig.CollectorFilterRule{{
+			ID:      "risk-ignore-similar-custom-risk",
+			Name:    "风险处置忽略同类",
+			Enabled: true,
+			Conditions: []systemconfig.CollectorFilterCondition{
+				{Field: "event_type", Op: "eq", Value: "process_exec"},
+				{Field: "process_name", Op: "eq", Value: "bash"},
+				{Field: "cmdline", Op: "eq", Value: "bash -c custom-risk-token"},
+			},
+		}},
+	}))
+	if err := writer.Refresh(context.Background()); err != nil {
+		t.Fatalf("Refresh returned error: %v", err)
+	}
+
+	err := writer.Write(context.Background(), []audit.Event{{
+		EventType:   "process_exec",
+		Username:    "operator",
+		ProcessName: "bash",
+		Cmdline:     "bash -c custom-risk-token",
+		Severity:    "info",
+	}})
+	if err != nil {
+		t.Fatalf("Write returned error: %v", err)
+	}
+
+	if len(sink.events) != 0 {
+		t.Fatalf("expected ignored-similar rule to filter event before audit rule hit, got %d events", len(sink.events))
+	}
+}
+
 func TestRuleApplyingWriterPreservesRootExplicitHighRiskBeforeRulePromotion(t *testing.T) {
 	sink := &fakeEventSink{}
 	writer := newRefreshingRuleWriter(sink, &fakeRuleProvider{sets: [][]rule.Rule{{

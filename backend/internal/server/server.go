@@ -108,6 +108,7 @@ func NewRouter(repository audit.Repository, ruleRepository rule.Repository, stat
 	var riskStatusHandler *riskstatus.Handler
 	if riskStatusRepository != nil {
 		riskStatusHandler = riskstatus.NewHandler(riskStatusRepository)
+		riskStatusHandler.SetCollectorFilterRepository(systemConfigRepository)
 	}
 	statsHandler := stats.NewHandler(statsRepository)
 	var authHandler *auth.Handler

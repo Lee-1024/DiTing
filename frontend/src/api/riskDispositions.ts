@@ -27,6 +27,7 @@ export async function updateRiskDisposition(event: AuditEvent, status: RiskDispo
     note,
     scope: status === 'ignore_similar' ? 'similar' : 'event',
     fingerprint: riskFingerprint(event),
+    event,
   });
   return response.data;
 }

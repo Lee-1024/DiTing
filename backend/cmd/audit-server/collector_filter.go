@@ -48,7 +48,7 @@ func (f collectorNoiseFilter) ShouldDropBeforeEnrichment(event audit.Event) bool
 		return false
 	}
 	for _, rule := range f.Rules {
-		if rule.ID == "pre-diting-self-vite-noise" && f.ruleMatches(rule, event) {
+		if f.shouldApplyBeforeEnrichment(rule) && f.ruleMatches(rule, event) {
 			return true
 		}
 	}
@@ -57,6 +57,10 @@ func (f collectorNoiseFilter) ShouldDropBeforeEnrichment(event audit.Event) bool
 
 func (f collectorNoiseFilter) hasAuditRuleHit(event audit.Event) bool {
 	return len(event.RuleIDs) > 0 || len(event.RuleNames) > 0 || len(event.RuleMatches) > 0
+}
+
+func (f collectorNoiseFilter) shouldApplyBeforeEnrichment(rule systemconfig.CollectorFilterRule) bool {
+	return rule.ID == "pre-diting-self-vite-noise" || strings.HasPrefix(rule.ID, "risk-ignore-similar-")
 }
 
 func (f collectorNoiseFilter) shouldDropByRules(event audit.Event) bool {
