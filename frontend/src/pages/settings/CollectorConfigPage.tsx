@@ -38,6 +38,10 @@ export default function CollectorConfigPage() {
 
   // submit 提交当前表单或操作。
   async function submit() {
+    await persistConfig(rules);
+  }
+
+  async function persistConfig(nextRules: CollectorFilterConfig['rules']) {
     const values = await form.validateFields();
     setSaving(true);
     try {
@@ -47,7 +51,7 @@ export default function CollectorConfigPage() {
         ignoreCommandKeywords: [],
         ignoreUsers: [],
         keepSeverities: values.keepSeverities ?? ['high', 'critical'],
-        rules: normalizeRules(rules),
+        rules: normalizeRules(nextRules),
       });
       form.setFieldsValue(saved);
       setRules(normalizeRules(saved.rules ?? []));
@@ -72,12 +76,12 @@ export default function CollectorConfigPage() {
     } else {
       nextRules[editingRuleIndex] = nextRule;
     }
-    setRules(nextRules);
+    await persistConfig(nextRules);
     setRuleModalOpen(false);
   }
 
-  function removeRule(index: number) {
-    setRules(rules.filter((_, ruleIndex) => ruleIndex !== index));
+  async function removeRule(index: number) {
+    await persistConfig(rules.filter((_, ruleIndex) => ruleIndex !== index));
   }
 
   return (
@@ -154,7 +158,7 @@ export default function CollectorConfigPage() {
                 render: (_, __, index) => (
                   <Space size={8}>
                     <Button size="small" onClick={() => openRuleModal(index)}>编辑</Button>
-                    <Popconfirm title="确认删除这条过滤规则？" onConfirm={() => removeRule(index)}>
+                    <Popconfirm title="确认删除这条过滤规则？" onConfirm={() => void removeRule(index)}>
                       <Button danger size="small" icon={<DeleteOutlined />} />
                     </Popconfirm>
                   </Space>
