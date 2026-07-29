@@ -97,6 +97,20 @@ export default function RiskEventsPage() {
         setPageSize(nextPageSize);
         return;
       }
+      if (dispositionStatus === 'open') {
+        const openItems = await loadOpenRiskEvents(nextPage, nextPageSize, formValues, () => seq === requestSeq.current);
+        if (!openItems) {
+          return;
+        }
+        setEvents(openItems.items);
+        setDispositions(openItems.dispositions);
+        setVisibleEvents(openItems.items);
+        setTotal(openItems.total);
+        setTotalKnown(openItems.totalKnown);
+        setPage(nextPage);
+        setPageSize(nextPageSize);
+        return;
+      }
       const data = await queryAuditEvents(buildQuery(nextPage, nextPageSize, formValues));
       if (seq !== requestSeq.current) {
         return;
@@ -182,11 +196,54 @@ export default function RiskEventsPage() {
     };
   }
 
+  async function loadOpenRiskEvents(nextPage: number, nextPageSize: number, formValues: any, isCurrent: () => boolean) {
+    const targetCount = nextPage * nextPageSize;
+    const batchSize = 100;
+    const maxBatches = 20;
+    const openEvents: AuditEvent[] = [];
+    const allDispositions: RiskDispositionMap = {};
+    let hasMore = false;
+
+    for (let batchPage = 1; batchPage <= maxBatches && openEvents.length < targetCount; batchPage += 1) {
+      const data = await queryAuditEvents({
+        ...buildQuery(batchPage, batchSize, formValues),
+        include_total: false,
+      });
+      if (!isCurrent()) {
+        return undefined;
+      }
+      const items = data.items ?? [];
+      if (items.length === 0) {
+        hasMore = false;
+        break;
+      }
+      const statusMap = await getRiskDispositions(items);
+      if (!isCurrent()) {
+        return undefined;
+      }
+      Object.assign(allDispositions, statusMap);
+      openEvents.push(...filterEventsByDisposition(items, statusMap, 'open'));
+      hasMore = Boolean(data.hasMore);
+      if (!data.hasMore) {
+        break;
+      }
+    }
+
+    const start = (nextPage - 1) * nextPageSize;
+    return {
+      items: openEvents.slice(start, start + nextPageSize),
+      dispositions: allDispositions,
+      total: hasMore && openEvents.length >= targetCount ? targetCount + 1 : openEvents.length,
+      totalKnown: !hasMore,
+    };
+  }
+
   useEffect(() => {
     void load();
   }, []);
 
-  const openCount = visibleEvents.filter((item) => dispositionFor(item).status === 'open').length;
+  const currentDispositionStatus = form.getFieldValue('dispositionStatus') ?? 'open';
+  const openCount = currentDispositionStatus === 'open' ? total : visibleEvents.filter((item) => dispositionFor(item).status === 'open').length;
   const criticalCount = visibleEvents.filter((item) => item.severity === 'critical').length;
   const highCount = visibleEvents.filter((item) => item.severity === 'high').length;
   const latestEvent = visibleEvents[0];
@@ -214,7 +271,7 @@ export default function RiskEventsPage() {
       </div>
       <div className="metric-grid risk-metric-grid">
         <MetricCard label="当前页" value={visibleEvents.length} hint={totalKnown ? `共 ${total} 条匹配结果` : '未执行全量计数，按页加载'} tone="blue" />
-        <MetricCard label="待处理" value={openCount} hint="需要确认或关闭" tone="danger" />
+        <MetricCard label="待处理" value={openCount} hint={currentDispositionStatus === 'open' && !totalKnown ? '还有更多，按页加载' : '需要确认或关闭'} tone="danger" />
         <MetricCard label="Critical" value={criticalCount} hint="最高优先级" tone="danger" />
         <MetricCard label="High" value={highCount} hint="高优先级" tone="warning" />
       </div>
