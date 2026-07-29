@@ -14,17 +14,19 @@ export default function CollectorConfigPage() {
   const [saving, setSaving] = useState(false);
   const [ruleModalOpen, setRuleModalOpen] = useState(false);
   const [editingRuleIndex, setEditingRuleIndex] = useState<number>();
+  const [rules, setRules] = useState<CollectorFilterConfig['rules']>([]);
   const [form] = Form.useForm<CollectorFilterConfig>();
   const [ruleForm] = Form.useForm<CollectorFilterConfig['rules'][number]>();
   const enabled = Form.useWatch('enabled', form);
-  const rules = Form.useWatch('rules', form) ?? [];
   const keepSeverities = Form.useWatch('keepSeverities', form) ?? [];
 
   // load 加载页面所需数据。
   async function load() {
     setLoading(true);
     try {
-      form.setFieldsValue(await getCollectorFilterConfig());
+      const config = await getCollectorFilterConfig();
+      form.setFieldsValue(config);
+      setRules(normalizeRules(config.rules ?? []));
     } finally {
       setLoading(false);
     }
@@ -45,9 +47,10 @@ export default function CollectorConfigPage() {
         ignoreCommandKeywords: [],
         ignoreUsers: [],
         keepSeverities: values.keepSeverities ?? ['high', 'critical'],
-        rules: normalizeRules(values.rules ?? []),
+        rules: normalizeRules(rules),
       });
       form.setFieldsValue(saved);
+      setRules(normalizeRules(saved.rules ?? []));
       message.success('采集配置已保存');
     } finally {
       setSaving(false);
@@ -69,12 +72,12 @@ export default function CollectorConfigPage() {
     } else {
       nextRules[editingRuleIndex] = nextRule;
     }
-    form.setFieldValue('rules', nextRules);
+    setRules(nextRules);
     setRuleModalOpen(false);
   }
 
   function removeRule(index: number) {
-    form.setFieldValue('rules', rules.filter((_, ruleIndex) => ruleIndex !== index));
+    setRules(rules.filter((_, ruleIndex) => ruleIndex !== index));
   }
 
   return (
@@ -118,7 +121,6 @@ export default function CollectorConfigPage() {
             ignoreCommandKeywords: [],
             ignoreUsers: [],
             keepSeverities: ['high', 'critical'],
-            rules: [],
           }}
         >
           <Form.Item name="enabled" label="启用采集过滤" valuePropName="checked">
