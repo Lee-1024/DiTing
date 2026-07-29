@@ -29,6 +29,15 @@ func TestMemoryRepositorySavesCollectorFilterConfig(t *testing.T) {
 		IgnoreCommandKeywords: []string{"/metrics"},
 		IgnoreUsers:           []string{"prometheus"},
 		KeepSeverities:        []string{"high", "critical"},
+		Rules: []CollectorFilterRule{{
+			ID:      "rule-1",
+			Name:    "ignore vite",
+			Enabled: true,
+			Conditions: []CollectorFilterCondition{
+				{Field: "process_name", Op: "eq", Value: "node"},
+				{Field: "cmdline", Op: "contains", Value: "node_modules/.bin/vite"},
+			},
+		}},
 	}
 
 	if err := repository.SaveCollectorFilter(context.Background(), expected); err != nil {
@@ -50,5 +59,8 @@ func TestMemoryRepositorySavesCollectorFilterConfig(t *testing.T) {
 	}
 	if actual.IgnoreUsers[0] != "prometheus" {
 		t.Fatalf("unexpected ignored users: %#v", actual.IgnoreUsers)
+	}
+	if len(actual.Rules) != 1 || actual.Rules[0].Conditions[1].Value != "node_modules/.bin/vite" {
+		t.Fatalf("unexpected rules: %#v", actual.Rules)
 	}
 }

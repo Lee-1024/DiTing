@@ -2,17 +2,33 @@ package systemconfig
 
 import (
 	"context"
+	"fmt"
 	"sync"
 )
 
 const CollectorFilterKey = "collector_filter"
 
 type CollectorFilterConfig struct {
-	Enabled               bool     `json:"enabled"`
-	IgnoreProcessNames    []string `json:"ignoreProcessNames"`
-	IgnoreCommandKeywords []string `json:"ignoreCommandKeywords"`
-	IgnoreUsers           []string `json:"ignoreUsers"`
-	KeepSeverities        []string `json:"keepSeverities"`
+	Enabled               bool                  `json:"enabled"`
+	IgnoreProcessNames    []string              `json:"ignoreProcessNames"`
+	IgnoreCommandKeywords []string              `json:"ignoreCommandKeywords"`
+	IgnoreUsers           []string              `json:"ignoreUsers"`
+	KeepSeverities        []string              `json:"keepSeverities"`
+	Rules                 []CollectorFilterRule `json:"rules"`
+}
+
+type CollectorFilterRule struct {
+	ID         string                     `json:"id"`
+	Name       string                     `json:"name"`
+	Enabled    bool                       `json:"enabled"`
+	Conditions []CollectorFilterCondition `json:"conditions"`
+}
+
+type CollectorFilterCondition struct {
+	Field  string   `json:"field"`
+	Op     string   `json:"op"`
+	Value  string   `json:"value"`
+	Values []string `json:"values"`
 }
 
 type Repository interface {
@@ -72,5 +88,73 @@ func normalizeCollectorFilterConfig(config CollectorFilterConfig) CollectorFilte
 	if config.IgnoreUsers == nil {
 		config.IgnoreUsers = []string{}
 	}
+	if config.Rules == nil {
+		config.Rules = []CollectorFilterRule{}
+	}
+	if len(config.Rules) == 0 {
+		config.Rules = legacyCollectorFilterRules(config)
+	}
+	for index := range config.Rules {
+		if config.Rules[index].Conditions == nil {
+			config.Rules[index].Conditions = []CollectorFilterCondition{}
+		}
+		for conditionIndex := range config.Rules[index].Conditions {
+			if config.Rules[index].Conditions[conditionIndex].Values == nil {
+				config.Rules[index].Conditions[conditionIndex].Values = []string{}
+			}
+		}
+	}
 	return config
+}
+
+func legacyCollectorFilterRules(config CollectorFilterConfig) []CollectorFilterRule {
+	rules := []CollectorFilterRule{}
+	for index, processName := range config.IgnoreProcessNames {
+		if processName == "" {
+			continue
+		}
+		rules = append(rules, CollectorFilterRule{
+			ID:      fmt.Sprintf("legacy-process-%d", index),
+			Name:    "忽略进程 " + processName,
+			Enabled: true,
+			Conditions: []CollectorFilterCondition{
+				{Field: "process_name", Op: "eq", Value: processName},
+			},
+		})
+	}
+	for index, keyword := range config.IgnoreCommandKeywords {
+		if keyword == "" {
+			continue
+		}
+		rules = append(rules, CollectorFilterRule{
+			ID:      fmt.Sprintf("legacy-command-%d", index),
+			Name:    "忽略命令 " + keyword,
+			Enabled: true,
+			Conditions: []CollectorFilterCondition{
+				{Field: "cmdline", Op: "contains", Value: keyword},
+			},
+		})
+	}
+	for index, username := range config.IgnoreUsers {
+		if username == "" {
+			continue
+		}
+		rules = append(rules, CollectorFilterRule{
+			ID:      fmt.Sprintf("legacy-user-%d", index),
+			Name:    "忽略执行用户 " + username,
+			Enabled: true,
+			Conditions: []CollectorFilterCondition{
+				{Field: "username", Op: "eq", Value: username},
+			},
+		})
+		rules = append(rules, CollectorFilterRule{
+			ID:      fmt.Sprintf("legacy-login-user-%d", index),
+			Name:    "忽略登录用户 " + username,
+			Enabled: true,
+			Conditions: []CollectorFilterCondition{
+				{Field: "login_username", Op: "eq", Value: username},
+			},
+		})
+	}
+	return rules
 }

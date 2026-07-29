@@ -179,6 +179,100 @@ func TestCollectorNoiseFilterUsesSystemConfig(t *testing.T) {
 	}
 }
 
+func TestCollectorNoiseFilterDropsWhenAllRuleConditionsMatch(t *testing.T) {
+	filter := collectorNoiseFilterFromSystemConfig(systemconfig.CollectorFilterConfig{
+		Enabled:        true,
+		KeepSeverities: []string{"high", "critical"},
+		Rules: []systemconfig.CollectorFilterRule{{
+			ID:      "rule-1",
+			Name:    "ignore vite node",
+			Enabled: true,
+			Conditions: []systemconfig.CollectorFilterCondition{
+				{Field: "process_name", Op: "eq", Value: "node"},
+				{Field: "cmdline", Op: "contains", Value: "node_modules/.bin/vite"},
+			},
+		}},
+	})
+
+	if filter.ShouldDrop(audit.Event{ProcessName: "node", Cmdline: "/data/app/node_modules/.bin/vite --host", Severity: "info"}) != true {
+		t.Fatalf("expected event matching all conditions to be dropped")
+	}
+	if filter.ShouldDrop(audit.Event{ProcessName: "node", Cmdline: "/usr/bin/node server.js", Severity: "info"}) != false {
+		t.Fatalf("expected event missing one condition to be kept")
+	}
+}
+
+func TestCollectorNoiseFilterDropsWhenAnyRuleMatches(t *testing.T) {
+	filter := collectorNoiseFilterFromSystemConfig(systemconfig.CollectorFilterConfig{
+		Enabled:        true,
+		KeepSeverities: []string{"high", "critical"},
+		Rules: []systemconfig.CollectorFilterRule{
+			{
+				ID:      "rule-1",
+				Name:    "ignore kube probe",
+				Enabled: true,
+				Conditions: []systemconfig.CollectorFilterCondition{
+					{Field: "process_name", Op: "eq", Value: "kube-probe"},
+				},
+			},
+			{
+				ID:      "rule-2",
+				Name:    "ignore nobody low severity",
+				Enabled: true,
+				Conditions: []systemconfig.CollectorFilterCondition{
+					{Field: "username", Op: "eq", Value: "nobody"},
+					{Field: "severity", Op: "in", Values: []string{"info", "low"}},
+				},
+			},
+		},
+	})
+
+	if !filter.ShouldDrop(audit.Event{ProcessName: "bash", Username: "nobody", Severity: "low"}) {
+		t.Fatalf("expected second matching rule to drop event")
+	}
+	if filter.ShouldDrop(audit.Event{ProcessName: "bash", Username: "nobody", Severity: "medium"}) {
+		t.Fatalf("expected non-matching rule conditions to keep event")
+	}
+}
+
+func TestCollectorNoiseFilterPreservesKeptSeverityEvenWhenRuleMatches(t *testing.T) {
+	filter := collectorNoiseFilterFromSystemConfig(systemconfig.CollectorFilterConfig{
+		Enabled:        true,
+		KeepSeverities: []string{"high", "critical"},
+		Rules: []systemconfig.CollectorFilterRule{{
+			ID:      "rule-1",
+			Name:    "ignore node",
+			Enabled: true,
+			Conditions: []systemconfig.CollectorFilterCondition{
+				{Field: "process_name", Op: "eq", Value: "node"},
+			},
+		}},
+	})
+
+	if filter.ShouldDrop(audit.Event{ProcessName: "node", Severity: "high"}) {
+		t.Fatalf("expected kept severity to bypass collector filter")
+	}
+}
+
+func TestCollectorNoiseFilterIgnoresDisabledRule(t *testing.T) {
+	filter := collectorNoiseFilterFromSystemConfig(systemconfig.CollectorFilterConfig{
+		Enabled:        true,
+		KeepSeverities: []string{"high", "critical"},
+		Rules: []systemconfig.CollectorFilterRule{{
+			ID:      "rule-1",
+			Name:    "disabled node rule",
+			Enabled: false,
+			Conditions: []systemconfig.CollectorFilterCondition{
+				{Field: "process_name", Op: "eq", Value: "node"},
+			},
+		}},
+	})
+
+	if filter.ShouldDrop(audit.Event{ProcessName: "node", Severity: "info"}) {
+		t.Fatalf("expected disabled rule to keep event")
+	}
+}
+
 func TestRuleApplyingWriterRefreshesCollectorFilterFromProvider(t *testing.T) {
 	sink := &fakeEventSink{}
 	provider := &fakeCollectorFilterProvider{sets: []systemconfig.CollectorFilterConfig{

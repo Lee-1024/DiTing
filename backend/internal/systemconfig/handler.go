@@ -36,6 +36,10 @@ func (h *Handler) SaveCollectorFilter(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid keep severity", http.StatusBadRequest)
 		return
 	}
+	if !validCollectorFilterRules(request.Rules) {
+		http.Error(w, "invalid collector filter rule", http.StatusBadRequest)
+		return
+	}
 	request = normalizeCollectorFilterConfig(request)
 	if err := h.repository.SaveCollectorFilter(r.Context(), request); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -43,6 +47,41 @@ func (h *Handler) SaveCollectorFilter(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(request)
+}
+
+func validCollectorFilterRules(rules []CollectorFilterRule) bool {
+	for _, rule := range rules {
+		for _, condition := range rule.Conditions {
+			if !validCollectorFilterField(condition.Field) || !validCollectorFilterOp(condition.Op) {
+				return false
+			}
+			if condition.Op == "in" && len(condition.Values) == 0 {
+				return false
+			}
+			if condition.Op != "in" && condition.Value == "" {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func validCollectorFilterField(field string) bool {
+	switch field {
+	case "event_type", "severity", "process_name", "cmdline", "username", "login_username", "file_path", "dst_ip", "dst_port":
+		return true
+	default:
+		return false
+	}
+}
+
+func validCollectorFilterOp(op string) bool {
+	switch op {
+	case "eq", "contains", "in":
+		return true
+	default:
+		return false
+	}
 }
 
 // validCollectorFilterSeverities 校验 valid Collector Filter Severities 是否满足要求。

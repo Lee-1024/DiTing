@@ -38,7 +38,7 @@ func TestHandlerReturnsCollectorFilterConfig(t *testing.T) {
 func TestHandlerSavesCollectorFilterConfig(t *testing.T) {
 	repository := NewMemoryRepository()
 	handler := NewHandler(repository)
-	body := bytes.NewBufferString(`{"enabled":true,"ignoreProcessNames":["node_exporter"],"ignoreCommandKeywords":["/metrics"],"ignoreUsers":["prometheus"],"keepSeverities":["high","critical"]}`)
+	body := bytes.NewBufferString(`{"enabled":true,"ignoreProcessNames":["node_exporter"],"ignoreCommandKeywords":["/metrics"],"ignoreUsers":["prometheus"],"keepSeverities":["high","critical"],"rules":[{"id":"rule-1","name":"ignore vite","enabled":true,"conditions":[{"field":"process_name","op":"eq","value":"node"},{"field":"cmdline","op":"contains","value":"node_modules/.bin/vite"}]}]}`)
 
 	req := httptest.NewRequest(http.MethodPut, "/api/v1/system-configs/collector-filter", body)
 	rec := httptest.NewRecorder()
@@ -54,11 +54,27 @@ func TestHandlerSavesCollectorFilterConfig(t *testing.T) {
 	if !config.Enabled || config.IgnoreUsers[0] != "prometheus" {
 		t.Fatalf("unexpected saved config: %#v", config)
 	}
+	if len(config.Rules) != 1 || config.Rules[0].Conditions[0].Field != "process_name" {
+		t.Fatalf("unexpected saved rules: %#v", config.Rules)
+	}
 }
 
 func TestHandlerValidatesCollectorFilterSeverity(t *testing.T) {
 	handler := NewHandler(NewMemoryRepository())
 	body := bytes.NewBufferString(`{"enabled":true,"keepSeverities":["urgent"]}`)
+
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/system-configs/collector-filter", body)
+	rec := httptest.NewRecorder()
+	handler.SaveCollectorFilter(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rec.Code)
+	}
+}
+
+func TestHandlerValidatesCollectorFilterRule(t *testing.T) {
+	handler := NewHandler(NewMemoryRepository())
+	body := bytes.NewBufferString(`{"enabled":true,"keepSeverities":["high"],"rules":[{"id":"rule-1","name":"bad","enabled":true,"conditions":[{"field":"unknown","op":"eq","value":"node"}]}]}`)
 
 	req := httptest.NewRequest(http.MethodPut, "/api/v1/system-configs/collector-filter", body)
 	rec := httptest.NewRecorder()

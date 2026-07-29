@@ -1,5 +1,5 @@
-import { SaveOutlined } from '@ant-design/icons';
-import { Button, Card, Form, Select, Space, Switch, Typography, message } from 'antd';
+import { DeleteOutlined, PlusOutlined, SaveOutlined } from '@ant-design/icons';
+import { Button, Card, Divider, Form, Input, Select, Space, Switch, Typography, message } from 'antd';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getCollectorFilterConfig, saveCollectorFilterConfig } from '../../api/systemConfig';
@@ -14,9 +14,7 @@ export default function CollectorConfigPage() {
   const [saving, setSaving] = useState(false);
   const [form] = Form.useForm<CollectorFilterConfig>();
   const enabled = Form.useWatch('enabled', form);
-  const ignoreProcessNames = Form.useWatch('ignoreProcessNames', form) ?? [];
-  const ignoreCommandKeywords = Form.useWatch('ignoreCommandKeywords', form) ?? [];
-  const ignoreUsers = Form.useWatch('ignoreUsers', form) ?? [];
+  const rules = Form.useWatch('rules', form) ?? [];
   const keepSeverities = Form.useWatch('keepSeverities', form) ?? [];
 
   // load 加载页面所需数据。
@@ -40,10 +38,11 @@ export default function CollectorConfigPage() {
     try {
       const saved = await saveCollectorFilterConfig({
         enabled: Boolean(values.enabled),
-        ignoreProcessNames: values.ignoreProcessNames ?? [],
-        ignoreCommandKeywords: values.ignoreCommandKeywords ?? [],
-        ignoreUsers: values.ignoreUsers ?? [],
+        ignoreProcessNames: [],
+        ignoreCommandKeywords: [],
+        ignoreUsers: [],
         keepSeverities: values.keepSeverities ?? ['high', 'critical'],
+        rules: normalizeRules(values.rules ?? []),
       });
       form.setFieldsValue(saved);
       message.success('采集配置已保存');
@@ -74,13 +73,13 @@ export default function CollectorConfigPage() {
           className="collector-summary"
           kicker="CURRENT PROFILE"
           title={enabled ? '过滤已启用' : '过滤未启用'}
-          description={`当前保留 ${keepSeverities.length ? keepSeverities.join(' / ') : '未指定'} 等级；忽略项共 ${compactNumber(ignoreProcessNames.length + ignoreCommandKeywords.length + ignoreUsers.length)} 条。`}
+          description={`当前保留 ${keepSeverities.length ? keepSeverities.join(' / ') : '未指定'} 等级；启用规则 ${compactNumber(rules.filter((rule) => rule?.enabled).length)} 条。`}
         />
       </section>
       <div className="metric-grid">
-        <MetricCard label="忽略进程" value={ignoreProcessNames.length} hint="Process names" tone="cyan" />
-        <MetricCard label="忽略命令" value={ignoreCommandKeywords.length} hint="Command keywords" tone="blue" />
-        <MetricCard label="忽略用户" value={ignoreUsers.length} hint="User filters" tone="success" />
+        <MetricCard label="过滤规则" value={rules.length} hint="Rules" tone="cyan" />
+        <MetricCard label="启用规则" value={rules.filter((rule) => rule?.enabled).length} hint="Enabled rules" tone="blue" />
+        <MetricCard label="条件数" value={rules.reduce((sum, rule) => sum + (rule?.conditions?.length ?? 0), 0)} hint="Rule conditions" tone="success" />
         <MetricCard label="保留等级" value={keepSeverities.length} hint="Risk severities" tone="danger" />
       </div>
       <Card className="data-card config-card" loading={loading}>
@@ -93,25 +92,125 @@ export default function CollectorConfigPage() {
             ignoreCommandKeywords: [],
             ignoreUsers: [],
             keepSeverities: ['high', 'critical'],
+            rules: [],
           }}
         >
           <Form.Item name="enabled" label="启用采集过滤" valuePropName="checked">
             <Switch />
           </Form.Item>
-          <Form.Item name="ignoreProcessNames" label="忽略进程名">
-            <Select mode="tags" tokenSeparators={[',']} options={[]} />
-          </Form.Item>
-          <Form.Item name="ignoreCommandKeywords" label="忽略命令关键词">
-            <Select mode="tags" tokenSeparators={[',']} options={[]} />
-          </Form.Item>
-          <Form.Item name="ignoreUsers" label="忽略用户">
-            <Select mode="tags" tokenSeparators={[',']} options={[]} />
-          </Form.Item>
           <Form.Item name="keepSeverities" label="保留风险等级" rules={[{ required: true }]}>
             <Select mode="multiple" options={severityOptions} />
           </Form.Item>
+          <Divider />
+          <Form.List name="rules">
+            {(fields, { add, remove }) => (
+              <Space direction="vertical" size={16} style={{ width: '100%' }}>
+                {fields.map((field, index) => (
+                  <Card
+                    key={field.key}
+                    size="small"
+                    title={`过滤规则 ${index + 1}`}
+                    extra={<Button danger type="text" icon={<DeleteOutlined />} onClick={() => remove(field.name)} />}
+                  >
+                    <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                      <Form.Item name={[field.name, 'id']} hidden>
+                        <Input />
+                      </Form.Item>
+                      <Space align="start" wrap>
+                        <Form.Item name={[field.name, 'enabled']} label="启用" valuePropName="checked" initialValue>
+                          <Switch />
+                        </Form.Item>
+                        <Form.Item name={[field.name, 'name']} label="规则名称" rules={[{ required: true, message: '请输入规则名称' }]}>
+                          <Input style={{ width: 260 }} placeholder="例如：忽略 vite node" />
+                        </Form.Item>
+                      </Space>
+                      <Form.List name={[field.name, 'conditions']}>
+                        {(conditionFields, conditionOps) => (
+                          <Space direction="vertical" size={10} style={{ width: '100%' }}>
+                            {conditionFields.map((conditionField) => (
+                              <Space key={conditionField.key} align="start" wrap>
+                                <Form.Item name={[conditionField.name, 'field']} label="字段" rules={[{ required: true, message: '请选择字段' }]}>
+                                  <Select style={{ width: 180 }} options={collectorFilterFieldOptions} />
+                                </Form.Item>
+                                <Form.Item name={[conditionField.name, 'op']} label="条件" rules={[{ required: true, message: '请选择条件' }]}>
+                                  <Select style={{ width: 120 }} options={collectorFilterOpOptions} />
+                                </Form.Item>
+                                <Form.Item noStyle shouldUpdate>
+                                  {({ getFieldValue }) => {
+                                    const op = getFieldValue(['rules', field.name, 'conditions', conditionField.name, 'op']);
+                                    return op === 'in' ? (
+                                      <Form.Item name={[conditionField.name, 'values']} label="取值" rules={[{ required: true, message: '请输入取值' }]}>
+                                        <Select mode="tags" tokenSeparators={[',']} style={{ width: 320 }} options={[]} />
+                                      </Form.Item>
+                                    ) : (
+                                      <Form.Item name={[conditionField.name, 'value']} label="取值" rules={[{ required: true, message: '请输入取值' }]}>
+                                        <Input style={{ width: 320 }} placeholder="支持精确匹配或包含匹配" />
+                                      </Form.Item>
+                                    );
+                                  }}
+                                </Form.Item>
+                                <Button danger type="text" icon={<DeleteOutlined />} onClick={() => conditionOps.remove(conditionField.name)} />
+                              </Space>
+                            ))}
+                            <Button
+                              icon={<PlusOutlined />}
+                              onClick={() => conditionOps.add({ field: 'process_name', op: 'eq', value: '' })}
+                            >
+                              添加条件
+                            </Button>
+                          </Space>
+                        )}
+                      </Form.List>
+                    </Space>
+                  </Card>
+                ))}
+                <Button
+                  icon={<PlusOutlined />}
+                  onClick={() => add({ id: newRuleID(), name: '新过滤规则', enabled: true, conditions: [{ field: 'process_name', op: 'eq', value: '' }] })}
+                >
+                  添加过滤规则
+                </Button>
+              </Space>
+            )}
+          </Form.List>
         </Form>
       </Card>
     </>
   );
+}
+
+const collectorFilterFieldOptions = [
+  { value: 'event_type', label: '事件类型' },
+  { value: 'severity', label: '风险等级' },
+  { value: 'process_name', label: '进程名' },
+  { value: 'cmdline', label: '命令行' },
+  { value: 'username', label: '执行用户' },
+  { value: 'login_username', label: '登录用户' },
+  { value: 'file_path', label: '文件路径' },
+  { value: 'dst_ip', label: '目标 IP' },
+  { value: 'dst_port', label: '目标端口' },
+];
+
+const collectorFilterOpOptions = [
+  { value: 'eq', label: '等于' },
+  { value: 'contains', label: '包含' },
+  { value: 'in', label: '属于' },
+];
+
+function newRuleID() {
+  return `filter-${Date.now()}`;
+}
+
+function normalizeRules(rules: CollectorFilterConfig['rules']) {
+  return rules.map((rule) => ({
+    id: rule.id || newRuleID(),
+    name: rule.name,
+    enabled: Boolean(rule.enabled),
+    conditions: (rule.conditions ?? []).map((condition) => ({
+      field: condition.field,
+      op: condition.op,
+      value: condition.op === 'in' ? '' : condition.value ?? '',
+      values: condition.op === 'in' ? condition.values ?? [] : [],
+    })),
+  }));
 }

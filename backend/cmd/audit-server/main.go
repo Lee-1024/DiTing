@@ -624,14 +624,6 @@ func newRefreshingRuleWriter(sink eventSink, provider ruleProvider) *refreshingR
 	return &refreshingRuleWriter{sink: sink, provider: provider, rules: []rule.Rule{}}
 }
 
-type collectorNoiseFilter struct {
-	Enabled               bool
-	IgnoreProcessNames    []string
-	IgnoreCommandKeywords []string
-	IgnoreUsers           []string
-	KeepSeverities        []string
-}
-
 // SetNoiseFilter 设置 Set Noise Filter。
 func (w *refreshingRuleWriter) SetNoiseFilter(filter collectorNoiseFilter) {
 	w.mu.Lock()
@@ -652,17 +644,6 @@ func (w *refreshingRuleWriter) SetHeartbeatRecorder(recorder collectorHeartbeatR
 	defer w.mu.Unlock()
 	w.heartbeat = recorder
 	w.heartbeatInputMode = collectorInputMode(inputMode)
-}
-
-// collectorNoiseFilterFromSystemConfig 处理 collector Noise Filter From System Config 相关逻辑。
-func collectorNoiseFilterFromSystemConfig(cfg systemconfig.CollectorFilterConfig) collectorNoiseFilter {
-	return collectorNoiseFilter{
-		Enabled:               cfg.Enabled,
-		IgnoreProcessNames:    cfg.IgnoreProcessNames,
-		IgnoreCommandKeywords: cfg.IgnoreCommandKeywords,
-		IgnoreUsers:           cfg.IgnoreUsers,
-		KeepSeverities:        cfg.KeepSeverities,
-	}
 }
 
 // collectorHeartbeatLoop 处理 collector Heartbeat Loop 相关逻辑。
@@ -987,43 +968,4 @@ func firstHostName(events []audit.Event) string {
 		}
 	}
 	return ""
-}
-
-// ShouldDrop 处理 Should Drop 相关逻辑。
-func (f collectorNoiseFilter) ShouldDrop(event audit.Event) bool {
-	if !f.Enabled || f.shouldKeep(event) {
-		return false
-	}
-	if containsFold(f.IgnoreProcessNames, event.ProcessName) {
-		return true
-	}
-	if containsFold(f.IgnoreUsers, event.Username) || containsFold(f.IgnoreUsers, event.LoginUsername) {
-		return true
-	}
-	cmdline := strings.ToLower(event.Cmdline)
-	for _, keyword := range f.IgnoreCommandKeywords {
-		if keyword != "" && strings.Contains(cmdline, strings.ToLower(keyword)) {
-			return true
-		}
-	}
-	return false
-}
-
-// shouldKeep 处理 should Keep 相关逻辑。
-func (f collectorNoiseFilter) shouldKeep(event audit.Event) bool {
-	keepSeverities := f.KeepSeverities
-	if len(keepSeverities) == 0 {
-		keepSeverities = []string{"high", "critical"}
-	}
-	return containsFold(keepSeverities, event.Severity)
-}
-
-// containsFold 判断 contains Fold 是否符合条件。
-func containsFold(values []string, target string) bool {
-	for _, value := range values {
-		if strings.EqualFold(strings.TrimSpace(value), strings.TrimSpace(target)) && strings.TrimSpace(value) != "" {
-			return true
-		}
-	}
-	return false
 }
