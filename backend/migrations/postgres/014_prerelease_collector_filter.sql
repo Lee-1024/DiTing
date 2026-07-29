@@ -54,7 +54,16 @@ VALUES (
           "name": "预发忽略监控探针噪声",
           "enabled": true,
           "conditions": [
-            {"field": "process_name", "op": "in", "values": ["kube-probe", "node_exporter", "prometheus", "telegraf", "grafana-agent"]},
+            {"field": "process_name", "op": "in", "values": ["kube-probe", "node_exporter", "prometheus", "telegraf", "grafana-agent", "zabbix_agentd", "zabbix_agent2"]},
+            {"field": "severity", "op": "in", "values": ["info", "low", "medium"]}
+          ]
+        },
+        {
+          "id": "pre-monitoring-user-noise",
+          "name": "预发忽略监控用户噪声",
+          "enabled": true,
+          "conditions": [
+            {"field": "username", "op": "in", "values": ["zabbix", "prometheus"]},
             {"field": "severity", "op": "in", "values": ["info", "low", "medium"]}
           ]
         },

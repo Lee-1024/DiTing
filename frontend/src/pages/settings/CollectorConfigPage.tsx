@@ -15,6 +15,11 @@ export default function CollectorConfigPage() {
   const [ruleModalOpen, setRuleModalOpen] = useState(false);
   const [editingRuleIndex, setEditingRuleIndex] = useState<number>();
   const [rules, setRules] = useState<CollectorFilterConfig['rules']>([]);
+  const [legacyFilters, setLegacyFilters] = useState<Pick<CollectorFilterConfig, 'ignoreProcessNames' | 'ignoreCommandKeywords' | 'ignoreUsers'>>({
+    ignoreProcessNames: [],
+    ignoreCommandKeywords: [],
+    ignoreUsers: [],
+  });
   const [form] = Form.useForm<CollectorFilterConfig>();
   const [ruleForm] = Form.useForm<CollectorFilterConfig['rules'][number]>();
   const enabled = Form.useWatch('enabled', form);
@@ -26,6 +31,11 @@ export default function CollectorConfigPage() {
     try {
       const config = await getCollectorFilterConfig();
       form.setFieldsValue(config);
+      setLegacyFilters({
+        ignoreProcessNames: config.ignoreProcessNames ?? [],
+        ignoreCommandKeywords: config.ignoreCommandKeywords ?? [],
+        ignoreUsers: config.ignoreUsers ?? [],
+      });
       setRules(normalizeRules(config.rules ?? []));
     } finally {
       setLoading(false);
@@ -47,13 +57,18 @@ export default function CollectorConfigPage() {
     try {
       const saved = await saveCollectorFilterConfig({
         enabled: Boolean(values.enabled),
-        ignoreProcessNames: [],
-        ignoreCommandKeywords: [],
-        ignoreUsers: [],
+        ignoreProcessNames: legacyFilters.ignoreProcessNames,
+        ignoreCommandKeywords: legacyFilters.ignoreCommandKeywords,
+        ignoreUsers: legacyFilters.ignoreUsers,
         keepSeverities: values.keepSeverities ?? ['high', 'critical'],
         rules: normalizeRules(nextRules),
       });
       form.setFieldsValue(saved);
+      setLegacyFilters({
+        ignoreProcessNames: saved.ignoreProcessNames ?? [],
+        ignoreCommandKeywords: saved.ignoreCommandKeywords ?? [],
+        ignoreUsers: saved.ignoreUsers ?? [],
+      });
       setRules(normalizeRules(saved.rules ?? []));
       message.success('采集配置已保存');
     } finally {

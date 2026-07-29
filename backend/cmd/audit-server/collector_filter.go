@@ -44,11 +44,14 @@ func (f collectorNoiseFilter) ShouldDropBeforeEnrichment(event audit.Event) bool
 	if !f.Enabled || f.shouldKeep(event) {
 		return false
 	}
-	if f.isRootRoutineEvent(event) && !isExplicitHighRiskRootEvent(event) {
+	if f.isRootRoutineEvent(event) {
+		return !isExplicitHighRiskRootEvent(event)
+	}
+	if f.shouldDropByLegacyFields(event) {
 		return true
 	}
 	for _, rule := range f.Rules {
-		if rule.ID == "pre-diting-self-vite-noise" && f.ruleMatches(rule, event) {
+		if f.ruleMatches(rule, event) {
 			return true
 		}
 	}
@@ -128,8 +131,8 @@ func isSuspiciousNetworkEvent(event audit.Event) bool {
 }
 
 func (f collectorNoiseFilter) shouldDropByRules(event audit.Event) bool {
-	if len(f.Rules) == 0 {
-		return f.shouldDropByLegacyFields(event)
+	if f.shouldDropByLegacyFields(event) {
+		return true
 	}
 	for _, rule := range f.Rules {
 		if f.ruleMatches(rule, event) {

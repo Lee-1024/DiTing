@@ -235,6 +235,60 @@ func TestRuleApplyingWriterFiltersRootRoutineNetworkBeforeRulePromotion(t *testi
 	}
 }
 
+func TestRuleApplyingWriterFiltersIgnoredUserBeforeRulePromotion(t *testing.T) {
+	sink := &fakeEventSink{}
+	writer := newRefreshingRuleWriter(sink, &fakeRuleProvider{sets: [][]rule.Rule{{{
+		ID:        "zabbix-file",
+		Name:      "zabbix file access",
+		EventType: "file_access",
+		Enabled:   true,
+		Severity:  "high",
+		RiskScore: 80,
+		MatchExpr: rule.Expression{
+			Operator: "and",
+			Conditions: []rule.Condition{
+				{Field: "event_type", Op: "eq", Value: "file_access"},
+				{Field: "process_name", Op: "eq", Value: "zabbix_agentd"},
+			},
+		},
+	}}}})
+	writer.SetNoiseFilter(collectorNoiseFilterFromSystemConfig(systemconfig.CollectorFilterConfig{
+		Enabled:        true,
+		KeepSeverities: []string{"high", "critical"},
+		Rules: []systemconfig.CollectorFilterRule{{
+			ID:      "ignore-zabbix-user",
+			Name:    "忽略 zabbix 用户",
+			Enabled: true,
+			Conditions: []systemconfig.CollectorFilterCondition{
+				{Field: "username", Op: "eq", Value: "zabbix"},
+			},
+		}},
+	}))
+	if err := writer.Refresh(context.Background()); err != nil {
+		t.Fatalf("Refresh returned error: %v", err)
+	}
+
+	err := writer.Write(context.Background(), []audit.Event{{
+		EventType:         "file_access",
+		Username:          "zabbix",
+		LoginUsername:     "zabbix",
+		ProcessName:       "zabbix_agentd",
+		Cmdline:           "/usr/sbin/zabbix_agentd",
+		FilePath:          "/usr/sbin/zabbix_agentd",
+		FileOperation:     "open",
+		Severity:          "info",
+		ParentCmdline:     "/usr/sbin/zabbix_agentd -c /etc/zabbix/zabbix_agentd.conf",
+		ParentProcessName: "zabbix_agentd",
+	}})
+	if err != nil {
+		t.Fatalf("Write returned error: %v", err)
+	}
+
+	if len(sink.events) != 0 {
+		t.Fatalf("expected ignored zabbix user event to be filtered before rule promotion, got %d events", len(sink.events))
+	}
+}
+
 func TestRuleApplyingWriterPreservesRootExplicitHighRiskBeforeRulePromotion(t *testing.T) {
 	sink := &fakeEventSink{}
 	writer := newRefreshingRuleWriter(sink, &fakeRuleProvider{sets: [][]rule.Rule{{
@@ -363,6 +417,26 @@ func TestCollectorNoiseFilterDropsWhenAnyRuleMatches(t *testing.T) {
 	}
 	if filter.ShouldDrop(audit.Event{ProcessName: "bash", Username: "nobody", Severity: "medium"}) {
 		t.Fatalf("expected non-matching rule conditions to keep event")
+	}
+}
+
+func TestCollectorNoiseFilterAppliesLegacyIgnoredUsersAlongsideRules(t *testing.T) {
+	filter := collectorNoiseFilterFromSystemConfig(systemconfig.CollectorFilterConfig{
+		Enabled:        true,
+		IgnoreUsers:    []string{"zabbix"},
+		KeepSeverities: []string{"high", "critical"},
+		Rules: []systemconfig.CollectorFilterRule{{
+			ID:      "ignore-node",
+			Name:    "ignore node",
+			Enabled: true,
+			Conditions: []systemconfig.CollectorFilterCondition{
+				{Field: "process_name", Op: "eq", Value: "node"},
+			},
+		}},
+	})
+
+	if !filter.ShouldDrop(audit.Event{EventType: "file_access", Username: "zabbix", LoginUsername: "zabbix", ProcessName: "zabbix_agentd", Severity: "info"}) {
+		t.Fatalf("expected legacy ignored user to be dropped even when rules are configured")
 	}
 }
 

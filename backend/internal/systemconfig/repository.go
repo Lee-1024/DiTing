@@ -96,7 +96,16 @@ func PreReleaseCollectorFilterConfig() CollectorFilterConfig {
 				Name:    "预发忽略监控探针噪声",
 				Enabled: true,
 				Conditions: []CollectorFilterCondition{
-					{Field: "process_name", Op: "in", Values: []string{"kube-probe", "node_exporter", "prometheus", "telegraf", "grafana-agent"}},
+					{Field: "process_name", Op: "in", Values: []string{"kube-probe", "node_exporter", "prometheus", "telegraf", "grafana-agent", "zabbix_agentd", "zabbix_agent2"}},
+					{Field: "severity", Op: "in", Values: []string{"info", "low", "medium"}},
+				},
+			},
+			{
+				ID:      "pre-monitoring-user-noise",
+				Name:    "预发忽略监控用户噪声",
+				Enabled: true,
+				Conditions: []CollectorFilterCondition{
+					{Field: "username", Op: "in", Values: []string{"zabbix", "prometheus"}},
 					{Field: "severity", Op: "in", Values: []string{"info", "low", "medium"}},
 				},
 			},
