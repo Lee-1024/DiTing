@@ -30,8 +30,8 @@ The pre-release reset command rewrites `collector_filter` during the rehearsal r
 The baseline is designed for high-volume hosts:
 
 - Always keep `high` and `critical` events after audit-rule enrichment.
-- Drop low-risk `root` `process_exec`, `file_access`, and `network_connect` events.
-- Keep root sensitive-file, reverse-shell, privilege, suspicious-network, and process-chain hits because rules raise them to `high` or `critical`.
+- Drop routine low-risk `root` `process_exec`, `file_access`, and `network_connect` events before audit-rule enrichment, so broad rules cannot promote root noise into stored high-severity events.
+- Let explicit root high-risk signals pass into rule enrichment: reverse shell patterns, download-to-shell patterns, sensitive-file mutation, dangerous permission changes, and suspicious outbound ports.
 - Keep normal-user commands by default.
 - Drop high-frequency low-value reads from `/proc`, `/sys`, and simple `/dev` pseudo files.
 - Drop low-risk monitoring probe noise from common agents.
