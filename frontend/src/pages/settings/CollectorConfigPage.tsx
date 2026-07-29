@@ -1,6 +1,5 @@
 import { DeleteOutlined, PlusOutlined, SaveOutlined } from '@ant-design/icons';
-import { Button, Card, Divider, Form, Input, Select, Space, Switch, Table, Tag, Typography, message } from 'antd';
-import type { FormListFieldData } from 'antd';
+import { Button, Card, Divider, Form, Input, Modal, Popconfirm, Select, Space, Switch, Table, Tag, Typography, message } from 'antd';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getCollectorFilterConfig, saveCollectorFilterConfig } from '../../api/systemConfig';
@@ -13,7 +12,10 @@ import { severityOptions } from '../../utils/labels';
 export default function CollectorConfigPage() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [ruleModalOpen, setRuleModalOpen] = useState(false);
+  const [editingRuleIndex, setEditingRuleIndex] = useState<number>();
   const [form] = Form.useForm<CollectorFilterConfig>();
+  const [ruleForm] = Form.useForm<CollectorFilterConfig['rules'][number]>();
   const enabled = Form.useWatch('enabled', form);
   const rules = Form.useWatch('rules', form) ?? [];
   const keepSeverities = Form.useWatch('keepSeverities', form) ?? [];
@@ -50,6 +52,29 @@ export default function CollectorConfigPage() {
     } finally {
       setSaving(false);
     }
+  }
+
+  function openRuleModal(index?: number) {
+    setEditingRuleIndex(index);
+    ruleForm.setFieldsValue(index === undefined ? newRule() : rules[index]);
+    setRuleModalOpen(true);
+  }
+
+  async function saveRule() {
+    const value = await ruleForm.validateFields();
+    const nextRules = [...rules];
+    const nextRule = normalizeRules([value])[0];
+    if (editingRuleIndex === undefined) {
+      nextRules.push(nextRule);
+    } else {
+      nextRules[editingRuleIndex] = nextRule;
+    }
+    form.setFieldValue('rules', nextRules);
+    setRuleModalOpen(false);
+  }
+
+  function removeRule(index: number) {
+    form.setFieldValue('rules', rules.filter((_, ruleIndex) => ruleIndex !== index));
   }
 
   return (
@@ -103,136 +128,134 @@ export default function CollectorConfigPage() {
             <Select mode="multiple" options={severityOptions} />
           </Form.Item>
           <Divider />
-          <Form.List name="rules">
-            {(fields, { add, remove }) => (
-              <Space direction="vertical" size={16} style={{ width: '100%' }}>
-                <Table
-                  rowKey="key"
-                  size="small"
-                  pagination={false}
-                  dataSource={fields}
-                  locale={{ emptyText: '暂无过滤规则' }}
-                  expandable={{
-                    expandedRowRender: (field) => renderConditionTable(field),
-                    rowExpandable: () => true,
-                    defaultExpandAllRows: true,
-                  }}
-                  columns={[
-                    {
-                      title: '启用',
-                      width: 90,
-                      render: (_, field) => (
-                        <Form.Item name={[field.name, 'enabled']} valuePropName="checked" initialValue noStyle>
-                          <Switch />
-                        </Form.Item>
-                      ),
-                    },
-                    {
-                      title: '规则名称',
-                      width: 300,
-                      render: (_, field) => (
-                        <>
-                          <Form.Item name={[field.name, 'id']} hidden>
-                            <Input />
-                          </Form.Item>
-                          <Form.Item name={[field.name, 'name']} rules={[{ required: true, message: '请输入规则名称' }]} style={{ marginBottom: 0 }}>
-                            <Input placeholder="例如：忽略 vite node" />
-                          </Form.Item>
-                        </>
-                      ),
-                    },
-                    {
-                      title: '条件',
-                      render: (_, field) => <ConditionSummary rule={rules[field.name]} />,
-                    },
-                    {
-                      title: '操作',
-                      width: 90,
-                      render: (_, field) => (
-                        <Button danger type="text" icon={<DeleteOutlined />} onClick={() => remove(field.name)} />
-                      ),
-                    },
-                  ]}
-                />
-                <Button
-                  icon={<PlusOutlined />}
-                  onClick={() => add({ id: newRuleID(), name: '新过滤规则', enabled: true, conditions: [{ field: 'process_name', op: 'eq', value: '' }] })}
-                >
-                  添加过滤规则
-                </Button>
-              </Space>
-            )}
-          </Form.List>
-        </Form>
-      </Card>
-    </>
-  );
-}
-
-function renderConditionTable(ruleField: FormListFieldData) {
-  return (
-    <Form.List name={[ruleField.name, 'conditions']}>
-      {(conditionFields, conditionOps) => (
-        <Space direction="vertical" size={10} style={{ width: '100%' }}>
           <Table
-            rowKey="key"
+            rowKey={(record) => record.id}
             size="small"
             pagination={false}
-            dataSource={conditionFields}
-            locale={{ emptyText: '暂无条件' }}
+            dataSource={rules}
+            locale={{ emptyText: '暂无过滤规则' }}
             columns={[
               {
-                title: '字段',
-                width: 220,
-                render: (_, conditionField) => (
-                  <Form.Item name={[conditionField.name, 'field']} rules={[{ required: true, message: '请选择字段' }]} style={{ marginBottom: 0 }}>
-                    <Select options={collectorFilterFieldOptions} />
-                  </Form.Item>
-                ),
+                title: '启用',
+                dataIndex: 'enabled',
+                width: 90,
+                render: (value) => <Tag color={value ? 'green' : 'default'}>{value ? '启用' : '停用'}</Tag>,
               },
+              { title: '规则名称', dataIndex: 'name', width: 280, render: (value) => value || '-' },
               {
                 title: '条件',
-                width: 160,
-                render: (_, conditionField) => (
-                  <Form.Item name={[conditionField.name, 'op']} rules={[{ required: true, message: '请选择条件' }]} style={{ marginBottom: 0 }}>
-                    <Select options={collectorFilterOpOptions} />
-                  </Form.Item>
-                ),
-              },
-              {
-                title: '取值',
-                render: (_, conditionField) => (
-                  <Form.Item noStyle shouldUpdate>
-                    {({ getFieldValue }) => {
-                      const op = getFieldValue(['rules', ruleField.name, 'conditions', conditionField.name, 'op']);
-                      return op === 'in' ? (
-                        <Form.Item name={[conditionField.name, 'values']} rules={[{ required: true, message: '请输入取值' }]} style={{ marginBottom: 0 }}>
-                          <Select mode="tags" tokenSeparators={[',']} options={[]} />
-                        </Form.Item>
-                      ) : (
-                        <Form.Item name={[conditionField.name, 'value']} rules={[{ required: true, message: '请输入取值' }]} style={{ marginBottom: 0 }}>
-                          <Input placeholder="支持精确匹配或包含匹配" />
-                        </Form.Item>
-                      );
-                    }}
-                  </Form.Item>
-                ),
+                render: (_, record) => <ConditionSummary rule={record} />,
               },
               {
                 title: '操作',
-                width: 80,
-                render: (_, conditionField) => (
-                  <Button danger type="text" icon={<DeleteOutlined />} onClick={() => conditionOps.remove(conditionField.name)} />
+                width: 170,
+                render: (_, __, index) => (
+                  <Space size={8}>
+                    <Button size="small" onClick={() => openRuleModal(index)}>编辑</Button>
+                    <Popconfirm title="确认删除这条过滤规则？" onConfirm={() => removeRule(index)}>
+                      <Button danger size="small" icon={<DeleteOutlined />} />
+                    </Popconfirm>
+                  </Space>
                 ),
               },
             ]}
           />
-          <Button icon={<PlusOutlined />} onClick={() => conditionOps.add({ field: 'process_name', op: 'eq', value: '' })}>
-            添加条件
+          <Button icon={<PlusOutlined />} style={{ marginTop: 16 }} onClick={() => openRuleModal()}>
+            添加过滤规则
           </Button>
-        </Space>
-      )}
-    </Form.List>
+        </Form>
+      </Card>
+      <Modal
+        title={editingRuleIndex === undefined ? '添加过滤规则' : '编辑过滤规则'}
+        open={ruleModalOpen}
+        width={860}
+        onOk={() => void saveRule()}
+        onCancel={() => setRuleModalOpen(false)}
+        destroyOnHidden
+      >
+        <RuleEditorForm form={ruleForm} />
+      </Modal>
+    </>
+  );
+}
+
+function RuleEditorForm({ form }: { form: ReturnType<typeof Form.useForm<CollectorFilterConfig['rules'][number]>>[0] }) {
+  return (
+    <Form form={form} layout="vertical">
+      <Form.Item name="id" hidden>
+        <Input />
+      </Form.Item>
+      <Space align="start" wrap>
+        <Form.Item name="enabled" label="启用" valuePropName="checked" initialValue>
+          <Switch />
+        </Form.Item>
+        <Form.Item name="name" label="规则名称" rules={[{ required: true, message: '请输入规则名称' }]}>
+          <Input style={{ width: 320 }} placeholder="例如：忽略 vite node" />
+        </Form.Item>
+      </Space>
+      <Form.List name="conditions">
+        {(conditionFields, conditionOps) => (
+          <Space direction="vertical" size={10} style={{ width: '100%' }}>
+            <Table
+              rowKey="key"
+              size="small"
+              pagination={false}
+              dataSource={conditionFields}
+              locale={{ emptyText: '暂无条件' }}
+              columns={[
+                {
+                  title: '字段',
+                  width: 190,
+                  render: (_, conditionField) => (
+                    <Form.Item name={[conditionField.name, 'field']} rules={[{ required: true, message: '请选择字段' }]} style={{ marginBottom: 0 }}>
+                      <Select options={collectorFilterFieldOptions} />
+                    </Form.Item>
+                  ),
+                },
+                {
+                  title: '条件',
+                  width: 140,
+                  render: (_, conditionField) => (
+                    <Form.Item name={[conditionField.name, 'op']} rules={[{ required: true, message: '请选择条件' }]} style={{ marginBottom: 0 }}>
+                      <Select options={collectorFilterOpOptions} />
+                    </Form.Item>
+                  ),
+                },
+                {
+                  title: '取值',
+                  render: (_, conditionField) => (
+                    <Form.Item noStyle shouldUpdate>
+                      {({ getFieldValue }) => {
+                        const op = getFieldValue(['conditions', conditionField.name, 'op']);
+                        return op === 'in' ? (
+                          <Form.Item name={[conditionField.name, 'values']} rules={[{ required: true, message: '请输入取值' }]} style={{ marginBottom: 0 }}>
+                            <Select mode="tags" tokenSeparators={[',']} options={[]} />
+                          </Form.Item>
+                        ) : (
+                          <Form.Item name={[conditionField.name, 'value']} rules={[{ required: true, message: '请输入取值' }]} style={{ marginBottom: 0 }}>
+                            <Input placeholder="支持精确匹配或包含匹配" />
+                          </Form.Item>
+                        );
+                      }}
+                    </Form.Item>
+                  ),
+                },
+                {
+                  title: '操作',
+                  width: 80,
+                  render: (_, conditionField) => (
+                    <Button danger type="text" icon={<DeleteOutlined />} onClick={() => conditionOps.remove(conditionField.name)} />
+                  ),
+                },
+              ]}
+            />
+            <Button icon={<PlusOutlined />} onClick={() => conditionOps.add({ field: 'process_name', op: 'eq', value: '' })}>
+              添加条件
+            </Button>
+          </Space>
+        )}
+      </Form.List>
+    </Form>
   );
 }
 
@@ -269,6 +292,10 @@ const collectorFilterOpOptions = [
 
 function newRuleID() {
   return `filter-${Date.now()}`;
+}
+
+function newRule(): CollectorFilterConfig['rules'][number] {
+  return { id: newRuleID(), name: '新过滤规则', enabled: true, conditions: [{ field: 'process_name', op: 'eq', value: '', values: [] }] };
 }
 
 function normalizeRules(rules: CollectorFilterConfig['rules']) {
