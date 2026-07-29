@@ -19,6 +19,16 @@ VALUES (
           ]
         },
         {
+          "id": "pre-root-login-process-exit-low-risk",
+          "name": "预发忽略 root 登录进程退出",
+          "enabled": true,
+          "conditions": [
+            {"field": "event_type", "op": "eq", "value": "process_exit"},
+            {"field": "login_username", "op": "eq", "value": "root"},
+            {"field": "severity", "op": "in", "values": ["info", "low", "medium"]}
+          ]
+        },
+        {
           "id": "pre-root-file-low-risk",
           "name": "预发忽略 root 常规文件访问",
           "enabled": true,

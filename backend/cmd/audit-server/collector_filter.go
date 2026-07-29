@@ -32,7 +32,7 @@ func collectorNoiseFilterFromSystemConfig(cfg systemconfig.CollectorFilterConfig
 
 // ShouldDrop returns true when the event matches any enabled collector filter rule.
 func (f collectorNoiseFilter) ShouldDrop(event audit.Event) bool {
-	if !f.Enabled || f.shouldKeep(event) {
+	if !f.Enabled || f.hasAuditRuleHit(event) || f.shouldKeep(event) {
 		return false
 	}
 	return f.shouldDropByRules(event)
@@ -44,90 +44,19 @@ func (f collectorNoiseFilter) ShouldDropBeforeEnrichment(event audit.Event) bool
 	if !f.Enabled || f.shouldKeep(event) {
 		return false
 	}
-	if f.isRootRoutineEvent(event) {
-		return !isExplicitHighRiskRootEvent(event)
-	}
 	if f.shouldDropByLegacyFields(event) {
-		return true
+		return false
 	}
 	for _, rule := range f.Rules {
-		if f.ruleMatches(rule, event) {
+		if rule.ID == "pre-diting-self-vite-noise" && f.ruleMatches(rule, event) {
 			return true
 		}
 	}
 	return false
 }
 
-func (f collectorNoiseFilter) isRootRoutineEvent(event audit.Event) bool {
-	if !strings.EqualFold(strings.TrimSpace(event.Username), "root") {
-		return false
-	}
-	switch event.EventType {
-	case "process_exec", "file_access", "network_connect":
-	default:
-		return false
-	}
-	severity := strings.ToLower(strings.TrimSpace(event.Severity))
-	return severity == "" || severity == "info" || severity == "low" || severity == "medium"
-}
-
-func isExplicitHighRiskRootEvent(event audit.Event) bool {
-	switch event.EventType {
-	case "process_exec":
-		return isExplicitHighRiskCommand(event)
-	case "file_access":
-		return isSensitiveFileMutation(event)
-	case "network_connect":
-		return isSuspiciousNetworkEvent(event)
-	default:
-		return false
-	}
-}
-
-func isExplicitHighRiskCommand(event audit.Event) bool {
-	cmdline := strings.ToLower(event.Cmdline)
-	highRiskKeywords := []string{
-		"bash -i",
-		"sh -i",
-		"nc -e",
-		"ncat -e",
-		"/dev/tcp/",
-		"socat exec:",
-		"| sh",
-		"| bash",
-		"chmod 777",
-		"chmod -r 777",
-		"chown root",
-	}
-	for _, keyword := range highRiskKeywords {
-		if strings.Contains(cmdline, keyword) {
-			return true
-		}
-	}
-	return false
-}
-
-func isSensitiveFileMutation(event audit.Event) bool {
-	filePath := event.FilePath
-	if filePath == "" {
-		return false
-	}
-	sensitive, err := regexp.MatchString(`(^/etc/(passwd|shadow|group|gshadow|sudoers|sudoers\.d/|ssh/|crontab)|^/var/spool/cron/|^/root/\.ssh/|^/home/[^/]+/\.ssh/)`, filePath)
-	if err != nil || !sensitive {
-		return false
-	}
-	operation := event.FileOperation
-	mutating, err := regexp.MatchString(`(?i)(write|truncate|create|creat|open.*wronly|open.*rdwr|unlink|unlinkat|rmdir|chmod|chown|fchmod|fchown|setxattr|removexattr|security_inode_unlink|security_inode_rmdir|security_inode_setattr)`, operation)
-	return err == nil && mutating
-}
-
-func isSuspiciousNetworkEvent(event audit.Event) bool {
-	switch event.DstPort {
-	case 4444, 5555, 6666, 7777, 8888, 9999, 31337:
-		return true
-	default:
-		return false
-	}
+func (f collectorNoiseFilter) hasAuditRuleHit(event audit.Event) bool {
+	return len(event.RuleIDs) > 0 || len(event.RuleNames) > 0 || len(event.RuleMatches) > 0
 }
 
 func (f collectorNoiseFilter) shouldDropByRules(event audit.Event) bool {

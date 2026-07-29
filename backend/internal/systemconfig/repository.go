@@ -61,6 +61,16 @@ func PreReleaseCollectorFilterConfig() CollectorFilterConfig {
 				},
 			},
 			{
+				ID:      "pre-root-login-process-exit-low-risk",
+				Name:    "预发忽略 root 登录进程退出",
+				Enabled: true,
+				Conditions: []CollectorFilterCondition{
+					{Field: "event_type", Op: "eq", Value: "process_exit"},
+					{Field: "login_username", Op: "eq", Value: "root"},
+					{Field: "severity", Op: "in", Values: []string{"info", "low", "medium"}},
+				},
+			},
+			{
 				ID:      "pre-root-file-low-risk",
 				Name:    "预发忽略 root 常规文件访问",
 				Enabled: true,
