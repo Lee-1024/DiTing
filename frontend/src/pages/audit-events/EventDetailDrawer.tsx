@@ -6,6 +6,7 @@ import { InvestigationBrief } from '../../components/InsightHeader';
 import ProcessChain from '../../components/ProcessChain';
 import SeverityTag from '../../components/SeverityTag';
 import type { AuditEvent, AuditEventQuery } from '../../types/audit';
+import type { AIRiskAnalysis } from '../../types/riskAnalysis';
 import { formatJSON } from '../../utils/format';
 import { displayHostIdentity } from '../../utils/hostDisplay';
 import { eventTypeLabel, ruleFieldLabel, ruleOperatorLabel } from '../../utils/labels';
@@ -15,12 +16,13 @@ interface Props {
   event?: AuditEvent;
   eventId?: string;
   relatedEvents?: AuditEvent[];
+  aiAnalysis?: AIRiskAnalysis;
   open: boolean;
   onClose: () => void;
 }
 
 // EventDetailDrawer 渲染调查式事件详情抽屉。
-export default function EventDetailDrawer({ event, eventId, relatedEvents = [], open, onClose }: Props) {
+export default function EventDetailDrawer({ event, eventId, relatedEvents = [], aiAnalysis, open, onClose }: Props) {
   const [detail, setDetail] = useState<AuditEvent>();
   const [selectedInlineEvent, setSelectedInlineEvent] = useState<AuditEvent>();
   const [autoRelatedEvents, setAutoRelatedEvents] = useState<AuditEvent[]>([]);
@@ -110,6 +112,7 @@ export default function EventDetailDrawer({ event, eventId, relatedEvents = [], 
             className="investigation-tabs"
             items={[
               { key: 'overview', label: '概览', children: <OverviewTab event={current} /> },
+              ...(aiAnalysis ? [{ key: 'ai', label: 'AI 分析', children: <AIAnalysisTab analysis={aiAnalysis} /> }] : []),
               { key: 'process', label: '进程与身份', children: <ProcessTab event={current} /> },
               { key: 'rules', label: '规则命中', children: <RulesTab event={current} /> },
               { key: 'related', label: `关联事件 ${mergedRelatedEvents.length > 1 ? mergedRelatedEvents.length : ''}`, children: <RelatedTab current={current} relatedEvents={mergedRelatedEvents} loading={relatedLoading} onSelect={setSelectedInlineEvent} /> },
@@ -120,6 +123,70 @@ export default function EventDetailDrawer({ event, eventId, relatedEvents = [], 
       )}
     </Drawer>
   );
+}
+
+function AIAnalysisTab({ analysis }: { analysis: AIRiskAnalysis }) {
+  return (
+    <Space direction="vertical" size={16} style={{ width: '100%' }}>
+      <Card className="panel-card" size="small">
+        <Descriptions column={1} bordered size="small">
+          <Descriptions.Item label="AI 判断"><Tag color={aiVerdictColor(analysis.verdict)}>{aiVerdictText(analysis.verdict)}</Tag></Descriptions.Item>
+          <Descriptions.Item label="AI 等级"><SeverityTag value={analysis.aiSeverity} /></Descriptions.Item>
+          <Descriptions.Item label="置信度">{analysis.confidence}%</Descriptions.Item>
+          <Descriptions.Item label="模型">{analysis.model || '-'}</Descriptions.Item>
+          <Descriptions.Item label="分析时间">{formatLocalDateTime(analysis.analyzedAt)}</Descriptions.Item>
+          <Descriptions.Item label="判断理由">
+            <Typography.Paragraph style={{ marginBottom: 0 }} copyable>
+              {analysis.reason || '-'}
+            </Typography.Paragraph>
+          </Descriptions.Item>
+          <Descriptions.Item label="处置建议">
+            <Typography.Paragraph style={{ marginBottom: 0 }} copyable>
+              {analysis.suggestion || '-'}
+            </Typography.Paragraph>
+          </Descriptions.Item>
+        </Descriptions>
+      </Card>
+      <Card className="panel-card" title="证据" size="small">
+        {analysis.evidence?.length ? (
+          <Space direction="vertical" size={8} style={{ width: '100%' }}>
+            {analysis.evidence.map((item, index) => (
+              <Typography.Paragraph key={`${index}-${item}`} style={{ marginBottom: 0 }} copyable>
+                {item}
+              </Typography.Paragraph>
+            ))}
+          </Space>
+        ) : (
+          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无证据" />
+        )}
+      </Card>
+      {analysis.rawResponse ? (
+        <Card className="panel-card" title="模型原始输出" size="small">
+          <pre className="detail-json">{analysis.rawResponse}</pre>
+        </Card>
+      ) : null}
+    </Space>
+  );
+}
+
+function aiVerdictText(verdict: string) {
+  const config: Record<string, string> = {
+    true_positive: '真实风险',
+    suspicious: '可疑',
+    false_positive: '可能误报',
+    needs_review: '需复核',
+  };
+  return config[verdict] ?? verdict;
+}
+
+function aiVerdictColor(verdict: string) {
+  const config: Record<string, string> = {
+    true_positive: 'red',
+    suspicious: 'orange',
+    false_positive: 'blue',
+    needs_review: 'purple',
+  };
+  return config[verdict] ?? 'default';
 }
 
 // OverviewTab 渲染事件概览。

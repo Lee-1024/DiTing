@@ -9,6 +9,7 @@ export interface AIRiskAnalysis {
   evidence: string[];
   suggestion: string;
   model: string;
+  rawResponse?: string;
   analyzedAt: string;
   createdAt: string;
   updatedAt: string;

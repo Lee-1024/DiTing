@@ -414,7 +414,12 @@ export default function RiskEventsPage() {
           ]}
         />
       </Card>
-      <EventDetailDrawer event={selected} open={Boolean(selected)} onClose={() => setSelected(undefined)} />
+      <EventDetailDrawer
+        event={selected}
+        aiAnalysis={selected ? aiAnalyses[selected.eventId] : undefined}
+        open={Boolean(selected)}
+        onClose={() => setSelected(undefined)}
+      />
       <Modal
         title="处置风险事件"
         open={dispositionOpen}
