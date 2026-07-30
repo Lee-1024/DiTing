@@ -1502,10 +1502,10 @@ body {
 }
 
 .ant-modal-footer {
-  margin: 28px -28px -24px;
-  padding: 20px 28px 22px;
+  margin: 32px 0 0;
+  padding: 20px 0 0;
   border-top: 1px solid rgba(148, 163, 184, 0.18);
-  background: rgba(248, 250, 252, 0.86);
+  background: transparent;
 }
 
 .ant-modal-footer .ant-btn + .ant-btn {
