@@ -1,5 +1,6 @@
 import { Button, Card, DatePicker, Empty, Form, Input, Modal, Select, Space, Table, Tag, Typography, message } from 'antd';
 import dayjs from 'dayjs';
+import type { Key } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { exportAuditEvents, queryAuditEvents } from '../../api/audit';
 import { analyzeRiskEvent, getRiskAnalyses } from '../../api/riskAnalyses';
@@ -36,9 +37,14 @@ export default function RiskEventsPage() {
   const [dispositionOpen, setDispositionOpen] = useState(false);
   const [dispositionEvent, setDispositionEvent] = useState<AuditEvent>();
   const [savingDisposition, setSavingDisposition] = useState(false);
+  const [batchDispositionOpen, setBatchDispositionOpen] = useState(false);
+  const [savingBatchDisposition, setSavingBatchDisposition] = useState(false);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
+  const [selectedRows, setSelectedRows] = useState<AuditEvent[]>([]);
   const [analyzingEventId, setAnalyzingEventId] = useState<string>();
   const [form] = Form.useForm();
   const [dispositionForm] = Form.useForm();
+  const [batchDispositionForm] = Form.useForm();
   const requestSeq = useRef(0);
 
   // buildQuery 构建 build Query 所需的数据结构。
@@ -51,6 +57,7 @@ export default function RiskEventsPage() {
       end_time: range?.[1]?.endOf('day').toISOString(),
       event_type: values.eventType,
       severity_in: severity,
+      host_name: values.hostName,
       username: values.username,
       keyword: values.keyword,
       page: nextPage,
@@ -75,6 +82,7 @@ export default function RiskEventsPage() {
           setEvents([]);
           setDispositions({});
           setVisibleEvents([]);
+          clearSelection();
           setTotal(0);
           setTotalKnown(true);
           setPage(1);
@@ -100,6 +108,7 @@ export default function RiskEventsPage() {
         setDispositions(dispositionMap);
         setAIAnalyses(analysisMap);
         setVisibleEvents(items);
+        clearSelection();
         setTotal(items.length);
         setTotalKnown(true);
         setPage(1);
@@ -119,6 +128,7 @@ export default function RiskEventsPage() {
         setDispositions(openItems.dispositions);
         setAIAnalyses(analysisMap);
         setVisibleEvents(openItems.items);
+        clearSelection();
         setTotal(openItems.total);
         setTotalKnown(openItems.totalKnown);
         setPage(nextPage);
@@ -139,6 +149,7 @@ export default function RiskEventsPage() {
       setDispositions(statusMap);
       setAIAnalyses(analysisMap);
       setVisibleEvents(filterEventsByDisposition(items, statusMap, dispositionStatus));
+      clearSelection();
       setTotal(effectivePagedTotal(data.total, data.hasMore, data.page, data.pageSize, items.length));
       setTotalKnown(Boolean(data.total && data.total > 0));
       setPage(data.page);
@@ -195,6 +206,58 @@ export default function RiskEventsPage() {
       setDispositionOpen(false);
     } finally {
       setSavingDisposition(false);
+    }
+  }
+
+  function clearSelection() {
+    setSelectedRowKeys([]);
+    setSelectedRows([]);
+  }
+
+  function openBatchDisposition() {
+    if (selectedRows.length === 0) {
+      message.warning('请先选择要处理的风险事件');
+      return;
+    }
+    batchDispositionForm.setFieldsValue({
+      status: 'confirmed',
+      note: '',
+    });
+    setBatchDispositionOpen(true);
+  }
+
+  async function submitBatchDisposition() {
+    const rows = selectedRows;
+    if (rows.length === 0) {
+      message.warning('请先选择要处理的风险事件');
+      return;
+    }
+    const values = await batchDispositionForm.validateFields();
+    setSavingBatchDisposition(true);
+    try {
+      const results = await Promise.allSettled(
+        rows.map((event) => updateRiskDisposition(event, values.status, values.note ?? '')),
+      );
+      const updatedMap = { ...dispositions };
+      results.forEach((result) => {
+        if (result.status === 'fulfilled') {
+          updatedMap[result.value.eventId] = result.value;
+        }
+      });
+      const successCount = results.filter((result) => result.status === 'fulfilled').length;
+      const failedCount = rows.length - successCount;
+      setDispositions(updatedMap);
+      setVisibleEvents(filterEventsByDisposition(events, updatedMap, form.getFieldValue('dispositionStatus') ?? 'open'));
+      clearSelection();
+      setBatchDispositionOpen(false);
+      if (failedCount > 0) {
+        message.warning(`批量处理完成：成功 ${successCount} 条，失败 ${failedCount} 条`);
+      } else {
+        message.success(`批量处理完成：成功 ${successCount} 条`);
+      }
+      await load(page, pageSize, form.getFieldsValue());
+    } finally {
+      setSavingBatchDisposition(false);
     }
   }
 
@@ -331,6 +394,9 @@ export default function RiskEventsPage() {
         <Form.Item name="username" label="用户">
           <Input className="filter-control-compact" placeholder="root / ubuntu" allowClear />
         </Form.Item>
+        <Form.Item name="hostName" label="主机">
+          <Input className="filter-control-compact" placeholder="主机名 / 节点 / Host ID" allowClear />
+        </Form.Item>
         <Form.Item name="dispositionStatus" label="处置状态">
           <Select
             className="filter-control-compact"
@@ -350,6 +416,17 @@ export default function RiskEventsPage() {
         </Form.Item>
       </FilterToolbar>
       <Card className="data-card">
+        <Space style={{ width: '100%', justifyContent: 'space-between', marginBottom: 12 }} wrap>
+          <Typography.Text type="secondary">已选 {selectedRows.length} 条</Typography.Text>
+          <Space>
+            <Button disabled={selectedRows.length === 0} onClick={clearSelection}>
+              清空选择
+            </Button>
+            <Button type="primary" disabled={selectedRows.length === 0} onClick={openBatchDisposition}>
+              批量处理
+            </Button>
+          </Space>
+        </Space>
         <Table
           rowKey="eventId"
           loading={loading}
@@ -357,6 +434,14 @@ export default function RiskEventsPage() {
           className="clickable-table"
           locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无风险事件" /> }}
           scroll={{ x: 1400 }}
+          rowSelection={{
+            selectedRowKeys,
+            preserveSelectedRowKeys: true,
+            onChange: (keys, rows) => {
+              setSelectedRowKeys(keys);
+              setSelectedRows(rows);
+            },
+          }}
           onRow={(record) => ({ onClick: () => setSelected(record), title: '点击查看风险事件详情' })}
           pagination={{
             current: page,
@@ -455,6 +540,35 @@ export default function RiskEventsPage() {
           </Form.Item>
           <Form.Item name="note" label="处置备注">
             <Input.TextArea rows={4} placeholder="记录确认原因、忽略理由或后续处理说明" />
+          </Form.Item>
+        </Form>
+      </Modal>
+      <Modal
+        title={`批量处理 ${selectedRows.length} 条风险事件`}
+        open={batchDispositionOpen}
+        confirmLoading={savingBatchDisposition}
+        onOk={() => void submitBatchDisposition()}
+        onCancel={() => setBatchDispositionOpen(false)}
+        width={560}
+      >
+        <Form form={batchDispositionForm} layout="vertical">
+          <Form.Item label="已选事件">
+            <Typography.Text type="secondary">将对当前选中的 {selectedRows.length} 条风险事件执行同一处置状态。</Typography.Text>
+          </Form.Item>
+          <Form.Item name="status" label="处置状态" rules={[{ required: true }]}>
+            <Select
+              options={[
+                { value: 'confirmed', label: '已处理' },
+                { value: 'false_positive', label: '误报' },
+                { value: 'ignored', label: '忽略当前' },
+                { value: 'ignore_similar', label: '忽略同类' },
+                { value: 'closed', label: '已关闭' },
+                { value: 'open', label: '未处理' },
+              ]}
+            />
+          </Form.Item>
+          <Form.Item name="note" label="处置备注">
+            <Input.TextArea rows={4} placeholder="记录本次批量处理原因" />
           </Form.Item>
         </Form>
       </Modal>
