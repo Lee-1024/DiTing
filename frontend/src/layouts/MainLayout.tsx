@@ -1,4 +1,4 @@
-import { AuditOutlined, BellOutlined, CodeOutlined, DashboardOutlined, DownOutlined, FileSearchOutlined, HddOutlined, MonitorOutlined, SafetyCertificateOutlined, SettingOutlined, TeamOutlined, ThunderboltOutlined, UserOutlined } from '@ant-design/icons';
+import { AuditOutlined, BellOutlined, CodeOutlined, DashboardOutlined, DownOutlined, FileSearchOutlined, HddOutlined, MonitorOutlined, RobotOutlined, SafetyCertificateOutlined, SettingOutlined, TeamOutlined, ThunderboltOutlined, UserOutlined } from '@ant-design/icons';
 import { Badge, Button, Dropdown, Form, Input, Layout, List, Menu, Modal, Space, Typography, message } from 'antd';
 import dayjs from 'dayjs';
 import { useEffect, useState } from 'react';
@@ -165,6 +165,7 @@ export default function MainLayout() {
                 { key: '/settings/collector-health', icon: <MonitorOutlined />, label: '采集状态' },
                 { key: '/settings/collector-debug', icon: <FileSearchOutlined />, label: '采集调试' },
                 { key: '/settings/collector', icon: <SettingOutlined />, label: '采集配置' },
+                { key: '/settings/ai', icon: <RobotOutlined />, label: 'AI 配置' },
                 { key: '/settings/tetragon-policies', icon: <SafetyCertificateOutlined />, label: '拦截策略' },
               ],
             },

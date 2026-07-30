@@ -63,6 +63,7 @@ func TestPostgresRuntimeDataCleanupStatements(t *testing.T) {
 	statements := postgresRuntimeDataCleanupStatements()
 
 	expected := []string{
+		"DELETE FROM diting_ai_risk_analyses",
 		"DELETE FROM diting_risk_dispositions",
 		"DELETE FROM diting_collector_heartbeats",
 		"DELETE FROM diting_host_assets",

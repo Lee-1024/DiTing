@@ -15,6 +15,7 @@ type Config struct {
 	ClickHouse ClickHouseConfig
 	Redis      RedisConfig
 	Collector  CollectorConfig
+	AI         AIConfig
 }
 
 type ServerConfig struct {
@@ -69,6 +70,15 @@ type CollectorConfig struct {
 	EnforcementPolicyDir           string
 	EnforcementSyncIntervalSeconds int
 	TetragonRestartCommand         string
+}
+
+type AIConfig struct {
+	Enabled        bool
+	BaseURL        string
+	APIKey         string
+	Model          string
+	TimeoutSeconds int
+	MaxTokens      int
 }
 
 // Load 处理 Load 相关逻辑。
@@ -200,6 +210,21 @@ func assignValue(cfg *Config, section, key, value string) error {
 			cfg.Collector.EnforcementSyncIntervalSeconds = mustInt(key, value)
 		case "tetragon_restart_command":
 			cfg.Collector.TetragonRestartCommand = value
+		}
+	case "ai":
+		switch key {
+		case "enabled":
+			cfg.AI.Enabled = mustBool(value)
+		case "base_url":
+			cfg.AI.BaseURL = value
+		case "api_key":
+			cfg.AI.APIKey = value
+		case "model":
+			cfg.AI.Model = value
+		case "timeout_seconds":
+			cfg.AI.TimeoutSeconds = mustInt(key, value)
+		case "max_tokens":
+			cfg.AI.MaxTokens = mustInt(key, value)
 		}
 	}
 	return nil

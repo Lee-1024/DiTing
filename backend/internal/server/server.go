@@ -13,6 +13,7 @@ import (
 	"diting/backend/internal/hostasset"
 	"diting/backend/internal/ingest"
 	"diting/backend/internal/operationlog"
+	"diting/backend/internal/riskanalysis"
 	"diting/backend/internal/riskstatus"
 	"diting/backend/internal/rule"
 	"diting/backend/internal/stats"
@@ -21,13 +22,15 @@ import (
 )
 
 type routerOptions struct {
-	ingestWriter          ingest.EventWriter
-	collectorToken        string
-	enforcementRepository enforcement.Repository
-	responseCache         cache.Cache
-	responseCacheTTL      time.Duration
-	responseCacheTTLs     map[string]time.Duration
-	responseCacheFlights  *cache.Singleflight
+	ingestWriter           ingest.EventWriter
+	collectorToken         string
+	enforcementRepository  enforcement.Repository
+	responseCache          cache.Cache
+	responseCacheTTL       time.Duration
+	responseCacheTTLs      map[string]time.Duration
+	responseCacheFlights   *cache.Singleflight
+	riskAnalysisRepository riskanalysis.Repository
+	riskAnalyzer           riskanalysis.Analyzer
 }
 
 type RouterOption func(*routerOptions)
@@ -72,6 +75,13 @@ func WithResponseCacheTTL(namespace string, ttl time.Duration) RouterOption {
 	}
 }
 
+func WithRiskAnalysis(repository riskanalysis.Repository, analyzer riskanalysis.Analyzer) RouterOption {
+	return func(options *routerOptions) {
+		options.riskAnalysisRepository = repository
+		options.riskAnalyzer = analyzer
+	}
+}
+
 // NewRouter 创建并初始化 New Router 实例。
 func NewRouter(repository audit.Repository, ruleRepository rule.Repository, statsRepository stats.Repository, authService *auth.Service, operationRepository operationlog.Repository, hostAssetRepository hostasset.Repository, riskStatusRepository riskstatus.Repository, systemConfigRepository systemconfig.Repository, userAdminRepository useradmin.Repository, collectorHealthRepository collectorhealth.Repository, opts ...RouterOption) http.Handler {
 	options := routerOptions{}
@@ -109,6 +119,10 @@ func NewRouter(repository audit.Repository, ruleRepository rule.Repository, stat
 	if riskStatusRepository != nil {
 		riskStatusHandler = riskstatus.NewHandler(riskStatusRepository)
 		riskStatusHandler.SetCollectorFilterRepository(systemConfigRepository)
+	}
+	var riskAnalysisHandler *riskanalysis.Handler
+	if options.riskAnalysisRepository != nil {
+		riskAnalysisHandler = riskanalysis.NewHandler(options.riskAnalysisRepository, repository, options.riskAnalyzer)
 	}
 	statsHandler := stats.NewHandler(statsRepository)
 	var authHandler *auth.Handler
@@ -175,6 +189,10 @@ func NewRouter(repository audit.Repository, ruleRepository rule.Repository, stat
 		})))
 		mux.Handle("/api/v1/risk-dispositions/batch", protect(http.HandlerFunc(riskStatusHandler.BatchGet)))
 		mux.Handle("/api/v1/risk-dispositions/{event_id}", protect(http.HandlerFunc(riskStatusHandler.Upsert)))
+	}
+	if riskAnalysisHandler != nil {
+		mux.Handle("/api/v1/risk-analyses/batch", protect(http.HandlerFunc(riskAnalysisHandler.BatchGet)))
+		mux.Handle("/api/v1/risk-analyses/{event_id}/analyze", protect(http.HandlerFunc(riskAnalysisHandler.Analyze)))
 	}
 	mux.Handle("/api/v1/rules", protect(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
@@ -282,6 +300,24 @@ func NewRouter(repository audit.Repository, ruleRepository rule.Repository, stat
 			systemConfigHandler.GetCollectorFilter(w, r)
 		case http.MethodPut:
 			systemConfigHandler.SaveCollectorFilter(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})))
+	mux.Handle("/api/v1/system-configs/ai", protect(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			systemConfigHandler.GetAIConfig(w, r)
+		case http.MethodPut:
+			systemConfigHandler.SaveAIConfig(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})))
+	mux.Handle("/api/v1/system-configs/ai/test", protect(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodPost:
+			systemConfigHandler.TestAIConfig(w, r)
 		default:
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}

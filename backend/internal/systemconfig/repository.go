@@ -7,6 +7,7 @@ import (
 )
 
 const CollectorFilterKey = "collector_filter"
+const AIConfigKey = "ai_provider_config"
 
 type CollectorFilterConfig struct {
 	Enabled               bool                  `json:"enabled"`
@@ -35,6 +36,20 @@ type CollectorFilterCondition struct {
 type Repository interface {
 	GetCollectorFilter(ctx context.Context) (CollectorFilterConfig, error)
 	SaveCollectorFilter(ctx context.Context, config CollectorFilterConfig) error
+	GetAIConfig(ctx context.Context) (AIProviderConfig, error)
+	SaveAIConfig(ctx context.Context, config AIProviderConfig) error
+}
+
+type AIProviderConfig struct {
+	Enabled         bool   `json:"enabled"`
+	BaseURL         string `json:"baseUrl"`
+	Model           string `json:"model"`
+	TimeoutSeconds  int    `json:"timeoutSeconds"`
+	MaxTokens       int    `json:"maxTokens"`
+	APIKey          string `json:"apiKey,omitempty"`
+	EncryptedAPIKey string `json:"encryptedApiKey,omitempty"`
+	APIKeySet       bool   `json:"apiKeySet"`
+	MaskedAPIKey    string `json:"maskedApiKey"`
 }
 
 // DefaultCollectorFilterConfig 处理 Default Collector Filter Config 相关逻辑。
@@ -138,6 +153,8 @@ type MemoryRepository struct {
 	mu              sync.Mutex
 	collectorFilter CollectorFilterConfig
 	hasFilter       bool
+	aiConfig        AIProviderConfig
+	hasAIConfig     bool
 }
 
 // NewMemoryRepository 创建并初始化 New Memory Repository 实例。
@@ -162,6 +179,61 @@ func (r *MemoryRepository) SaveCollectorFilter(_ context.Context, config Collect
 	r.collectorFilter = normalizeCollectorFilterConfig(config)
 	r.hasFilter = true
 	return nil
+}
+
+func (r *MemoryRepository) GetAIConfig(_ context.Context) (AIProviderConfig, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if !r.hasAIConfig {
+		return DefaultAIProviderConfig(), nil
+	}
+	return normalizeAIProviderConfig(r.aiConfig), nil
+}
+
+func (r *MemoryRepository) SaveAIConfig(_ context.Context, config AIProviderConfig) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.aiConfig = normalizeAIProviderConfig(config)
+	r.hasAIConfig = true
+	return nil
+}
+
+func DefaultAIProviderConfig() AIProviderConfig {
+	return AIProviderConfig{
+		BaseURL:        "http://127.0.0.1:11434/v1",
+		Model:          "qwen2.5:7b",
+		TimeoutSeconds: 30,
+		MaxTokens:      800,
+	}
+}
+
+func normalizeAIProviderConfig(config AIProviderConfig) AIProviderConfig {
+	if config.TimeoutSeconds <= 0 {
+		config.TimeoutSeconds = 30
+	}
+	if config.MaxTokens <= 0 {
+		config.MaxTokens = 800
+	}
+	if config.APIKey != "" || config.EncryptedAPIKey != "" {
+		config.APIKeySet = true
+	}
+	if config.APIKeySet && config.MaskedAPIKey == "" {
+		config.MaskedAPIKey = maskSecret(config.APIKey)
+		if config.MaskedAPIKey == "" {
+			config.MaskedAPIKey = "********"
+		}
+	}
+	return config
+}
+
+func maskSecret(value string) string {
+	if len(value) <= 8 {
+		if value == "" {
+			return ""
+		}
+		return "********"
+	}
+	return value[:4] + "****" + value[len(value)-4:]
 }
 
 // normalizeCollectorFilterConfig 规范化 normalize Collector Filter Config 的默认值和边界值。

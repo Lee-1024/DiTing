@@ -22,6 +22,7 @@ import (
 	"diting/backend/internal/hostasset"
 	"diting/backend/internal/operationlog"
 	"diting/backend/internal/postgres"
+	"diting/backend/internal/riskanalysis"
 	"diting/backend/internal/riskstatus"
 	"diting/backend/internal/rule"
 	"diting/backend/internal/server"
@@ -286,7 +287,10 @@ func main() {
 	operationRepository := operationlog.NewPostgresRepository(pool)
 	hostAssetRepository := hostasset.NewPostgresRepository(pool)
 	riskStatusRepository := riskstatus.NewPostgresRepository(pool)
+	riskAnalysisRepository := riskanalysis.NewPostgresRepository(pool)
 	systemConfigRepository := systemconfig.NewPostgresRepository(pool)
+	systemConfigRepository.SetEncryptionSecret(cfg.JWT.Secret)
+	riskAnalyzer := riskanalysis.NewDynamicAnalyzer(systemConfigRepository)
 	userAdminRepository := useradmin.NewPostgresRepository(pool)
 	collectorHealthRepository := collectorhealth.NewPostgresRepository(pool)
 	enforcementRepository := enforcement.NewPostgresRepository(pool)
@@ -324,6 +328,7 @@ func main() {
 		server.WithIngestWriter(ingestWriter),
 		server.WithCollectorToken(cfg.Collector.Token),
 		server.WithEnforcementRepository(enforcementRepository),
+		server.WithRiskAnalysis(riskAnalysisRepository, riskAnalyzer),
 		server.WithResponseCache(responseCache, responseCacheTTL),
 		server.WithResponseCacheTTL("stats.hosts", hostProfileCacheTTL),
 		server.WithResponseCacheTTL("stats.hosts.users", hostProfileCacheTTL),
@@ -463,6 +468,7 @@ func hasSQLFiles(dir string) bool {
 
 func postgresRuntimeDataCleanupStatements() []string {
 	return []string{
+		"DELETE FROM diting_ai_risk_analyses",
 		"DELETE FROM diting_risk_dispositions",
 		"DELETE FROM diting_collector_heartbeats",
 		"DELETE FROM diting_host_assets",

@@ -2,6 +2,7 @@ import { Button, Card, DatePicker, Empty, Form, Input, Modal, Select, Space, Tab
 import dayjs from 'dayjs';
 import { useEffect, useRef, useState } from 'react';
 import { exportAuditEvents, queryAuditEvents } from '../../api/audit';
+import { analyzeRiskEvent, getRiskAnalyses } from '../../api/riskAnalyses';
 import { getRiskDispositions, listRiskDispositions, updateRiskDisposition } from '../../api/riskDispositions';
 import CommandText from '../../components/CommandText';
 import FilterToolbar from '../../components/FilterToolbar';
@@ -9,6 +10,7 @@ import { InsightHero, LatestPanel, MetricCard } from '../../components/InsightHe
 import ProcessChain from '../../components/ProcessChain';
 import SeverityTag from '../../components/SeverityTag';
 import type { AuditEvent, AuditEventQuery } from '../../types/audit';
+import type { AIRiskAnalysis, AIRiskAnalysisMap, AIRiskVerdict } from '../../types/riskAnalysis';
 import type { RiskDisposition, RiskDispositionMap, RiskDispositionStatus } from '../../types/riskDisposition';
 import { downloadBlob } from '../../utils/download';
 import { displayHostIdentity } from '../../utils/hostDisplay';
@@ -30,9 +32,11 @@ export default function RiskEventsPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [dispositions, setDispositions] = useState<RiskDispositionMap>({});
+  const [aiAnalyses, setAIAnalyses] = useState<AIRiskAnalysisMap>({});
   const [dispositionOpen, setDispositionOpen] = useState(false);
   const [dispositionEvent, setDispositionEvent] = useState<AuditEvent>();
   const [savingDisposition, setSavingDisposition] = useState(false);
+  const [analyzingEventId, setAnalyzingEventId] = useState<string>();
   const [form] = Form.useForm();
   const [dispositionForm] = Form.useForm();
   const requestSeq = useRef(0);
@@ -88,8 +92,13 @@ export default function RiskEventsPage() {
         }
         const dispositionMap = Object.fromEntries(dispositionItems.map((item) => [item.eventId, item]));
         const items = data.items ?? [];
+        const analysisMap = await getRiskAnalyses(items);
+        if (seq !== requestSeq.current) {
+          return;
+        }
         setEvents(items);
         setDispositions(dispositionMap);
+        setAIAnalyses(analysisMap);
         setVisibleEvents(items);
         setTotal(items.length);
         setTotalKnown(true);
@@ -102,8 +111,13 @@ export default function RiskEventsPage() {
         if (!openItems) {
           return;
         }
+        const analysisMap = await getRiskAnalyses(openItems.items);
+        if (seq !== requestSeq.current) {
+          return;
+        }
         setEvents(openItems.items);
         setDispositions(openItems.dispositions);
+        setAIAnalyses(analysisMap);
         setVisibleEvents(openItems.items);
         setTotal(openItems.total);
         setTotalKnown(openItems.totalKnown);
@@ -118,10 +132,12 @@ export default function RiskEventsPage() {
       const items = data.items ?? [];
       setEvents(items);
       const statusMap = await getRiskDispositions(items);
+      const analysisMap = await getRiskAnalyses(items);
       if (seq !== requestSeq.current) {
         return;
       }
       setDispositions(statusMap);
+      setAIAnalyses(analysisMap);
       setVisibleEvents(filterEventsByDisposition(items, statusMap, dispositionStatus));
       setTotal(effectivePagedTotal(data.total, data.hasMore, data.page, data.pageSize, items.length));
       setTotalKnown(Boolean(data.total && data.total > 0));
@@ -194,6 +210,19 @@ export default function RiskEventsPage() {
       createdAt: '',
       updatedAt: '',
     };
+  }
+
+  async function analyzeEvent(record: AuditEvent) {
+    setAnalyzingEventId(record.eventId);
+    try {
+      const analysis = await analyzeRiskEvent(record.eventId);
+      setAIAnalyses((current) => ({ ...current, [record.eventId]: analysis }));
+      message.success('AI 分析已完成');
+    } catch (error: any) {
+      message.error(error?.response?.data || error?.message || 'AI 分析失败');
+    } finally {
+      setAnalyzingEventId(undefined);
+    }
   }
 
   async function loadOpenRiskEvents(nextPage: number, nextPageSize: number, formValues: any, isCurrent: () => boolean) {
@@ -364,12 +393,22 @@ export default function RiskEventsPage() {
               render: (_, record) => <DispositionTag disposition={dispositionFor(record)} />,
             },
             {
+              title: 'AI 判断',
+              width: 180,
+              render: (_, record) => <AIAnalysisCell analysis={aiAnalyses[record.eventId]} />,
+            },
+            {
               title: '处置',
-              width: 88,
+              width: 176,
               render: (_, record) => (
-                <Button size="small" onClick={(event) => { event.stopPropagation(); openDisposition(record); }}>
-                  处理
-                </Button>
+                <Space size={8}>
+                  <Button size="small" onClick={(event) => { event.stopPropagation(); openDisposition(record); }}>
+                    处理
+                  </Button>
+                  <Button size="small" loading={analyzingEventId === record.eventId} onClick={(event) => { event.stopPropagation(); void analyzeEvent(record); }}>
+                    {aiAnalyses[record.eventId] ? '重分析' : 'AI 分析'}
+                  </Button>
+                </Space>
               ),
             },
           ]}
@@ -437,6 +476,42 @@ function riskTarget(record: AuditEvent) {
     ) : <Typography.Text type="secondary">-</Typography.Text>;
   }
   return record.processName ? <Typography.Text>{record.processName}</Typography.Text> : <Typography.Text type="secondary">-</Typography.Text>;
+}
+
+function AIAnalysisCell({ analysis }: { analysis?: AIRiskAnalysis }) {
+  if (!analysis) {
+    return <Typography.Text type="secondary">未分析</Typography.Text>;
+  }
+  return (
+    <Space direction="vertical" size={0}>
+      <Space size={6} wrap>
+        <Tag color={aiVerdictColor(analysis.verdict)}>{aiVerdictText(analysis.verdict)}</Tag>
+        <SeverityTag value={analysis.aiSeverity} />
+      </Space>
+      <Typography.Text type="secondary">{analysis.confidence}% / {analysis.model || '-'}</Typography.Text>
+      {analysis.reason && <Typography.Text ellipsis style={{ maxWidth: 150 }}>{analysis.reason}</Typography.Text>}
+    </Space>
+  );
+}
+
+function aiVerdictText(verdict: AIRiskVerdict) {
+  const config: Record<AIRiskVerdict, string> = {
+    true_positive: '真实风险',
+    suspicious: '可疑',
+    false_positive: '可能误报',
+    needs_review: '需复核',
+  };
+  return config[verdict] ?? verdict;
+}
+
+function aiVerdictColor(verdict: AIRiskVerdict) {
+  const config: Record<AIRiskVerdict, string> = {
+    true_positive: 'red',
+    suspicious: 'orange',
+    false_positive: 'blue',
+    needs_review: 'purple',
+  };
+  return config[verdict] ?? 'default';
 }
 
 // filterEventsByDisposition 按条件过滤 filter Events By Disposition。

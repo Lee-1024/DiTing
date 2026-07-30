@@ -21,3 +21,14 @@ export interface CollectorFilterCondition {
   value?: string;
   values?: string[];
 }
+
+export interface AIProviderConfig {
+  enabled: boolean;
+  baseUrl: string;
+  model: string;
+  timeoutSeconds: number;
+  maxTokens: number;
+  apiKey?: string;
+  apiKeySet?: boolean;
+  maskedApiKey?: string;
+}

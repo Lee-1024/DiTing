@@ -14,6 +14,7 @@ import OperationLogsPage from '../pages/settings/OperationLogsPage';
 import CollectorHealthPage from '../pages/settings/CollectorHealthPage';
 import CollectorDebugPage from '../pages/settings/CollectorDebugPage';
 import CollectorConfigPage from '../pages/settings/CollectorConfigPage';
+import AIConfigPage from '../pages/settings/AIConfigPage';
 import TetragonPolicyPage from '../pages/settings/TetragonPolicyPage';
 import LoginPage from '../pages/login/LoginPage';
 import { getToken } from '../stores/auth';
@@ -43,6 +44,7 @@ export const router = createBrowserRouter([
       { path: 'settings/collector-health', element: <CollectorHealthPage /> },
       { path: 'settings/collector-debug', element: <CollectorDebugPage /> },
       { path: 'settings/collector', element: <CollectorConfigPage /> },
+      { path: 'settings/ai', element: <AIConfigPage /> },
       { path: 'settings/tetragon-policies', element: <TetragonPolicyPage /> },
       { path: '*', element: <Navigate to="/" replace /> },
     ],
