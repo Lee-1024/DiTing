@@ -1,6 +1,9 @@
 package riskanalysis
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestParseAnalysisJSONNormalizesModelVerdict(t *testing.T) {
 	analysis, err := parseAnalysisJSON(`{"ai_severity":"critical","verdict":"true_positive","confidence":120,"reason":"敏感文件写入","evidence":["/etc/shadow"],"suggestion":"人工确认"}`)
@@ -26,5 +29,25 @@ func TestParseAnalysisJSONExtractsObjectAfterThinkBlock(t *testing.T) {
 	}
 	if analysis.AISeverity != "low" || analysis.Verdict != VerdictNeedsReview || analysis.Reason != "连通性测试" {
 		t.Fatalf("unexpected analysis: %#v", analysis)
+	}
+}
+
+func TestParseAnalysisJSONReturnsChineseErrorForThinkOnlyOutput(t *testing.T) {
+	_, err := parseAnalysisJSON(`<think>模型内部推理，没有输出最终 JSON`)
+	if err == nil {
+		t.Fatal("expected parseAnalysisJSON to reject non-json output")
+	}
+	if got := err.Error(); !strings.HasPrefix(got, "模型输出不是合法") {
+		t.Fatalf("expected chinese invalid json error, got %q", got)
+	}
+}
+
+func TestFallbackAnalysisFromInvalidOutputKeepsReviewableResult(t *testing.T) {
+	analysis := fallbackAnalysisFromInvalidOutput(`<think>模型内部推理，没有输出最终 JSON`)
+	if analysis.Verdict != VerdictNeedsReview {
+		t.Fatalf("expected needs_review verdict, got %q", analysis.Verdict)
+	}
+	if analysis.Confidence != 0 || len(analysis.Evidence) != 1 {
+		t.Fatalf("unexpected fallback analysis: %#v", analysis)
 	}
 }

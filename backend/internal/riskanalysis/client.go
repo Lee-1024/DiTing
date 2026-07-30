@@ -120,7 +120,7 @@ func (a *OpenAICompatibleAnalyzer) Analyze(ctx context.Context, event audit.Even
 	raw := strings.TrimSpace(response.Choices[0].Message.Content)
 	analysis, err := parseAnalysisJSON(raw)
 	if err != nil {
-		return Analysis{}, err
+		analysis = fallbackAnalysisFromInvalidOutput(raw)
 	}
 	analysis.EventID = event.EventID
 	analysis.Model = a.cfg.Model
@@ -139,6 +139,9 @@ func trimProviderBody(data []byte) string {
 
 func parseAnalysisJSON(raw string) (Analysis, error) {
 	raw = normalizeAnalysisJSONContent(raw)
+	if raw == "" || !strings.HasPrefix(raw, "{") {
+		return Analysis{}, fmt.Errorf("模型输出不是合法 AI 风险分析 JSON：%s", trimTextForError(raw))
+	}
 	var payload struct {
 		AISeverity string   `json:"ai_severity"`
 		Verdict    string   `json:"verdict"`
@@ -166,12 +169,50 @@ func normalizeAnalysisJSONContent(raw string) string {
 	raw = strings.TrimPrefix(raw, "```")
 	raw = strings.TrimSuffix(raw, "```")
 	raw = strings.TrimSpace(raw)
+	raw = stripThinkBlocks(raw)
 	if start := strings.Index(raw, "{"); start >= 0 {
 		if end := strings.LastIndex(raw, "}"); end > start {
 			return strings.TrimSpace(raw[start : end+1])
 		}
 	}
 	return raw
+}
+
+func stripThinkBlocks(raw string) string {
+	for {
+		start := strings.Index(strings.ToLower(raw), "<think>")
+		if start < 0 {
+			return strings.TrimSpace(raw)
+		}
+		end := strings.Index(strings.ToLower(raw[start:]), "</think>")
+		if end < 0 {
+			return strings.TrimSpace(raw[:start])
+		}
+		raw = raw[:start] + raw[start+end+len("</think>"):]
+	}
+}
+
+func fallbackAnalysisFromInvalidOutput(raw string) Analysis {
+	evidence := []string{}
+	if trimmed := trimTextForError(raw); trimmed != "" {
+		evidence = append(evidence, "模型原始输出："+trimmed)
+	}
+	return Analysis{
+		AISeverity: "medium",
+		Verdict:    VerdictNeedsReview,
+		Confidence: 0,
+		Reason:     "模型没有按要求输出结构化 JSON，系统已保留原始输出，请人工复核。",
+		Evidence:   evidence,
+		Suggestion: "建议在 AI 配置中降低最大输出 Token 或更换支持 JSON 输出的模型；当前事件不要仅依据 AI 自动降级。",
+	}
+}
+
+func trimTextForError(value string) string {
+	value = strings.TrimSpace(value)
+	if len(value) > 300 {
+		return value[:300] + "..."
+	}
+	return value
 }
 
 func normalizeAnalysis(analysis Analysis) Analysis {
