@@ -60,7 +60,7 @@ func (f collectorNoiseFilter) hasAuditRuleHit(event audit.Event) bool {
 }
 
 func (f collectorNoiseFilter) shouldApplyBeforeEnrichment(rule systemconfig.CollectorFilterRule) bool {
-	return rule.ID == "pre-diting-self-vite-noise" || strings.HasPrefix(rule.ID, "risk-ignore-similar-")
+	return rule.PreAudit || rule.ID == "pre-diting-self-vite-noise" || strings.HasPrefix(rule.ID, "risk-ignore-similar-")
 }
 
 func (f collectorNoiseFilter) shouldDropByRules(event audit.Event) bool {

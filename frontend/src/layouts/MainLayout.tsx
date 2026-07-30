@@ -6,6 +6,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { queryAuditEvents } from '../api/audit';
 import { changePassword } from '../api/auth';
 import { listCollectorHealth } from '../api/collectorHealth';
+import { getRiskDispositions } from '../api/riskDispositions';
 import { clearSession, getUser } from '../stores/auth';
 import type { AuditEvent } from '../types/audit';
 import type { CollectorHeartbeat } from '../types/collectorHealth';
@@ -63,13 +64,14 @@ export default function MainLayout() {
         end_time: end.toISOString(),
         severity_in: 'high,critical',
         page: 1,
-        page_size: 10,
+        page_size: 100,
       }),
       listCollectorHealth(),
     ]);
+    const riskItems = await openRiskAlertEvents(riskData.items ?? []);
     const nextAlerts = [
       ...collectorAlerts(collectors),
-      ...(riskData.items ?? []).map(riskAlert),
+      ...riskItems.map(riskAlert),
     ].slice(0, 20);
     setAlerts(nextAlerts);
   }
@@ -208,6 +210,14 @@ export default function MainLayout() {
       </Modal>
     </Layout>
   );
+}
+
+async function openRiskAlertEvents(events: AuditEvent[]): Promise<AuditEvent[]> {
+  if (events.length === 0) {
+    return [];
+  }
+  const dispositions = await getRiskDispositions(events);
+  return events.filter((event) => (dispositions[event.eventId]?.status ?? 'open') === 'open').slice(0, 10);
 }
 
 // riskAlert 生成 risk Alert 的展示内容。

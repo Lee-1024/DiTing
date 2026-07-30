@@ -51,6 +51,9 @@ func (h *Handler) SaveCollectorFilter(w http.ResponseWriter, r *http.Request) {
 
 func validCollectorFilterRules(rules []CollectorFilterRule) bool {
 	for _, rule := range rules {
+		if rule.PreAudit && !validPreAuditCollectorFilterRule(rule) {
+			return false
+		}
 		for _, condition := range rule.Conditions {
 			if !validCollectorFilterField(condition.Field) || !validCollectorFilterOp(condition.Op) {
 				return false
@@ -64,6 +67,20 @@ func validCollectorFilterRules(rules []CollectorFilterRule) bool {
 		}
 	}
 	return true
+}
+
+func validPreAuditCollectorFilterRule(rule CollectorFilterRule) bool {
+	hasSource := false
+	hasAction := false
+	for _, condition := range rule.Conditions {
+		switch condition.Field {
+		case "parent_process_name", "username", "login_username":
+			hasSource = true
+		case "process_name", "cmdline", "file_path", "file_operation", "dst_ip", "dst_port", "protocol", "domain":
+			hasAction = true
+		}
+	}
+	return hasSource && hasAction
 }
 
 func validCollectorFilterField(field string) bool {

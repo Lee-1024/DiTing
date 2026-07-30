@@ -21,6 +21,7 @@ type CollectorFilterRule struct {
 	ID         string                     `json:"id"`
 	Name       string                     `json:"name"`
 	Enabled    bool                       `json:"enabled"`
+	PreAudit   bool                       `json:"preAudit"`
 	Conditions []CollectorFilterCondition `json:"conditions"`
 }
 

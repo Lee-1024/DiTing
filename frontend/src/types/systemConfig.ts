@@ -11,6 +11,7 @@ export interface CollectorFilterRule {
   id: string;
   name: string;
   enabled: boolean;
+  preAudit?: boolean;
   conditions: CollectorFilterCondition[];
 }
 

@@ -395,6 +395,104 @@ func TestRuleApplyingWriterFiltersIgnoredSimilarRuncExecWithVolatileIDs(t *testi
 	}
 }
 
+func TestRuleApplyingWriterPreservesParentProcessNoiseWhenRuleIsNotPreAudit(t *testing.T) {
+	sink := &fakeEventSink{}
+	writer := newRefreshingRuleWriter(sink, &fakeRuleProvider{sets: [][]rule.Rule{{{
+		ID:        "docker-command",
+		Name:      "docker command",
+		EventType: "process_exec",
+		Enabled:   true,
+		Severity:  "high",
+		RiskScore: 85,
+		MatchExpr: rule.Expression{
+			Operator:   "and",
+			Conditions: []rule.Condition{{Field: "process_name", Op: "eq", Value: "docker"}},
+		},
+	}}}})
+	writer.SetNoiseFilter(collectorNoiseFilterFromSystemConfig(systemconfig.CollectorFilterConfig{
+		Enabled:        true,
+		KeepSeverities: []string{"high", "critical"},
+		Rules: []systemconfig.CollectorFilterRule{{
+			ID:      "monitor-agent-parent",
+			Name:    "ignore monitor agent children",
+			Enabled: true,
+			Conditions: []systemconfig.CollectorFilterCondition{
+				{Field: "parent_process_name", Op: "eq", Value: "monitor-agent"},
+			},
+		}},
+	}))
+	if err := writer.Refresh(context.Background()); err != nil {
+		t.Fatalf("Refresh returned error: %v", err)
+	}
+
+	err := writer.Write(context.Background(), []audit.Event{{
+		EventType:         "process_exec",
+		ProcessName:       "docker",
+		Cmdline:           `/usr/bin/docker stats --no-stream --format "{{json .}}"`,
+		ParentProcessName: "monitor-agent",
+		Severity:          "info",
+	}})
+	if err != nil {
+		t.Fatalf("Write returned error: %v", err)
+	}
+
+	if len(sink.events) != 1 {
+		t.Fatalf("expected plain parent-process collector filter to preserve audit rule hit, got %d events", len(sink.events))
+	}
+	if sink.events[0].Severity != "high" {
+		t.Fatalf("expected audit rule to promote event to high, got %s", sink.events[0].Severity)
+	}
+}
+
+func TestRuleApplyingWriterFiltersTrustedActionBeforeAuditRulePromotion(t *testing.T) {
+	sink := &fakeEventSink{}
+	writer := newRefreshingRuleWriter(sink, &fakeRuleProvider{sets: [][]rule.Rule{{{
+		ID:        "docker-command",
+		Name:      "docker command",
+		EventType: "process_exec",
+		Enabled:   true,
+		Severity:  "high",
+		RiskScore: 85,
+		MatchExpr: rule.Expression{
+			Operator:   "and",
+			Conditions: []rule.Condition{{Field: "process_name", Op: "eq", Value: "docker"}},
+		},
+	}}}})
+	writer.SetNoiseFilter(collectorNoiseFilterFromSystemConfig(systemconfig.CollectorFilterConfig{
+		Enabled:        true,
+		KeepSeverities: []string{"high", "critical"},
+		Rules: []systemconfig.CollectorFilterRule{{
+			ID:       "monitor-agent-docker-stats",
+			Name:     "trust monitor agent docker stats",
+			Enabled:  true,
+			PreAudit: true,
+			Conditions: []systemconfig.CollectorFilterCondition{
+				{Field: "parent_process_name", Op: "eq", Value: "monitor-agent"},
+				{Field: "process_name", Op: "eq", Value: "docker"},
+				{Field: "cmdline", Op: "contains", Value: "docker stats --no-stream"},
+			},
+		}},
+	}))
+	if err := writer.Refresh(context.Background()); err != nil {
+		t.Fatalf("Refresh returned error: %v", err)
+	}
+
+	err := writer.Write(context.Background(), []audit.Event{{
+		EventType:         "process_exec",
+		ProcessName:       "docker",
+		Cmdline:           `/usr/bin/docker stats --no-stream --format "{{json .}}"`,
+		ParentProcessName: "monitor-agent",
+		Severity:          "info",
+	}})
+	if err != nil {
+		t.Fatalf("Write returned error: %v", err)
+	}
+
+	if len(sink.events) != 0 {
+		t.Fatalf("expected trusted action collector filter to drop event before audit rule hit, got %d events", len(sink.events))
+	}
+}
+
 func TestRuleApplyingWriterPreservesRootExplicitHighRiskBeforeRulePromotion(t *testing.T) {
 	sink := &fakeEventSink{}
 	writer := newRefreshingRuleWriter(sink, &fakeRuleProvider{sets: [][]rule.Rule{{

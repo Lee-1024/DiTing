@@ -86,6 +86,10 @@ export default function CollectorConfigPage() {
     const value = await ruleForm.validateFields();
     const nextRules = [...rules];
     const nextRule = normalizeRules([value])[0];
+    if (nextRule.preAudit && !isValidPreAuditRule(nextRule)) {
+      message.error('审计前过滤需要同时包含来源条件和动作条件');
+      return;
+    }
     if (editingRuleIndex === undefined) {
       nextRules.push(nextRule);
     } else {
@@ -162,6 +166,12 @@ export default function CollectorConfigPage() {
                 width: 90,
                 render: (value) => <Tag color={value ? 'green' : 'default'}>{value ? '启用' : '停用'}</Tag>,
               },
+              {
+                title: '类型',
+                dataIndex: 'preAudit',
+                width: 120,
+                render: (value) => <Tag color={value ? 'purple' : 'default'}>{value ? '可信动作' : '普通过滤'}</Tag>,
+              },
               { title: '规则名称', dataIndex: 'name', width: 280, render: (value) => value || '-' },
               {
                 title: '条件',
@@ -208,6 +218,9 @@ function RuleEditorForm({ form }: { form: ReturnType<typeof Form.useForm<Collect
       </Form.Item>
       <Space align="start" wrap>
         <Form.Item name="enabled" label="启用" valuePropName="checked" initialValue>
+          <Switch />
+        </Form.Item>
+        <Form.Item name="preAudit" label="可信动作过滤" valuePropName="checked" initialValue={false}>
           <Switch />
         </Form.Item>
         <Form.Item name="name" label="规则名称" rules={[{ required: true, message: '请输入规则名称' }]}>
@@ -288,6 +301,7 @@ function ConditionSummary({ rule }: { rule?: CollectorFilterConfig['rules'][numb
   return (
     <Space size={6} wrap>
       <Tag color="blue">{count} 个条件</Tag>
+      {rule?.preAudit && <Tag color="purple">审计前</Tag>}
       <Typography.Text type="secondary">规则内全部满足才过滤</Typography.Text>
     </Space>
   );
@@ -322,7 +336,7 @@ function newRuleID() {
 }
 
 function newRule(): CollectorFilterConfig['rules'][number] {
-  return { id: newRuleID(), name: '新过滤规则', enabled: true, conditions: [{ field: 'process_name', op: 'eq', value: '', values: [] }] };
+  return { id: newRuleID(), name: '新过滤规则', enabled: true, preAudit: false, conditions: [{ field: 'process_name', op: 'eq', value: '', values: [] }] };
 }
 
 function normalizeRules(rules: CollectorFilterConfig['rules']) {
@@ -330,6 +344,7 @@ function normalizeRules(rules: CollectorFilterConfig['rules']) {
     id: rule.id || newRuleID(),
     name: rule.name,
     enabled: Boolean(rule.enabled),
+    preAudit: Boolean(rule.preAudit),
     conditions: (rule.conditions ?? []).map((condition) => ({
       field: condition.field,
       op: condition.op,
@@ -337,4 +352,11 @@ function normalizeRules(rules: CollectorFilterConfig['rules']) {
       values: condition.op === 'in' ? condition.values ?? [] : [],
     })),
   }));
+}
+
+function isValidPreAuditRule(rule: CollectorFilterConfig['rules'][number]) {
+  const sourceFields = new Set(['parent_process_name', 'username', 'login_username']);
+  const actionFields = new Set(['process_name', 'cmdline', 'file_path', 'file_operation', 'dst_ip', 'dst_port', 'protocol', 'domain']);
+  const fields = (rule.conditions ?? []).map((condition) => condition.field);
+  return fields.some((field) => sourceFields.has(field)) && fields.some((field) => actionFields.has(field));
 }
