@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -94,12 +95,20 @@ func (a *OpenAICompatibleAnalyzer) Analyze(ctx context.Context, event audit.Even
 		return Analysis{}, err
 	}
 	defer resp.Body.Close()
-	var response chatCompletionResponse
-	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+	responseBody, err := io.ReadAll(resp.Body)
+	if err != nil {
 		return Analysis{}, err
 	}
+	var response chatCompletionResponse
+	if err := json.Unmarshal(responseBody, &response); err != nil {
+		return Analysis{}, fmt.Errorf("ai provider returned invalid json: %s", strings.TrimSpace(string(responseBody)))
+	}
 	if resp.StatusCode >= 300 {
-		return Analysis{}, fmt.Errorf("ai provider returned %d: %s", resp.StatusCode, response.Error.Message)
+		message := response.Error.Message
+		if message == "" {
+			message = strings.TrimSpace(string(responseBody))
+		}
+		return Analysis{}, fmt.Errorf("ai provider returned %d: %s", resp.StatusCode, message)
 	}
 	if len(response.Choices) == 0 {
 		return Analysis{}, fmt.Errorf("ai provider returned no choices")

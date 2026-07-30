@@ -99,6 +99,24 @@ func TestClickHouseRuntimeDataTablesIncludeOperationAggregates(t *testing.T) {
 	}
 }
 
+func TestSplitLogHandlerWritesErrorsToStderr(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	logger := slog.New(newSplitLogHandler(&stdout, &stderr))
+
+	logger.Info("info message")
+	if stderr.Len() != 0 {
+		t.Fatalf("expected info log to avoid stderr, got %s", stderr.String())
+	}
+	logger.Error("error message")
+	if !strings.Contains(stdout.String(), "error message") {
+		t.Fatalf("expected error log in stdout, got %s", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "error message") {
+		t.Fatalf("expected error log in stderr, got %s", stderr.String())
+	}
+}
+
 func TestProductionPreReleaseBaselineSeedsCollectorFilterAndAuditRules(t *testing.T) {
 	for _, expected := range []string{
 		"INSERT INTO diting_system_configs",

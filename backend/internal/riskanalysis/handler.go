@@ -2,6 +2,7 @@ package riskanalysis
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -56,11 +57,13 @@ func (h *Handler) Analyze(w http.ResponseWriter, r *http.Request) {
 	}
 	analysis, err := h.analyzer.Analyze(r.Context(), event)
 	if err != nil {
+		slog.Error("ai risk analysis failed", "event_id", eventID, "error", err)
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
 	analysis, err = h.repository.Upsert(r.Context(), analysis)
 	if err != nil {
+		slog.Error("save ai risk analysis failed", "event_id", eventID, "error", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

@@ -32,7 +32,7 @@ import (
 
 // main 处理 main 相关逻辑。
 func main() {
-	slog.SetDefault(slog.New(newLogHandler(os.Stdout)))
+	slog.SetDefault(slog.New(newSplitLogHandler(os.Stdout, os.Stderr)))
 	mode, cfgPath := parseArgs(os.Args)
 	slog.Info("process starting", "mode", mode, "config", cfgPath)
 
@@ -338,6 +338,40 @@ func main() {
 		fmt.Fprintf(os.Stderr, "listen: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+func newSplitLogHandler(stdout io.Writer, stderr io.Writer) slog.Handler {
+	return splitLogHandler{
+		all:    newLogHandler(stdout),
+		errors: newLogHandler(stderr),
+	}
+}
+
+type splitLogHandler struct {
+	all    slog.Handler
+	errors slog.Handler
+}
+
+func (h splitLogHandler) Enabled(ctx context.Context, level slog.Level) bool {
+	return h.all.Enabled(ctx, level) || h.errors.Enabled(ctx, level)
+}
+
+func (h splitLogHandler) Handle(ctx context.Context, record slog.Record) error {
+	if err := h.all.Handle(ctx, record); err != nil {
+		return err
+	}
+	if record.Level >= slog.LevelError {
+		return h.errors.Handle(ctx, record)
+	}
+	return nil
+}
+
+func (h splitLogHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return splitLogHandler{all: h.all.WithAttrs(attrs), errors: h.errors.WithAttrs(attrs)}
+}
+
+func (h splitLogHandler) WithGroup(name string) slog.Handler {
+	return splitLogHandler{all: h.all.WithGroup(name), errors: h.errors.WithGroup(name)}
 }
 
 // newLogHandler 创建并初始化 new Log Handler 实例。

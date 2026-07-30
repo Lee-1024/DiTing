@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -110,6 +111,7 @@ func (h *Handler) TestAIConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	started := time.Now()
 	if err := testOpenAICompatibleProvider(r, request); err != nil {
+		slog.Error("test ai provider failed", "base_url", request.BaseURL, "model", request.Model, "error", err)
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
