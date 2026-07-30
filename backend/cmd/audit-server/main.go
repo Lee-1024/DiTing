@@ -222,15 +222,13 @@ func main() {
 			fmt.Fprintf(os.Stderr, "auto clickhouse migrations: %v\n", err)
 			os.Exit(1)
 		}
-		auditTable := "audit_events"
-		if cfg.ClickHouse.Database != "" {
-			auditTable = cfg.ClickHouse.Database + "." + auditTable
-		}
-		slog.Warn("clearing clickhouse audit events", "table", auditTable)
-		if err := client.Execute(context.Background(), "TRUNCATE TABLE IF EXISTS "+auditTable); err != nil {
-			slog.Error("clear clickhouse audit events failed", "table", auditTable, "error", err)
-			fmt.Fprintf(os.Stderr, "clear clickhouse audit events: %v\n", err)
-			os.Exit(1)
+		for _, table := range clickHouseRuntimeDataTables(cfg.ClickHouse.Database) {
+			slog.Warn("clearing clickhouse runtime data", "table", table)
+			if err := client.Execute(context.Background(), "TRUNCATE TABLE IF EXISTS "+table); err != nil {
+				slog.Error("clear clickhouse runtime data failed", "table", table, "error", err)
+				fmt.Fprintf(os.Stderr, "clear clickhouse runtime data: %v\n", err)
+				os.Exit(1)
+			}
 		}
 		pool, err := postgres.Connect(context.Background(), cfg.Postgres)
 		if err != nil {
@@ -470,6 +468,28 @@ func postgresRuntimeDataCleanupStatements() []string {
 		"DELETE FROM diting_host_assets",
 		"DELETE FROM diting_audit_rules",
 	}
+}
+
+func clickHouseRuntimeDataTables(database string) []string {
+	tables := []string{
+		"audit_events",
+		"audit_overview_hourly",
+		"audit_host_stats_hourly",
+		"audit_user_stats_hourly",
+		"audit_host_user_stats_hourly",
+		"audit_command_stats_hourly",
+		"audit_rule_hit_stats_hourly",
+		"audit_operation_groups_hourly",
+		"audit_host_behavior_hourly",
+	}
+	if database == "" {
+		return tables
+	}
+	qualified := make([]string, 0, len(tables))
+	for _, table := range tables {
+		qualified = append(qualified, database+"."+table)
+	}
+	return qualified
 }
 
 // parseArgs 解析 parse Args 并返回结构化结果。

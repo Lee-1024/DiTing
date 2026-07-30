@@ -1,13 +1,15 @@
-import { Button, Card, DatePicker, Empty, Form, Input, Select, Table, Tag, Typography } from 'antd';
+import { Button, Card, DatePicker, Empty, Form, Input, Select, Space, Table, Tag, Typography } from 'antd';
 import dayjs from 'dayjs';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { exportAuditEvents, queryAuditEvents, queryAuditOperations } from '../../api/audit';
+import { getRiskDispositions } from '../../api/riskDispositions';
 import CommandText from '../../components/CommandText';
 import FilterToolbar from '../../components/FilterToolbar';
 import { InsightHero, LatestPanel, MetricCard } from '../../components/InsightHeader';
 import SeverityTag from '../../components/SeverityTag';
 import type { AuditEvent, AuditEventQuery, AuditOperationGroup } from '../../types/audit';
+import type { RiskDispositionMap, RiskDispositionStatus } from '../../types/riskDisposition';
 import { downloadBlob } from '../../utils/download';
 import { compactNumber } from '../../utils/format';
 import { displayHostIdentity } from '../../utils/hostDisplay';
@@ -22,6 +24,7 @@ export default function AuditEventsPage() {
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<AuditEvent>();
   const [relatedEvents, setRelatedEvents] = useState<AuditEvent[]>([]);
+  const [riskDispositions, setRiskDispositions] = useState<RiskDispositionMap>({});
   const [total, setTotal] = useState(0);
   const [totalKnown, setTotalKnown] = useState(false);
   const [page, setPage] = useState(1);
@@ -61,7 +64,12 @@ export default function AuditEventsPage() {
         return;
       }
       const items = data.items ?? [];
+      const dispositionMap = await getRiskDispositions(items.map((item) => item.representative).filter(Boolean));
+      if (seq !== requestSeq.current) {
+        return;
+      }
       setGroups(items);
+      setRiskDispositions(dispositionMap);
       setTotal(effectivePagedTotal(data.total, data.hasMore, data.page, data.pageSize, items.length));
       setTotalKnown(Boolean(data.total && data.total > 0));
       setPage(data.page);
@@ -95,8 +103,8 @@ export default function AuditEventsPage() {
     void load();
   }, []);
 
-  const riskyEvents = groups.filter((item) => item.maxSeverity === 'high' || item.maxSeverity === 'critical').length;
-  const criticalEvents = groups.filter((item) => item.maxSeverity === 'critical').length;
+  const riskyEvents = groups.filter((item) => isOpenRiskOperation(item, riskDispositions)).length;
+  const criticalEvents = groups.filter((item) => item.maxSeverity === 'critical' && isOpenRiskOperation(item, riskDispositions)).length;
   const activeHosts = uniqueValues(groups.map((item) => displayHostIdentity(item.representative, '')).filter(Boolean)).length;
   const latestEvent = groups[0]?.representative;
 
@@ -196,7 +204,7 @@ export default function AuditEventsPage() {
           }}
           columns={[
             { title: '时间', dataIndex: ['representative', 'eventTime'], width: 190, render: (value) => formatLocalDateTime(value) },
-            { title: '等级', dataIndex: 'maxSeverity', width: 100, render: (value) => <SeverityTag value={value} /> },
+            { title: '等级', dataIndex: 'maxSeverity', width: 150, render: (value, record) => renderOperationSeverity(value, record, riskDispositions) },
             { title: '事件', dataIndex: 'eventTypes', width: 160, render: (values: string[]) => values.map((value) => <Tag key={value}>{eventTypeLabel(value)}</Tag>) },
             { title: '明细数', dataIndex: 'eventCount', width: 104, align: 'right', className: 'number-cell' },
             { title: '主机/节点', dataIndex: ['representative', 'hostName'], width: 170, ellipsis: true, render: (_, record) => displayHostIdentity(record.representative) },
@@ -253,6 +261,52 @@ function renderAuditGroupDetails(group: AuditOperationGroup, onSelect: (event: A
       ))}
     </div>
   );
+}
+
+function renderOperationSeverity(value: string, record: AuditOperationGroup, dispositions: RiskDispositionMap) {
+  const disposition = dispositions[record.representative.eventId];
+  const status = disposition?.status ?? 'open';
+  return (
+    <Space size={6} wrap>
+      <SeverityTag value={value} />
+      {isRiskSeverity(value) && status !== 'open' && <Tag color={riskDispositionColor(status)}>{riskDispositionText(status)}</Tag>}
+    </Space>
+  );
+}
+
+function isOpenRiskOperation(item: AuditOperationGroup, dispositions: RiskDispositionMap) {
+  if (!isRiskSeverity(item.maxSeverity)) {
+    return false;
+  }
+  return (dispositions[item.representative.eventId]?.status ?? 'open') === 'open';
+}
+
+function isRiskSeverity(value: string) {
+  return value === 'high' || value === 'critical';
+}
+
+function riskDispositionText(status: RiskDispositionStatus) {
+  const config: Record<RiskDispositionStatus, string> = {
+    open: '未处理',
+    confirmed: '已处理',
+    false_positive: '误报',
+    ignored: '已忽略',
+    ignore_similar: '忽略同类',
+    closed: '已关闭',
+  };
+  return config[status] ?? status;
+}
+
+function riskDispositionColor(status: RiskDispositionStatus) {
+  const config: Record<RiskDispositionStatus, string> = {
+    open: 'red',
+    confirmed: 'green',
+    false_positive: 'blue',
+    ignored: 'default',
+    ignore_similar: 'purple',
+    closed: 'cyan',
+  };
+  return config[status] ?? 'default';
 }
 
 // uniqueValues 处理 unique Values 相关逻辑。

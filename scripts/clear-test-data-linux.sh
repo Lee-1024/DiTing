@@ -18,6 +18,7 @@ Options:
 
 This clears collected runtime data and audit rules while preserving collector config:
   - ClickHouse diting.audit_events
+  - ClickHouse diting.audit_*_hourly acceleration tables
   - PostgreSQL diting_risk_dispositions
   - PostgreSQL diting_collector_heartbeats
   - PostgreSQL diting_host_assets

@@ -78,6 +78,26 @@ func TestPostgresRuntimeDataCleanupStatements(t *testing.T) {
 	}
 }
 
+func TestClickHouseRuntimeDataTablesIncludeOperationAggregates(t *testing.T) {
+	tables := clickHouseRuntimeDataTables("diting")
+
+	expected := []string{
+		"diting.audit_events",
+		"diting.audit_operation_groups_hourly",
+		"diting.audit_overview_hourly",
+		"diting.audit_host_stats_hourly",
+		"diting.audit_user_stats_hourly",
+		"diting.audit_command_stats_hourly",
+		"diting.audit_rule_hit_stats_hourly",
+		"diting.audit_host_behavior_hourly",
+	}
+	for _, table := range expected {
+		if !containsString(tables, table) {
+			t.Fatalf("expected clickhouse cleanup table %q in %#v", table, tables)
+		}
+	}
+}
+
 func TestProductionPreReleaseBaselineSeedsCollectorFilterAndAuditRules(t *testing.T) {
 	for _, expected := range []string{
 		"INSERT INTO diting_system_configs",
