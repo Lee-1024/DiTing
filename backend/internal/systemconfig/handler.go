@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -73,7 +74,7 @@ func (h *Handler) SaveAIConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if request.Enabled && (request.BaseURL == "" || request.Model == "") {
-		http.Error(w, "baseUrl and model are required", http.StatusBadRequest)
+		http.Error(w, "请填写模型服务 Base URL 和模型名称", http.StatusBadRequest)
 		return
 	}
 	if err := h.repository.SaveAIConfig(r.Context(), request); err != nil {
@@ -98,7 +99,7 @@ func (h *Handler) TestAIConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if request.BaseURL == "" || request.Model == "" {
-		http.Error(w, "baseUrl and model are required", http.StatusBadRequest)
+		http.Error(w, "请填写模型服务 Base URL 和模型名称", http.StatusBadRequest)
 		return
 	}
 	if request.APIKey == "" {
@@ -135,8 +136,8 @@ func testOpenAICompatibleProvider(r *http.Request, config AIProviderConfig) erro
 	body, err := json.Marshal(map[string]any{
 		"model": config.Model,
 		"messages": []map[string]string{
-			{"role": "system", "content": "你是连通性测试助手。"},
-			{"role": "user", "content": "请只回复 OK。"},
+			{"role": "system", "content": "你是主机安全审计分析助手。必须只输出 JSON。"},
+			{"role": "user", "content": `请按这个 JSON Schema 输出一次测试分析，不要输出 Markdown：{"ai_severity":"low","verdict":"needs_review","confidence":80,"reason":"连通性测试","evidence":["test"],"suggestion":"测试通过"}`},
 		},
 		"temperature": 0,
 		"max_tokens":  maxTokens,
@@ -159,6 +160,10 @@ func testOpenAICompatibleProvider(r *http.Request, config AIProviderConfig) erro
 		return err
 	}
 	defer resp.Body.Close()
+	responseBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
 	var response struct {
 		Choices []struct {
 			Message struct {
@@ -169,16 +174,54 @@ func testOpenAICompatibleProvider(r *http.Request, config AIProviderConfig) erro
 			Message string `json:"message"`
 		} `json:"error"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		return err
+	if err := json.Unmarshal(responseBody, &response); err != nil {
+		return fmt.Errorf("模型服务返回的内容不是合法 JSON：%s", trimForError(responseBody))
 	}
 	if resp.StatusCode >= 300 {
-		return fmt.Errorf("ai provider returned %d: %s", resp.StatusCode, response.Error.Message)
+		message := response.Error.Message
+		if message == "" {
+			message = trimForError(responseBody)
+		}
+		return fmt.Errorf("模型服务返回错误，状态码 %d：%s", resp.StatusCode, message)
 	}
 	if len(response.Choices) == 0 {
-		return fmt.Errorf("ai provider returned no choices")
+		return fmt.Errorf("模型服务没有返回可用结果")
+	}
+	if err := validateAIAnalysisContent(response.Choices[0].Message.Content); err != nil {
+		return err
 	}
 	return nil
+}
+
+func validateAIAnalysisContent(content string) error {
+	raw := strings.TrimSpace(content)
+	raw = strings.TrimPrefix(raw, "```json")
+	raw = strings.TrimPrefix(raw, "```")
+	raw = strings.TrimSuffix(raw, "```")
+	raw = strings.TrimSpace(raw)
+	var payload struct {
+		AISeverity string   `json:"ai_severity"`
+		Verdict    string   `json:"verdict"`
+		Confidence int      `json:"confidence"`
+		Reason     string   `json:"reason"`
+		Evidence   []string `json:"evidence"`
+		Suggestion string   `json:"suggestion"`
+	}
+	if err := json.Unmarshal([]byte(raw), &payload); err != nil {
+		return fmt.Errorf("模型服务可连通，但没有按 AI 风险分析 JSON 格式输出：%s", raw)
+	}
+	if payload.AISeverity == "" || payload.Verdict == "" || payload.Reason == "" {
+		return fmt.Errorf("模型服务可连通，但 AI 风险分析 JSON 字段不完整：%s", raw)
+	}
+	return nil
+}
+
+func trimForError(data []byte) string {
+	value := strings.TrimSpace(string(data))
+	if len(value) > 500 {
+		return value[:500] + "..."
+	}
+	return value
 }
 
 func validCollectorFilterRules(rules []CollectorFilterRule) bool {

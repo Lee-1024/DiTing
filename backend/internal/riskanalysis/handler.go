@@ -43,7 +43,7 @@ func (h *Handler) Analyze(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.analyzer == nil {
-		http.Error(w, "ai analyzer is not configured", http.StatusServiceUnavailable)
+		http.Error(w, "AI 分析服务未配置", http.StatusServiceUnavailable)
 		return
 	}
 	event, err := h.auditRepository.GetEvent(r.Context(), eventID)

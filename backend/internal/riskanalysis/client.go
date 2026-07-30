@@ -60,10 +60,10 @@ func NewOpenAICompatibleAnalyzer(cfg config.AIConfig) *OpenAICompatibleAnalyzer 
 
 func (a *OpenAICompatibleAnalyzer) Analyze(ctx context.Context, event audit.Event) (Analysis, error) {
 	if !a.cfg.Enabled {
-		return Analysis{}, fmt.Errorf("ai analysis is disabled")
+		return Analysis{}, fmt.Errorf("AI 复核未启用，请先到“配置管理 -> AI 配置”开启并保存")
 	}
 	if strings.TrimSpace(a.cfg.BaseURL) == "" || strings.TrimSpace(a.cfg.Model) == "" {
-		return Analysis{}, fmt.Errorf("ai base_url and model are required")
+		return Analysis{}, fmt.Errorf("AI 配置不完整，请填写模型服务 Base URL 和模型名称")
 	}
 	request := chatCompletionRequest{
 		Model: a.cfg.Model,
@@ -101,17 +101,17 @@ func (a *OpenAICompatibleAnalyzer) Analyze(ctx context.Context, event audit.Even
 	}
 	var response chatCompletionResponse
 	if err := json.Unmarshal(responseBody, &response); err != nil {
-		return Analysis{}, fmt.Errorf("ai provider returned invalid json: %s", strings.TrimSpace(string(responseBody)))
+		return Analysis{}, fmt.Errorf("模型服务返回的内容不是合法 JSON：%s", trimProviderBody(responseBody))
 	}
 	if resp.StatusCode >= 300 {
 		message := response.Error.Message
 		if message == "" {
-			message = strings.TrimSpace(string(responseBody))
+			message = trimProviderBody(responseBody)
 		}
-		return Analysis{}, fmt.Errorf("ai provider returned %d: %s", resp.StatusCode, message)
+		return Analysis{}, fmt.Errorf("模型服务返回错误，状态码 %d：%s", resp.StatusCode, message)
 	}
 	if len(response.Choices) == 0 {
-		return Analysis{}, fmt.Errorf("ai provider returned no choices")
+		return Analysis{}, fmt.Errorf("模型服务没有返回可用结果")
 	}
 	raw := strings.TrimSpace(response.Choices[0].Message.Content)
 	analysis, err := parseAnalysisJSON(raw)
@@ -123,6 +123,14 @@ func (a *OpenAICompatibleAnalyzer) Analyze(ctx context.Context, event audit.Even
 	analysis.RawResponse = raw
 	analysis.AnalyzedAt = time.Now().UTC()
 	return analysis, nil
+}
+
+func trimProviderBody(data []byte) string {
+	value := strings.TrimSpace(string(data))
+	if len(value) > 500 {
+		return value[:500] + "..."
+	}
+	return value
 }
 
 func parseAnalysisJSON(raw string) (Analysis, error) {
