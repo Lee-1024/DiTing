@@ -95,7 +95,7 @@ export default function AIConfigPage() {
         <Form
           form={form}
           layout="vertical"
-          initialValues={{ enabled: false, baseUrl: 'http://127.0.0.1:11434/v1', model: 'qwen2.5:7b', timeoutSeconds: 30, maxTokens: 800 }}
+          initialValues={{ enabled: false, baseUrl: 'http://127.0.0.1:11434/v1', model: 'qwen2.5:7b', timeoutSeconds: 120, maxTokens: 800 }}
         >
           <Form.Item name="enabled" label="启用 AI 复核" valuePropName="checked">
             <Switch />
@@ -111,7 +111,7 @@ export default function AIConfigPage() {
           </Form.Item>
           <Space align="start" wrap>
             <Form.Item name="timeoutSeconds" label="超时秒数" rules={[{ required: true }]}>
-              <InputNumber min={5} max={300} />
+              <InputNumber min={10} max={900} />
             </Form.Item>
             <Form.Item name="maxTokens" label="最大输出 Token" rules={[{ required: true }]}>
               <InputNumber min={200} max={4000} />

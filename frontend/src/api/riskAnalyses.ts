@@ -13,6 +13,10 @@ export async function getRiskAnalyses(events: AuditEvent[]): Promise<AIRiskAnaly
 }
 
 export async function analyzeRiskEvent(eventId: string): Promise<AIRiskAnalysis> {
-  const response = await apiClient.post<AIRiskAnalysis>(`/risk-analyses/${encodeURIComponent(eventId)}/analyze`);
+  const response = await apiClient.post<AIRiskAnalysis>(
+    `/risk-analyses/${encodeURIComponent(eventId)}/analyze`,
+    undefined,
+    { timeout: 10 * 60 * 1000 },
+  );
   return response.data;
 }

@@ -24,6 +24,11 @@ export async function saveAIProviderConfig(config: AIProviderConfig): Promise<AI
 }
 
 export async function testAIProviderConfig(config: AIProviderConfig): Promise<{ ok: boolean; latencyMs: number; message: string }> {
-  const response = await apiClient.post<{ ok: boolean; latencyMs: number; message: string }>('/system-configs/ai/test', config);
+  const timeoutSeconds = config.timeoutSeconds || 120;
+  const response = await apiClient.post<{ ok: boolean; latencyMs: number; message: string }>(
+    '/system-configs/ai/test',
+    config,
+    { timeout: Math.max(timeoutSeconds + 10, 30) * 1000 },
+  );
   return response.data;
 }

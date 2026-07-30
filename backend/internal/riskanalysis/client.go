@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -50,7 +51,7 @@ type OpenAICompatibleAnalyzer struct {
 func NewOpenAICompatibleAnalyzer(cfg config.AIConfig) *OpenAICompatibleAnalyzer {
 	timeout := time.Duration(cfg.TimeoutSeconds) * time.Second
 	if timeout <= 0 {
-		timeout = 30 * time.Second
+		timeout = 120 * time.Second
 	}
 	return &OpenAICompatibleAnalyzer{
 		cfg:    cfg,
@@ -92,6 +93,9 @@ func (a *OpenAICompatibleAnalyzer) Analyze(ctx context.Context, event audit.Even
 	}
 	resp, err := a.client.Do(req)
 	if err != nil {
+		if os.IsTimeout(err) || strings.Contains(err.Error(), "Client.Timeout") || strings.Contains(err.Error(), "context deadline exceeded") {
+			return Analysis{}, fmt.Errorf("AI 分析超时，请在 AI 配置中调大超时秒数或降低最大输出 Token：%w", err)
+		}
 		return Analysis{}, err
 	}
 	defer resp.Body.Close()

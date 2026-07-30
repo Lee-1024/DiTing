@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 )
@@ -127,7 +128,7 @@ func (h *Handler) TestAIConfig(w http.ResponseWriter, r *http.Request) {
 func testOpenAICompatibleProvider(r *http.Request, config AIProviderConfig) error {
 	timeout := time.Duration(config.TimeoutSeconds) * time.Second
 	if timeout <= 0 {
-		timeout = 30 * time.Second
+		timeout = 120 * time.Second
 	}
 	maxTokens := config.MaxTokens
 	if maxTokens <= 0 || maxTokens > 200 {
@@ -157,6 +158,9 @@ func testOpenAICompatibleProvider(r *http.Request, config AIProviderConfig) erro
 	client := &http.Client{Timeout: timeout}
 	resp, err := client.Do(req)
 	if err != nil {
+		if os.IsTimeout(err) || strings.Contains(err.Error(), "Client.Timeout") || strings.Contains(err.Error(), "context deadline exceeded") {
+			return fmt.Errorf("模型服务测试超时，请调大超时秒数或降低最大输出 Token：%w", err)
+		}
 		return err
 	}
 	defer resp.Body.Close()

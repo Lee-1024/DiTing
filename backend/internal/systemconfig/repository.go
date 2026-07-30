@@ -202,14 +202,17 @@ func DefaultAIProviderConfig() AIProviderConfig {
 	return AIProviderConfig{
 		BaseURL:        "http://127.0.0.1:11434/v1",
 		Model:          "qwen2.5:7b",
-		TimeoutSeconds: 30,
+		TimeoutSeconds: 120,
 		MaxTokens:      800,
 	}
 }
 
 func normalizeAIProviderConfig(config AIProviderConfig) AIProviderConfig {
 	if config.TimeoutSeconds <= 0 {
-		config.TimeoutSeconds = 30
+		config.TimeoutSeconds = 120
+	}
+	if config.TimeoutSeconds > 900 {
+		config.TimeoutSeconds = 900
 	}
 	if config.MaxTokens <= 0 {
 		config.MaxTokens = 800
