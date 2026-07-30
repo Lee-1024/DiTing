@@ -493,6 +493,33 @@ func TestRuleApplyingWriterFiltersTrustedActionBeforeAuditRulePromotion(t *testi
 	}
 }
 
+func TestCollectorNoiseFilterFiltersTrustedActionEvenWhenIncomingSeverityIsHigh(t *testing.T) {
+	filter := collectorNoiseFilterFromSystemConfig(systemconfig.CollectorFilterConfig{
+		Enabled:        true,
+		KeepSeverities: []string{"high", "critical"},
+		Rules: []systemconfig.CollectorFilterRule{{
+			ID:       "monitor-agent-docker-stats",
+			Name:     "trust monitor agent docker stats",
+			Enabled:  true,
+			PreAudit: true,
+			Conditions: []systemconfig.CollectorFilterCondition{
+				{Field: "parent_process_name", Op: "eq", Value: "monitor-agent"},
+				{Field: "cmdline", Op: "eq", Value: `/usr/bin/docker stats --no-stream --format "{{json .}}"`},
+			},
+		}},
+	})
+
+	if !filter.ShouldDropBeforeEnrichment(audit.Event{
+		EventType:         "process_exec",
+		ProcessName:       "docker",
+		Cmdline:           `/usr/bin/docker stats --no-stream --format "{{json .}}"`,
+		ParentProcessName: "monitor-agent",
+		Severity:          "high",
+	}) {
+		t.Fatalf("expected trusted action filter to drop even when incoming severity is already high")
+	}
+}
+
 func TestRuleApplyingWriterPreservesRootExplicitHighRiskBeforeRulePromotion(t *testing.T) {
 	sink := &fakeEventSink{}
 	writer := newRefreshingRuleWriter(sink, &fakeRuleProvider{sets: [][]rule.Rule{{

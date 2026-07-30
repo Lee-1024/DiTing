@@ -41,7 +41,7 @@ func (f collectorNoiseFilter) ShouldDrop(event audit.Event) bool {
 // ShouldDropBeforeEnrichment drops explicit platform self-noise before audit rules can
 // promote it to a protected severity.
 func (f collectorNoiseFilter) ShouldDropBeforeEnrichment(event audit.Event) bool {
-	if !f.Enabled || f.shouldKeep(event) {
+	if !f.Enabled {
 		return false
 	}
 	if f.shouldDropByLegacyFields(event) {
