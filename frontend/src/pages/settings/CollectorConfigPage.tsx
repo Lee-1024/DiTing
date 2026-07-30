@@ -1,5 +1,5 @@
 import { DeleteOutlined, PlusOutlined, SaveOutlined } from '@ant-design/icons';
-import { Button, Card, Divider, Form, Input, Modal, Popconfirm, Select, Space, Switch, Table, Tag, Typography, message } from 'antd';
+import { Alert, Button, Card, Divider, Form, Input, Modal, Popconfirm, Select, Space, Switch, Table, Tag, Typography, message } from 'antd';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getCollectorFilterConfig, saveCollectorFilterConfig } from '../../api/systemConfig';
@@ -211,6 +211,7 @@ export default function CollectorConfigPage() {
 }
 
 function RuleEditorForm({ form }: { form: ReturnType<typeof Form.useForm<CollectorFilterConfig['rules'][number]>>[0] }) {
+  const preAudit = Form.useWatch('preAudit', form);
   return (
     <Form form={form} layout="vertical">
       <Form.Item name="id" hidden>
@@ -227,6 +228,15 @@ function RuleEditorForm({ form }: { form: ReturnType<typeof Form.useForm<Collect
           <Input style={{ width: 320 }} placeholder="例如：忽略 vite node" />
         </Form.Item>
       </Space>
+      <Alert
+        showIcon
+        type={preAudit ? 'warning' : 'info'}
+        style={{ marginBottom: 16 }}
+        message={preAudit ? '可信动作过滤会在审计规则前生效' : '普通过滤不会丢弃已命中审计规则或高危保留等级的事件'}
+        description={preAudit
+          ? '必须同时配置来源条件和动作条件。来源可选父进程名、父进程命令、工作目录、登录用户或执行用户；动作可选进程名、命令行、文件路径或网络目标。例如：父进程命令包含 /data/monitor-agent/monitor-agent，进程名等于 docker，命令行包含 docker ps -a --format。'
+          : '适合过滤低价值普通噪声。若要确认某个巡检程序执行的固定高危动作是安全的，请打开可信动作过滤，并用来源条件加动作条件精确描述。'}
+      />
       <Form.List name="conditions">
         {(conditionFields, conditionOps) => (
           <Space direction="vertical" size={10} style={{ width: '100%' }}>
@@ -312,7 +322,9 @@ const collectorFilterFieldOptions = [
   { value: 'severity', label: '风险等级' },
   { value: 'process_name', label: '进程名' },
   { value: 'cmdline', label: '命令行' },
+  { value: 'cwd', label: '工作目录' },
   { value: 'parent_process_name', label: '父进程名' },
+  { value: 'parent_cmdline', label: '父进程命令' },
   { value: 'username', label: '执行用户' },
   { value: 'login_username', label: '登录用户' },
   { value: 'file_path', label: '文件路径' },
@@ -355,7 +367,7 @@ function normalizeRules(rules: CollectorFilterConfig['rules']) {
 }
 
 function isValidPreAuditRule(rule: CollectorFilterConfig['rules'][number]) {
-  const sourceFields = new Set(['parent_process_name', 'username', 'login_username']);
+  const sourceFields = new Set(['parent_process_name', 'parent_cmdline', 'username', 'login_username', 'cwd']);
   const actionFields = new Set(['process_name', 'cmdline', 'file_path', 'file_operation', 'dst_ip', 'dst_port', 'protocol', 'domain']);
   const fields = (rule.conditions ?? []).map((condition) => condition.field);
   return fields.some((field) => sourceFields.has(field)) && fields.some((field) => actionFields.has(field));

@@ -132,8 +132,12 @@ func collectorFilterFieldValue(event audit.Event, field string) string {
 		return event.ProcessName
 	case "cmdline":
 		return event.Cmdline
+	case "cwd":
+		return event.CWD
 	case "parent_process_name":
 		return event.ParentProcessName
+	case "parent_cmdline":
+		return event.ParentCmdline
 	case "username":
 		return event.Username
 	case "login_username":

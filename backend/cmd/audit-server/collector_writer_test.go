@@ -520,6 +520,35 @@ func TestCollectorNoiseFilterFiltersTrustedActionEvenWhenIncomingSeverityIsHigh(
 	}
 }
 
+func TestCollectorNoiseFilterSupportsParentCmdlineTrustedActionSource(t *testing.T) {
+	filter := collectorNoiseFilterFromSystemConfig(systemconfig.CollectorFilterConfig{
+		Enabled:        true,
+		KeepSeverities: []string{"high", "critical"},
+		Rules: []systemconfig.CollectorFilterRule{{
+			ID:       "monitor-agent-docker-ps",
+			Name:     "trust monitor agent docker ps",
+			Enabled:  true,
+			PreAudit: true,
+			Conditions: []systemconfig.CollectorFilterCondition{
+				{Field: "parent_cmdline", Op: "contains", Value: "/data/monitor-agent/monitor-agent"},
+				{Field: "process_name", Op: "eq", Value: "docker"},
+				{Field: "cmdline", Op: "contains", Value: "docker ps -a --format"},
+			},
+		}},
+	})
+
+	if !filter.ShouldDropBeforeEnrichment(audit.Event{
+		EventType:         "process_exec",
+		ProcessName:       "docker",
+		Cmdline:           `/usr/bin/docker ps -a --format "{{json .}}"`,
+		ParentProcessName: "monitor-agent",
+		ParentCmdline:     "/data/monitor-agent/monitor-agent -interval 10 -config agent-config.yaml",
+		Severity:          "high",
+	}) {
+		t.Fatalf("expected parent cmdline trusted action filter to drop docker ps")
+	}
+}
+
 func TestRuleApplyingWriterPreservesRootExplicitHighRiskBeforeRulePromotion(t *testing.T) {
 	sink := &fakeEventSink{}
 	writer := newRefreshingRuleWriter(sink, &fakeRuleProvider{sets: [][]rule.Rule{{

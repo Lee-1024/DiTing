@@ -74,7 +74,7 @@ func validPreAuditCollectorFilterRule(rule CollectorFilterRule) bool {
 	hasAction := false
 	for _, condition := range rule.Conditions {
 		switch condition.Field {
-		case "parent_process_name", "username", "login_username":
+		case "parent_process_name", "parent_cmdline", "username", "login_username", "cwd":
 			hasSource = true
 		case "process_name", "cmdline", "file_path", "file_operation", "dst_ip", "dst_port", "protocol", "domain":
 			hasAction = true
@@ -85,7 +85,7 @@ func validPreAuditCollectorFilterRule(rule CollectorFilterRule) bool {
 
 func validCollectorFilterField(field string) bool {
 	switch field {
-	case "event_type", "severity", "process_name", "cmdline", "parent_process_name", "username", "login_username", "file_path", "file_operation", "dst_ip", "dst_port", "protocol", "domain":
+	case "event_type", "severity", "process_name", "cmdline", "cwd", "parent_process_name", "parent_cmdline", "username", "login_username", "file_path", "file_operation", "dst_ip", "dst_port", "protocol", "domain":
 		return true
 	default:
 		return false
