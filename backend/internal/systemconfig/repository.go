@@ -200,8 +200,8 @@ func (r *MemoryRepository) SaveAIConfig(_ context.Context, config AIProviderConf
 
 func DefaultAIProviderConfig() AIProviderConfig {
 	return AIProviderConfig{
-		BaseURL:        "http://127.0.0.1:11434/v1",
-		Model:          "qwen2.5:7b",
+		BaseURL:        "https://api.minimaxi.com/v1",
+		Model:          "MiniMax-M3",
 		TimeoutSeconds: 120,
 		MaxTokens:      800,
 	}

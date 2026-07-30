@@ -1,8 +1,15 @@
 package riskanalysis
 
 import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"diting/backend/internal/audit"
+	"diting/backend/internal/config"
 )
 
 func TestParseAnalysisJSONNormalizesModelVerdict(t *testing.T) {
@@ -49,5 +56,85 @@ func TestFallbackAnalysisFromInvalidOutputKeepsReviewableResult(t *testing.T) {
 	}
 	if analysis.Confidence != 0 || len(analysis.Evidence) != 1 {
 		t.Fatalf("unexpected fallback analysis: %#v", analysis)
+	}
+}
+
+func TestAnalyzeRepairsInvalidModelOutput(t *testing.T) {
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		w.Header().Set("Content-Type", "application/json")
+		content := `<think>只输出了思考，没有最终 JSON`
+		if requests == 2 {
+			content = `{"ai_severity":"low","verdict":"false_positive","confidence":88,"reason":"监控巡检命令","evidence":["docker ps"],"suggestion":"可加入可信动作过滤"}`
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"choices": []map[string]any{
+				{"message": map[string]string{"content": content}},
+			},
+		})
+	}))
+	defer server.Close()
+
+	analyzer := NewOpenAICompatibleAnalyzer(config.AIConfig{
+		Enabled:        true,
+		BaseURL:        server.URL,
+		Model:          "test-model",
+		TimeoutSeconds: 5,
+		MaxTokens:      800,
+	})
+	analysis, err := analyzer.Analyze(context.Background(), audit.Event{EventID: "event-1", Cmdline: "/usr/bin/docker ps"})
+	if err != nil {
+		t.Fatalf("Analyze returned error: %v", err)
+	}
+	if requests != 2 {
+		t.Fatalf("expected repair request, got %d requests", requests)
+	}
+	if analysis.Verdict != VerdictFalsePositive || analysis.AISeverity != "low" || analysis.Confidence != 88 {
+		t.Fatalf("unexpected repaired analysis: %#v", analysis)
+	}
+}
+
+func TestAnalyzeUsesMiniMaxResponsesAPIWithReasoningNone(t *testing.T) {
+	var path string
+	var reasoningEffort string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path = r.URL.Path
+		var request struct {
+			Reasoning struct {
+				Effort string `json:"effort"`
+			} `json:"reasoning"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		reasoningEffort = request.Reasoning.Effort
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"status":      "completed",
+			"output_text": `{"ai_severity":"low","verdict":"false_positive","confidence":91,"reason":"监控巡检命令","evidence":["docker ps"],"suggestion":"可加入可信动作过滤"}`,
+		})
+	}))
+	defer server.Close()
+
+	analyzer := NewOpenAICompatibleAnalyzer(config.AIConfig{
+		Enabled:        true,
+		BaseURL:        server.URL,
+		Model:          "MiniMax-M3",
+		TimeoutSeconds: 5,
+		MaxTokens:      800,
+	})
+	analysis, err := analyzer.Analyze(context.Background(), audit.Event{EventID: "event-1", Cmdline: "/usr/bin/docker ps"})
+	if err != nil {
+		t.Fatalf("Analyze returned error: %v", err)
+	}
+	if path != "/v1/responses" {
+		t.Fatalf("expected MiniMax responses path, got %q", path)
+	}
+	if reasoningEffort != "none" {
+		t.Fatalf("expected reasoning effort none, got %q", reasoningEffort)
+	}
+	if analysis.Verdict != VerdictFalsePositive || analysis.AISeverity != "low" || analysis.Confidence != 91 {
+		t.Fatalf("unexpected MiniMax analysis: %#v", analysis)
 	}
 }

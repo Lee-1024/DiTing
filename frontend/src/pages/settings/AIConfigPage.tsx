@@ -95,16 +95,16 @@ export default function AIConfigPage() {
         <Form
           form={form}
           layout="vertical"
-          initialValues={{ enabled: false, baseUrl: 'http://127.0.0.1:11434/v1', model: 'qwen2.5:7b', timeoutSeconds: 120, maxTokens: 800 }}
+          initialValues={{ enabled: false, baseUrl: 'https://api.minimaxi.com/v1', model: 'MiniMax-M3', timeoutSeconds: 120, maxTokens: 800 }}
         >
           <Form.Item name="enabled" label="启用 AI 复核" valuePropName="checked">
             <Switch />
           </Form.Item>
           <Form.Item name="baseUrl" label="Base URL" rules={[{ required: enabled, message: '请输入模型服务 Base URL' }]}>
-            <Input placeholder="例如：http://127.0.0.1:11434/v1" />
+            <Input placeholder="例如：https://api.minimaxi.com/v1" />
           </Form.Item>
           <Form.Item name="model" label="模型" rules={[{ required: enabled, message: '请输入模型名称' }]}>
-            <Input placeholder="例如：qwen2.5:7b / deepseek-chat" />
+            <Input placeholder="例如：MiniMax-M3 / deepseek-chat" />
           </Form.Item>
           <Form.Item name="apiKey" label={config?.apiKeySet ? `API Key（当前 ${config.maskedApiKey || '已保存'}）` : 'API Key'}>
             <Input.Password placeholder={config?.apiKeySet ? '留空保留当前密钥' : '请输入 API Key，可为空用于无鉴权内网模型'} />

@@ -134,6 +134,9 @@ func testOpenAICompatibleProvider(r *http.Request, config AIProviderConfig) erro
 	if maxTokens <= 0 || maxTokens > 200 {
 		maxTokens = 80
 	}
+	if usesMiniMaxResponsesAPI(config) {
+		return testMiniMaxResponsesProvider(r, config, timeout, maxTokens)
+	}
 	body, err := json.Marshal(map[string]any{
 		"model": config.Model,
 		"messages": []map[string]string{
@@ -195,6 +198,88 @@ func testOpenAICompatibleProvider(r *http.Request, config AIProviderConfig) erro
 		return err
 	}
 	return nil
+}
+
+func testMiniMaxResponsesProvider(r *http.Request, config AIProviderConfig, timeout time.Duration, maxTokens int) error {
+	body, err := json.Marshal(map[string]any{
+		"model":             config.Model,
+		"instructions":      "你是主机安全审计分析助手。必须只输出 JSON 对象，不要输出 <think>。",
+		"input":             `请按这个 JSON Schema 输出一次测试分析：{"ai_severity":"low","verdict":"needs_review","confidence":80,"reason":"连通性测试","evidence":["test"],"suggestion":"测试通过"}`,
+		"temperature":       0,
+		"max_output_tokens": maxTokens,
+		"reasoning": map[string]string{
+			"effort": "none",
+		},
+		"stream": false,
+	})
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, strings.TrimRight(normalizeMiniMaxBaseURL(config.BaseURL), "/")+"/responses", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if config.APIKey != "" {
+		req.Header.Set("Authorization", "Bearer "+config.APIKey)
+	}
+	client := &http.Client{Timeout: timeout}
+	resp, err := client.Do(req)
+	if err != nil {
+		if os.IsTimeout(err) || strings.Contains(err.Error(), "Client.Timeout") || strings.Contains(err.Error(), "context deadline exceeded") {
+			return fmt.Errorf("模型服务测试超时，请调大超时秒数或降低最大输出 Token：%w", err)
+		}
+		return err
+	}
+	defer resp.Body.Close()
+	responseBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	var response struct {
+		Status     string `json:"status"`
+		OutputText string `json:"output_text"`
+		Error      struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(responseBody, &response); err != nil {
+		return fmt.Errorf("模型服务返回的内容不是合法 JSON：%s", trimForError(responseBody))
+	}
+	if resp.StatusCode >= 300 {
+		message := response.Error.Message
+		if message == "" {
+			message = trimForError(responseBody)
+		}
+		return fmt.Errorf("模型服务返回错误，状态码 %d：%s", resp.StatusCode, message)
+	}
+	if strings.TrimSpace(response.OutputText) == "" {
+		return fmt.Errorf("模型服务没有返回可用结果")
+	}
+	return validateAIAnalysisContent(response.OutputText)
+}
+
+func usesMiniMaxResponsesAPI(config AIProviderConfig) bool {
+	baseURL := strings.ToLower(strings.TrimSpace(config.BaseURL))
+	model := strings.ToLower(strings.TrimSpace(config.Model))
+	return strings.Contains(baseURL, "minimaxi.com") || strings.HasPrefix(model, "minimax-")
+}
+
+func normalizeMiniMaxBaseURL(baseURL string) string {
+	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	if strings.HasSuffix(baseURL, "/chat/completions") {
+		baseURL = strings.TrimSuffix(baseURL, "/chat/completions")
+	}
+	if strings.HasSuffix(baseURL, "/responses") {
+		baseURL = strings.TrimSuffix(baseURL, "/responses")
+	}
+	if strings.HasSuffix(baseURL, "/anthropic") {
+		baseURL = strings.TrimSuffix(baseURL, "/anthropic") + "/v1"
+	}
+	if !strings.HasSuffix(baseURL, "/v1") {
+		baseURL += "/v1"
+	}
+	return baseURL
 }
 
 func validateAIAnalysisContent(content string) error {
