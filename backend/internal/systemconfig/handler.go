@@ -194,11 +194,7 @@ func testOpenAICompatibleProvider(r *http.Request, config AIProviderConfig) erro
 }
 
 func validateAIAnalysisContent(content string) error {
-	raw := strings.TrimSpace(content)
-	raw = strings.TrimPrefix(raw, "```json")
-	raw = strings.TrimPrefix(raw, "```")
-	raw = strings.TrimSuffix(raw, "```")
-	raw = strings.TrimSpace(raw)
+	raw := normalizeAIAnalysisJSONContent(content)
 	var payload struct {
 		AISeverity string   `json:"ai_severity"`
 		Verdict    string   `json:"verdict"`
@@ -214,6 +210,20 @@ func validateAIAnalysisContent(content string) error {
 		return fmt.Errorf("模型服务可连通，但 AI 风险分析 JSON 字段不完整：%s", raw)
 	}
 	return nil
+}
+
+func normalizeAIAnalysisJSONContent(raw string) string {
+	raw = strings.TrimSpace(raw)
+	raw = strings.TrimPrefix(raw, "```json")
+	raw = strings.TrimPrefix(raw, "```")
+	raw = strings.TrimSuffix(raw, "```")
+	raw = strings.TrimSpace(raw)
+	if start := strings.Index(raw, "{"); start >= 0 {
+		if end := strings.LastIndex(raw, "}"); end > start {
+			return strings.TrimSpace(raw[start : end+1])
+		}
+	}
+	return raw
 }
 
 func trimForError(data []byte) string {

@@ -134,11 +134,7 @@ func trimProviderBody(data []byte) string {
 }
 
 func parseAnalysisJSON(raw string) (Analysis, error) {
-	raw = strings.TrimSpace(raw)
-	raw = strings.TrimPrefix(raw, "```json")
-	raw = strings.TrimPrefix(raw, "```")
-	raw = strings.TrimSuffix(raw, "```")
-	raw = strings.TrimSpace(raw)
+	raw = normalizeAnalysisJSONContent(raw)
 	var payload struct {
 		AISeverity string   `json:"ai_severity"`
 		Verdict    string   `json:"verdict"`
@@ -158,6 +154,20 @@ func parseAnalysisJSON(raw string) (Analysis, error) {
 		Evidence:   payload.Evidence,
 		Suggestion: payload.Suggestion,
 	}), nil
+}
+
+func normalizeAnalysisJSONContent(raw string) string {
+	raw = strings.TrimSpace(raw)
+	raw = strings.TrimPrefix(raw, "```json")
+	raw = strings.TrimPrefix(raw, "```")
+	raw = strings.TrimSuffix(raw, "```")
+	raw = strings.TrimSpace(raw)
+	if start := strings.Index(raw, "{"); start >= 0 {
+		if end := strings.LastIndex(raw, "}"); end > start {
+			return strings.TrimSpace(raw[start : end+1])
+		}
+	}
+	return raw
 }
 
 func normalizeAnalysis(analysis Analysis) Analysis {
