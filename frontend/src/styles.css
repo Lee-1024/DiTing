@@ -425,6 +425,39 @@ body {
   background: rgba(255, 255, 255, 0.94);
 }
 
+.risk-bulk-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 68px;
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--dt-color-border-soft);
+  background: rgba(255, 255, 255, 0.86);
+}
+
+.risk-bulk-count {
+  color: #64748b;
+  font-size: 14px;
+}
+
+.risk-bulk-actions {
+  justify-content: flex-end;
+}
+
+@media (max-width: 720px) {
+  .risk-bulk-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 14px 16px;
+  }
+
+  .risk-bulk-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
 .ant-table {
   color: #172033;
 }

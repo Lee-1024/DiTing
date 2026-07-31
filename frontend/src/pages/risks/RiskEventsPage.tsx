@@ -418,9 +418,9 @@ export default function RiskEventsPage() {
         </Form.Item>
       </FilterToolbar>
       <Card className="data-card">
-        <Space style={{ width: '100%', justifyContent: 'space-between', marginBottom: 12 }} wrap>
-          <Typography.Text type="secondary">已选 {selectedRows.length} 条</Typography.Text>
-          <Space>
+        <div className="risk-bulk-toolbar">
+          <Typography.Text className="risk-bulk-count">已选 {selectedRows.length} 条</Typography.Text>
+          <Space className="risk-bulk-actions" size={10} wrap>
             <Button disabled={selectedRows.length === 0} onClick={clearSelection}>
               清空选择
             </Button>
@@ -428,7 +428,7 @@ export default function RiskEventsPage() {
               批量处理
             </Button>
           </Space>
-        </Space>
+        </div>
         <Table
           rowKey="eventId"
           loading={loading}
