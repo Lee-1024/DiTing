@@ -289,12 +289,12 @@ export default function RiskEventsPage() {
   }
 
   async function loadOpenRiskEvents(nextPage: number, nextPageSize: number, formValues: any, isCurrent: () => boolean) {
-    const targetCount = nextPage * nextPageSize;
+    const targetCount = nextPage * nextPageSize + 1;
     const batchSize = 100;
     const maxBatches = 20;
     const openEvents: AuditEvent[] = [];
     const allDispositions: RiskDispositionMap = {};
-    let hasMore = false;
+    let reachedScanLimit = false;
 
     for (let batchPage = 1; batchPage <= maxBatches && openEvents.length < targetCount; batchPage += 1) {
       const data = await queryAuditEvents({
@@ -306,7 +306,6 @@ export default function RiskEventsPage() {
       }
       const items = data.items ?? [];
       if (items.length === 0) {
-        hasMore = false;
         break;
       }
       const statusMap = await getRiskDispositions(items);
@@ -315,18 +314,20 @@ export default function RiskEventsPage() {
       }
       Object.assign(allDispositions, statusMap);
       openEvents.push(...filterEventsByDisposition(items, statusMap, 'open'));
-      hasMore = Boolean(data.hasMore);
       if (!data.hasMore) {
         break;
       }
+      reachedScanLimit = batchPage === maxBatches && openEvents.length < targetCount;
     }
 
     const start = (nextPage - 1) * nextPageSize;
+    const pageEnd = nextPage * nextPageSize;
+    const hasNextOpenPage = openEvents.length > pageEnd || reachedScanLimit;
     return {
       items: openEvents.slice(start, start + nextPageSize),
       dispositions: allDispositions,
-      total: hasMore && openEvents.length >= targetCount ? targetCount + 1 : openEvents.length,
-      totalKnown: !hasMore,
+      total: hasNextOpenPage ? pageEnd + 1 : openEvents.length,
+      totalKnown: !hasNextOpenPage,
     };
   }
 

@@ -91,6 +91,9 @@ export default function MainLayout() {
 
   const alertDropdown = (
     <div className="header-alert-dropdown">
+      <div style={{ padding: '8px 12px 4px' }}>
+        <Typography.Text type="secondary">最近 10 分钟未处理高危/严重风险 + 采集异常，最多显示 20 条</Typography.Text>
+      </div>
       <List
         size="small"
         dataSource={alerts}
@@ -218,7 +221,7 @@ async function openRiskAlertEvents(events: AuditEvent[]): Promise<AuditEvent[]> 
     return [];
   }
   const dispositions = await getRiskDispositions(events);
-  return events.filter((event) => (dispositions[event.eventId]?.status ?? 'open') === 'open').slice(0, 10);
+  return events.filter((event) => (dispositions[event.eventId]?.status ?? 'open') === 'open');
 }
 
 // riskAlert 生成 risk Alert 的展示内容。
