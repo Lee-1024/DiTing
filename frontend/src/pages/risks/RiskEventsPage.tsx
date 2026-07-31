@@ -120,6 +120,11 @@ export default function RiskEventsPage() {
         if (!openItems) {
           return;
         }
+        if (openItems.items.length === 0 && nextPage > 1) {
+          const previousPage = Math.max(Math.ceil(openItems.total / nextPageSize), 1);
+          void load(previousPage, nextPageSize, formValues);
+          return;
+        }
         const analysisMap = await getRiskAnalyses(openItems.items);
         if (seq !== requestSeq.current) {
           return;
@@ -200,10 +205,9 @@ export default function RiskEventsPage() {
     try {
       const updated = await updateRiskDisposition(dispositionEvent, values.status, values.note ?? '');
       setDispositions((current) => ({ ...current, [updated.eventId]: updated }));
-      const nextDispositions = { ...dispositions, [updated.eventId]: updated };
-      setVisibleEvents(filterEventsByDisposition(events, nextDispositions, form.getFieldValue('dispositionStatus') ?? 'open'));
       message.success('处置状态已更新');
       setDispositionOpen(false);
+      await load(page, pageSize, form.getFieldsValue());
     } finally {
       setSavingDisposition(false);
     }
@@ -247,7 +251,6 @@ export default function RiskEventsPage() {
       const successCount = results.filter((result) => result.status === 'fulfilled').length;
       const failedCount = rows.length - successCount;
       setDispositions(updatedMap);
-      setVisibleEvents(filterEventsByDisposition(events, updatedMap, form.getFieldValue('dispositionStatus') ?? 'open'));
       clearSelection();
       setBatchDispositionOpen(false);
       if (failedCount > 0) {
@@ -294,7 +297,6 @@ export default function RiskEventsPage() {
     const maxBatches = 20;
     const openEvents: AuditEvent[] = [];
     const allDispositions: RiskDispositionMap = {};
-    let reachedScanLimit = false;
 
     for (let batchPage = 1; batchPage <= maxBatches && openEvents.length < targetCount; batchPage += 1) {
       const data = await queryAuditEvents({
@@ -317,12 +319,11 @@ export default function RiskEventsPage() {
       if (!data.hasMore) {
         break;
       }
-      reachedScanLimit = batchPage === maxBatches && openEvents.length < targetCount;
     }
 
     const start = (nextPage - 1) * nextPageSize;
     const pageEnd = nextPage * nextPageSize;
-    const hasNextOpenPage = openEvents.length > pageEnd || reachedScanLimit;
+    const hasNextOpenPage = openEvents.length > pageEnd;
     return {
       items: openEvents.slice(start, start + nextPageSize),
       dispositions: allDispositions,
