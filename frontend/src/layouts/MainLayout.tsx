@@ -1,23 +1,18 @@
 import { AuditOutlined, BellOutlined, CodeOutlined, DashboardOutlined, DownOutlined, FileSearchOutlined, HddOutlined, MonitorOutlined, RobotOutlined, SafetyCertificateOutlined, SettingOutlined, TeamOutlined, ThunderboltOutlined, UserOutlined } from '@ant-design/icons';
 import { Badge, Button, Dropdown, Form, Input, Layout, List, Menu, Modal, Space, Typography, message } from 'antd';
-import dayjs from 'dayjs';
 import { useEffect, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { queryAuditEvents } from '../api/audit';
 import { changePassword } from '../api/auth';
 import { listCollectorHealth } from '../api/collectorHealth';
-import { getRiskDispositions } from '../api/riskDispositions';
 import { clearSession, getUser } from '../stores/auth';
-import type { AuditEvent } from '../types/audit';
 import type { CollectorHeartbeat } from '../types/collectorHealth';
-import { eventTypeLabel } from '../utils/labels';
 import { formatLocalDateTime } from '../utils/time';
 
 const { Header, Sider, Content } = Layout;
 
 interface HeaderAlert {
   id: string;
-  type: 'risk' | 'collector';
+  type: 'collector';
   title: string;
   description: string;
   time?: string;
@@ -57,23 +52,8 @@ export default function MainLayout() {
 
   // loadHeaderAlerts 加载页面所需数据。
   async function loadHeaderAlerts() {
-    const end = dayjs();
-    const [riskData, collectors] = await Promise.all([
-      queryAuditEvents({
-        start_time: end.subtract(10, 'minute').toISOString(),
-        end_time: end.toISOString(),
-        severity_in: 'high,critical',
-        page: 1,
-        page_size: 100,
-      }),
-      listCollectorHealth(),
-    ]);
-    const riskItems = await openRiskAlertEvents(riskData.items ?? []);
-    const nextAlerts = [
-      ...collectorAlerts(collectors),
-      ...riskItems.map(riskAlert),
-    ].slice(0, 20);
-    setAlerts(nextAlerts);
+    const collectors = await listCollectorHealth();
+    setAlerts(serviceStatusAlerts(collectors).slice(0, 20));
   }
 
   // openAlertTarget 打开对应的弹窗或详情视图。
@@ -92,12 +72,12 @@ export default function MainLayout() {
   const alertDropdown = (
     <div className="header-alert-dropdown">
       <div style={{ padding: '8px 12px 4px' }}>
-        <Typography.Text type="secondary">最近 10 分钟未处理高危/严重风险 + 采集异常，最多显示 20 条</Typography.Text>
+        <Typography.Text type="secondary">采集节点离线、采集异常或 Tetragon 不可访问，最多显示 20 条</Typography.Text>
       </div>
       <List
         size="small"
         dataSource={alerts}
-        locale={{ emptyText: '暂无高危风险或采集异常' }}
+        locale={{ emptyText: '采集服务状态正常' }}
         renderItem={(item) => (
           <List.Item onClick={() => openAlertTarget(item.target)} style={{ cursor: 'pointer' }}>
             <List.Item.Meta
@@ -184,7 +164,7 @@ export default function MainLayout() {
           <Space className="header-actions">
             <Dropdown dropdownRender={() => alertDropdown} trigger={['click']} placement="bottomRight">
               <Badge count={alerts.length} size="small" showZero>
-                <Button icon={<BellOutlined />} onClick={(event) => event.preventDefault()}>告警</Button>
+                <Button icon={<BellOutlined />} onClick={(event) => event.preventDefault()}>服务状态</Button>
               </Badge>
             </Dropdown>
             <Dropdown menu={userMenu} trigger={['click']} placement="bottomRight">
@@ -216,36 +196,36 @@ export default function MainLayout() {
   );
 }
 
-async function openRiskAlertEvents(events: AuditEvent[]): Promise<AuditEvent[]> {
-  if (events.length === 0) {
-    return [];
-  }
-  const dispositions = await getRiskDispositions(events);
-  return events.filter((event) => (dispositions[event.eventId]?.status ?? 'open') === 'open');
-}
-
-// riskAlert 生成 risk Alert 的展示内容。
-function riskAlert(event: AuditEvent): HeaderAlert {
-  return {
-    id: `risk:${event.eventId}`,
-    type: 'risk',
-    title: `${eventTypeLabel(event.eventType) || event.eventType} / ${event.processName || '-'}`,
-    description: event.cmdline || event.filePath || event.dstIp || '-',
-    time: event.eventTime,
-    target: '/audit/risks',
-  };
-}
-
-// collectorAlerts 处理 collector Alerts 相关逻辑。
-function collectorAlerts(items: CollectorHeartbeat[]): HeaderAlert[] {
+// serviceStatusAlerts 处理 service Status Alerts 相关逻辑。
+function serviceStatusAlerts(items: CollectorHeartbeat[]): HeaderAlert[] {
   return items
     .filter((item) => item.healthLevel === 'warning' || item.healthLevel === 'critical')
     .map((item) => ({
       id: `collector:${item.hostId || item.hostName}:${item.healthLevel}:${item.message}`,
       type: 'collector',
-      title: `${item.healthLevel === 'critical' ? '采集异常' : '采集预警'}：${item.hostName || item.hostId || '-'}`,
-      description: item.lastError || item.message || (item.status === 'offline' ? 'Collector 心跳超时' : '采集状态异常'),
+      title: `${serviceStatusTitle(item)}：${item.hostName || item.hostId || '-'}`,
+      description: serviceStatusDescription(item),
       time: item.lastSeenAt,
       target: '/settings/collector-health',
     }));
+}
+
+function serviceStatusTitle(item: CollectorHeartbeat) {
+  if (item.status === 'offline') {
+    return '采集节点离线';
+  }
+  if (/tetragon/i.test(item.lastError || item.message || '')) {
+    return 'Tetragon 服务异常';
+  }
+  return item.healthLevel === 'critical' ? '采集服务异常' : '采集服务预警';
+}
+
+function serviceStatusDescription(item: CollectorHeartbeat) {
+  if (item.lastError) {
+    return item.lastError;
+  }
+  if (item.message) {
+    return item.message;
+  }
+  return item.status === 'offline' ? 'Collector 心跳超时' : '采集服务状态异常';
 }
