@@ -92,6 +92,7 @@ ${returnArgBlock(returnProbe)}
     tags:
     - "${name}"
     - "${tag}"
+${enforcementTags(mode)}
     selectors:
     - matchArgs:
       - index: ${argIndex}
@@ -117,6 +118,7 @@ ${uidDataBlock(user)}
     tags:
     - "dangerous-command-args"
     - "process_exec"
+${enforcementTags(mode)}
     selectors:
 ${rules.map((rule) => preciseCommandSelector(rule, mode, user)).join('\n')}`;
 }
@@ -179,6 +181,7 @@ ${uidDataBlock(user)}
     tags:
     - "${name}"
     - "${tag}"
+${enforcementTags(mode)}
     selectors:
     - matchArgs:
       - index: 0
@@ -281,6 +284,14 @@ function matchActions(mode: PolicyMode) {
   return `
       matchActions:
       - action: Sigkill`;
+}
+
+function enforcementTags(mode: PolicyMode) {
+  if (mode !== 'enforce') {
+    return '';
+  }
+  return `    - "diting-enforcement"
+    - "diting-blocked-command"`;
 }
 
 function sanitizeName(value: string) {

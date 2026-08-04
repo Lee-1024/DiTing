@@ -1,10 +1,12 @@
 import { AuditOutlined, BellOutlined, CodeOutlined, DashboardOutlined, DownOutlined, FileSearchOutlined, HddOutlined, MonitorOutlined, RobotOutlined, SafetyCertificateOutlined, SettingOutlined, TeamOutlined, ThunderboltOutlined, UserOutlined } from '@ant-design/icons';
-import { Badge, Button, Dropdown, Form, Input, Layout, List, Menu, Modal, Space, Typography, message } from 'antd';
-import { useEffect, useState } from 'react';
+import { Badge, Button, Dropdown, Form, Input, Layout, List, Menu, Modal, Space, Typography, message, notification } from 'antd';
+import { useEffect, useRef, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { queryAuditEvents } from '../api/audit';
 import { changePassword } from '../api/auth';
 import { listCollectorHealth } from '../api/collectorHealth';
 import { clearSession, getUser } from '../stores/auth';
+import type { AuditEvent } from '../types/audit';
 import type { CollectorHeartbeat } from '../types/collectorHealth';
 import { formatLocalDateTime } from '../utils/time';
 
@@ -12,7 +14,7 @@ const { Header, Sider, Content } = Layout;
 
 interface HeaderAlert {
   id: string;
-  type: 'collector';
+  type: 'collector' | 'enforcement';
   title: string;
   description: string;
   time?: string;
@@ -27,6 +29,8 @@ export default function MainLayout() {
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [alerts, setAlerts] = useState<HeaderAlert[]>([]);
+  const seenEnforcementEvents = useRef<Set<string>>(new Set());
+  const enforcementInitialized = useRef(false);
   const [form] = Form.useForm();
 
   // logout 处理 logout 相关逻辑。
@@ -52,8 +56,36 @@ export default function MainLayout() {
 
   // loadHeaderAlerts 加载页面所需数据。
   async function loadHeaderAlerts() {
-    const collectors = await listCollectorHealth();
-    setAlerts(serviceStatusAlerts(collectors).slice(0, 20));
+    const [collectors, enforcementEvents] = await Promise.all([
+      listCollectorHealth(),
+      queryAuditEvents({
+        tag: 'diting-enforcement',
+        page: 1,
+        page_size: 10,
+      }),
+    ]);
+    const enforcementAlerts = enforcementEventAlerts(enforcementEvents.items ?? []);
+    notifyNewEnforcementEvents(enforcementAlerts);
+    setAlerts([...enforcementAlerts, ...serviceStatusAlerts(collectors)].slice(0, 20));
+  }
+
+  function notifyNewEnforcementEvents(items: HeaderAlert[]) {
+    for (const item of items.slice().reverse()) {
+      if (seenEnforcementEvents.current.has(item.id)) {
+        continue;
+      }
+      seenEnforcementEvents.current.add(item.id);
+      if (!enforcementInitialized.current) {
+        continue;
+      }
+      notification.warning({
+        message: item.title,
+        description: item.description,
+        placement: 'topRight',
+        duration: 8,
+      });
+    }
+    enforcementInitialized.current = true;
   }
 
   // openAlertTarget 打开对应的弹窗或详情视图。
@@ -72,12 +104,12 @@ export default function MainLayout() {
   const alertDropdown = (
     <div className="header-alert-dropdown">
       <div style={{ padding: '8px 12px 4px' }}>
-        <Typography.Text type="secondary">采集节点离线、采集异常或 Tetragon 不可访问，最多显示 20 条</Typography.Text>
+        <Typography.Text type="secondary">拦截触发、采集节点离线或 Tetragon 不可访问，最多显示 20 条</Typography.Text>
       </div>
       <List
         size="small"
         dataSource={alerts}
-        locale={{ emptyText: '采集服务状态正常' }}
+        locale={{ emptyText: '暂无通知' }}
         renderItem={(item) => (
           <List.Item onClick={() => openAlertTarget(item.target)} style={{ cursor: 'pointer' }}>
             <List.Item.Meta
@@ -164,7 +196,7 @@ export default function MainLayout() {
           <Space className="header-actions">
             <Dropdown dropdownRender={() => alertDropdown} trigger={['click']} placement="bottomRight">
               <Badge count={alerts.length} size="small" showZero>
-                <Button icon={<BellOutlined />} onClick={(event) => event.preventDefault()}>服务状态</Button>
+                <Button icon={<BellOutlined />} onClick={(event) => event.preventDefault()}>通知</Button>
               </Badge>
             </Dropdown>
             <Dropdown menu={userMenu} trigger={['click']} placement="bottomRight">
@@ -196,6 +228,17 @@ export default function MainLayout() {
   );
 }
 
+function enforcementEventAlerts(items: AuditEvent[]): HeaderAlert[] {
+  return items.map((item) => ({
+    id: `enforcement:${item.eventId}`,
+    type: 'enforcement',
+    title: '拦截策略触发',
+    description: `${displayUser(item)} 执行 ${displayCommand(item)} 已被拦截`,
+    time: item.eventTime,
+    target: '/audit/events',
+  }));
+}
+
 // serviceStatusAlerts 处理 service Status Alerts 相关逻辑。
 function serviceStatusAlerts(items: CollectorHeartbeat[]): HeaderAlert[] {
   return items
@@ -208,6 +251,14 @@ function serviceStatusAlerts(items: CollectorHeartbeat[]): HeaderAlert[] {
       time: item.lastSeenAt,
       target: '/settings/collector-health',
     }));
+}
+
+function displayUser(event: AuditEvent) {
+  return event.loginUsername || event.username || (event.uid !== undefined ? `UID ${event.uid}` : '未知用户');
+}
+
+function displayCommand(event: AuditEvent) {
+  return event.cmdline || event.binaryPath || event.processName || '未知命令';
 }
 
 function serviceStatusTitle(item: CollectorHeartbeat) {

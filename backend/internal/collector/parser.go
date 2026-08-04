@@ -17,6 +17,7 @@ type tetragonEnvelope struct {
 	NodeName    string            `json:"node_name"`
 	ProcessExec *processExecEvent `json:"process_exec"`
 	ProcessExit *processExitEvent `json:"process_exit"`
+	ProcessKprobe *processKprobeEvent `json:"process_kprobe"`
 }
 
 type processExecEvent struct {
@@ -28,6 +29,37 @@ type processExitEvent struct {
 	Process processInfo `json:"process"`
 	Parent  processInfo `json:"parent"`
 	Time    string      `json:"time"`
+}
+
+type processKprobeEvent struct {
+	FunctionName string        `json:"function_name"`
+	PolicyName   string        `json:"policy_name"`
+	Message      string        `json:"message"`
+	Tags         []string      `json:"tags"`
+	Process      processInfo   `json:"process"`
+	Parent       processInfo   `json:"parent"`
+	Args         []kprobeArg   `json:"args"`
+	Data         []kprobeArg   `json:"data"`
+}
+
+type kprobeArg struct {
+	StringArg string          `json:"string_arg"`
+	PathArg   kprobePathArg   `json:"path_arg"`
+	FileArg   kprobePathArg   `json:"file_arg"`
+	Sockaddr  kprobeSockaddr  `json:"sockaddr_arg"`
+	SockaddrU kprobeSockaddr  `json:"sockaddrun_arg"`
+}
+
+type kprobePathArg struct {
+	Path       string `json:"path"`
+	Permission string `json:"permission"`
+	Flags      string `json:"flags"`
+}
+
+type kprobeSockaddr struct {
+	Addr string `json:"addr"`
+	Port uint16 `json:"port"`
+	Path string `json:"path"`
 }
 
 type processInfo struct {
@@ -79,6 +111,9 @@ func ParseTetragonEvent(data []byte) (audit.Event, error) {
 	}
 	if envelope.ProcessExit != nil {
 		return parseProcessExit(envelope, data)
+	}
+	if envelope.ProcessKprobe != nil {
+		return parseProcessKprobe(envelope, data)
 	}
 	return audit.Event{}, ErrUnsupportedEvent
 }
@@ -152,6 +187,50 @@ func parseProcessExit(envelope tetragonEnvelope, data []byte) (audit.Event, erro
 		Severity:          "info",
 		RiskScore:         0,
 		NodeName:          envelope.NodeName,
+		PID:               process.PID,
+		PPID:              parent.PID,
+		ProcessName:       processName(process.Binary),
+		BinaryPath:        process.Binary,
+		Cmdline:           joinCmdline(process.Binary, process.Arguments),
+		CWD:               process.CWD,
+		ParentProcessName: processName(parent.Binary),
+		ParentBinaryPath:  parent.Binary,
+		ParentCmdline:     joinCmdline(parent.Binary, parent.Arguments),
+		UID:               process.UID,
+		GID:               process.GID,
+		AUID:              process.AUID,
+		EUID:              process.ProcessCredentials.EUID,
+		EGID:              process.ProcessCredentials.EGID,
+		RawEvent:          string(data),
+	}, nil
+}
+
+// parseProcessKprobe 解析 process_kprobe 文件日志事件。
+func parseProcessKprobe(envelope tetragonEnvelope, data []byte) (audit.Event, error) {
+	eventTime, err := time.Parse(time.RFC3339Nano, envelope.Time)
+	if err != nil {
+		return audit.Event{}, err
+	}
+
+	process := envelope.ProcessKprobe.Process
+	parent := envelope.ProcessKprobe.Parent
+
+	return audit.Event{
+		EventID:           stableID(data),
+		EventTime:         eventTime,
+		EventDate:         dateOnly(eventTime),
+		IngestTime:        time.Now().UTC(),
+		EventType:         "process_kprobe",
+		Action:            envelope.ProcessKprobe.FunctionName,
+		Severity:          "info",
+		RiskScore:         0,
+		Tags:              envelope.ProcessKprobe.Tags,
+		NodeName:          envelope.NodeName,
+		Namespace:         process.Pod.Namespace,
+		PodName:           process.Pod.Name,
+		ContainerID:       process.Pod.Container.ID,
+		ContainerName:     process.Pod.Container.Name,
+		Image:             process.Pod.Container.Image.Name,
 		PID:               process.PID,
 		PPID:              parent.PID,
 		ProcessName:       processName(process.Binary),

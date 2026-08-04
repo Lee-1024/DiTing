@@ -106,3 +106,17 @@ func TestMatcherAuditIdentityFields(t *testing.T) {
 		t.Fatal("expected audit identity fields rule to match")
 	}
 }
+
+func TestMatcherContainsTag(t *testing.T) {
+	event := audit.Event{Tags: []string{"diting-enforcement", "dangerous-command-args"}}
+	expr := Expression{
+		Operator: "and",
+		Conditions: []Condition{
+			{Field: "tags", Op: "contains", Value: "diting-enforcement"},
+		},
+	}
+
+	if !Match(expr, event) {
+		t.Fatal("expected tags contains rule to match")
+	}
+}

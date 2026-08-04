@@ -25,6 +25,8 @@ const yaml = generatePolicy(policy);
 
 assertIncludes(yaml, 'call: "sys_execve"');
 assertIncludes(yaml, 'values:\n            - "reboot"');
+assertIncludes(yaml, '- "diting-enforcement"');
+assertIncludes(yaml, '- "diting-blocked-command"');
 assertIncludes(yaml, '- index: 1\n        operator: Equal\n        values:\n            - "restart"\n            - "stop"');
 assertIncludes(yaml, '- index: 2\n        operator: Equal\n        values:\n            - "docker"\n            - "docker.service"');
 assertIncludes(yaml, 'source: "current_task"\n      resolve: "cred.uid.val"');

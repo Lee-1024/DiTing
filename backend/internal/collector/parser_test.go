@@ -87,6 +87,28 @@ func TestParseTetragonProcessExitEvent(t *testing.T) {
 	}
 }
 
+func TestParseTetragonProcessKprobeEnforcementEvent(t *testing.T) {
+	line := `{"process_kprobe":{"function_name":"sys_execve","policy_name":"block-docker","tags":["diting-enforcement","diting-blocked-command"],"process":{"pid":10,"uid":1000,"binary":"/usr/bin/systemctl","arguments":"restart docker","process_credentials":{"uid":1000,"gid":1000,"euid":1000,"egid":1000},"pod":{}},"parent":{"pid":1,"binary":"/bin/bash","arguments":"-l"}},"node_name":"server-1","time":"2026-08-04T07:08:20.928822560Z"}`
+
+	event, err := ParseTetragonEvent([]byte(line))
+	if err != nil {
+		t.Fatalf("ParseTetragonEvent returned error: %v", err)
+	}
+
+	if event.EventType != "process_kprobe" || event.Action != "sys_execve" {
+		t.Fatalf("expected process_kprobe sys_execve, got type=%s action=%s", event.EventType, event.Action)
+	}
+	if event.ProcessName != "systemctl" || event.Cmdline != "/usr/bin/systemctl restart docker" {
+		t.Fatalf("unexpected command process=%s cmdline=%s", event.ProcessName, event.Cmdline)
+	}
+	if len(event.Tags) != 2 || event.Tags[0] != "diting-enforcement" {
+		t.Fatalf("unexpected enforcement tags %#v", event.Tags)
+	}
+	if event.UID != 1000 || event.EUID != 1000 {
+		t.Fatalf("unexpected uid/euid %d/%d", event.UID, event.EUID)
+	}
+}
+
 func TestParseTetragonEventIDIsUniquePerRawEvent(t *testing.T) {
 	execLine := `{"process_exec":{"process":{"exec_id":"same-exec","pid":10,"binary":"/usr/bin/bash","arguments":"-c id","pod":{}},"parent":{"pid":1}},"node_name":"node-1","time":"2026-07-09T07:08:20.928822560Z"}`
 	exitLine := `{"process_exit":{"process":{"exec_id":"same-exec","pid":10,"binary":"/usr/bin/bash"},"parent":{"pid":1},"time":"2026-07-09T07:08:21.928822560Z"},"node_name":"node-1","time":"2026-07-09T07:08:21.928822560Z"}`

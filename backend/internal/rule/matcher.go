@@ -77,6 +77,9 @@ func conditionValue(condition Condition) string {
 // matchCondition 处理 match Condition 相关逻辑。
 func matchCondition(condition Condition, event audit.Event) (bool, string) {
 	actual := fieldValue(condition.Field, event)
+	if condition.Field == "tags" {
+		return matchStringSlice(condition, event.Tags)
+	}
 	switch strings.ToLower(condition.Op) {
 	case "eq":
 		return actual == condition.Value, actual
@@ -103,6 +106,30 @@ func matchCondition(condition Condition, event audit.Event) (bool, string) {
 	}
 }
 
+func matchStringSlice(condition Condition, values []string) (bool, string) {
+	actual := strings.Join(values, ",")
+	switch strings.ToLower(condition.Op) {
+	case "contains":
+		for _, value := range values {
+			if value == condition.Value {
+				return true, actual
+			}
+		}
+		return false, actual
+	case "in":
+		for _, value := range values {
+			for _, expected := range condition.Values {
+				if value == expected {
+					return true, actual
+				}
+			}
+		}
+		return false, actual
+	default:
+		return false, actual
+	}
+}
+
 // fieldValue 处理 field Value 相关逻辑。
 func fieldValue(field string, event audit.Event) string {
 	switch field {
@@ -112,6 +139,8 @@ func fieldValue(field string, event audit.Event) string {
 		return event.Action
 	case "severity":
 		return event.Severity
+	case "tags":
+		return strings.Join(event.Tags, ",")
 	case "host_id":
 		return event.HostID
 	case "host_name":
