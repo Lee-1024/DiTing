@@ -41,21 +41,37 @@ ${template}`;
 function policyTemplate(values: PolicyFormValues) {
   switch (values.template) {
     case 'sensitive_file':
-      return kprobeBlock('file-access', 'security_file_open', 'file_access', 'file', values.filePaths ?? [], values.processNames ?? [], userMatcher(values), values.mode);
+      return withSudoPreEscalation(
+        kprobeBlock('file-access', 'security_file_open', 'file_access', 'file', values.filePaths ?? [], values.processNames ?? [], userMatcher(values), values.mode),
+        values,
+      );
     case 'permission_change':
-      return syscallBlock('permission-change', [
-        { syscall: 'chmod', argIndex: 0 },
-        { syscall: 'fchmodat', argIndex: 1 },
-        { syscall: 'chown', argIndex: 0 },
-        { syscall: 'fchownat', argIndex: 1 },
-      ], 'file_access', values.filePaths ?? ['/'], values.processNames ?? [], userMatcher(values), values.mode, 'Prefix', false);
+      return withSudoPreEscalation(
+        syscallBlock('permission-change', [
+          { syscall: 'chmod', argIndex: 0 },
+          { syscall: 'fchmodat', argIndex: 1 },
+          { syscall: 'chown', argIndex: 0 },
+          { syscall: 'fchownat', argIndex: 1 },
+        ], 'file_access', values.filePaths ?? ['/'], values.processNames ?? [], userMatcher(values), values.mode, 'Prefix', false),
+        values,
+      );
     case 'delete_behavior':
       return deleteBehaviorBlock(values.filePaths ?? ['/'], values.processNames ?? [], userMatcher(values));
     case 'suspicious_process':
-      return syscallBlock('suspicious-process', [{ syscall: 'execve', argIndex: 0 }], 'process_exec', values.processNames ?? [], [], null, values.mode, 'Postfix', false);
+      return withSudoPreEscalation(
+        syscallBlock('suspicious-process', [{ syscall: 'execve', argIndex: 0 }], 'process_exec', values.processNames ?? [], [], null, values.mode, 'Postfix', false),
+        values,
+      );
     default:
       return dangerousCommandBlock(values);
   }
+}
+
+function withSudoPreEscalation(base: string, values: PolicyFormValues) {
+  const processNames = values.template === 'dangerous_command' ? values.commands ?? [] : values.processNames ?? [];
+  const block = sudoPreEscalationBlock(values.filePaths ?? [], processNames, values.mode, actualUserMatcher(values));
+  return block ? `${base}
+${block}` : base;
 }
 
 interface SyscallProbe {
@@ -66,16 +82,17 @@ interface SyscallProbe {
 interface UserMatcher {
   operator: 'Equal' | 'NotEqual';
   values: string[];
+  resolve?: 'loginuid.val' | 'cred.uid.val';
 }
 
 function dangerousCommandBlock(values: PolicyFormValues) {
   const broadBlock = syscallBlock('dangerous-command', [{ syscall: 'execve', argIndex: 0 }], 'process_exec', values.commands ?? [], [], null, values.mode, 'Postfix', false);
   const preciseRules = parseCommandRules(values.commandRules, values.commandRuleText);
   if (preciseRules.length === 0) {
-    return broadBlock;
+    return withSudoPreEscalation(broadBlock, values);
   }
-  return `${broadBlock}
-${preciseCommandBlock(preciseRules, values.mode, userMatcher(values))}`;
+  return withSudoPreEscalation(`${broadBlock}
+${preciseCommandBlock(preciseRules, values.mode, userMatcher(values))}`, values);
 }
 
 function syscallBlock(name: string, syscalls: SyscallProbe[], tag: string, values: string[], processNames: string[], user: UserMatcher | null, mode: PolicyMode, operator: 'Prefix' | 'Postfix', returnProbe: boolean) {
@@ -135,6 +152,66 @@ ${args.map((values, index) => `      - index: ${index + 1}
         operator: Equal
         values:
 ${values.map((value) => `            - "${escapeYaml(value)}"`).join('\n')}`).join('\n')}${matchUser(user)}${matchActions(mode)}`;
+}
+
+function sudoPreEscalationBlock(paths: string[], processNames: string[], mode: PolicyMode, user: UserMatcher | null) {
+  const cleanPaths = paths.filter(Boolean);
+  const cleanProcesses = processNames.filter(Boolean);
+  if (mode !== 'enforce' || cleanProcesses.length === 0) {
+    return '';
+  }
+  return `  - call: "sys_execve"
+    syscall: true
+    return: false
+    args:
+    - index: 0
+      type: "string"
+    - index: 1
+      type: "string"
+    - index: 2
+      type: "string"
+${uidDataBlock(user)}
+    tags:
+    - "diting-sudo-pre-escalation"
+    - "process_exec"
+${enforcementTags(mode)}
+    selectors:
+${sudoPreEscalationSelectors(cleanProcesses, cleanPaths, mode, user)}`;
+}
+
+function sudoPreEscalationSelector(processName: string, path: string, mode: PolicyMode, user: UserMatcher | null) {
+  return `    - matchArgs:
+      - index: 0
+        operator: Postfix
+        values:
+            - "sudo"
+      - index: 1
+        operator: Postfix
+        values:
+            - "${escapeYaml(processName)}"
+      - index: 2
+        operator: Equal
+        values:
+            - "${escapeYaml(path)}"${matchUser(user)}${matchActions(mode)}`;
+}
+
+function sudoPreEscalationSelectors(processNames: string[], paths: string[], mode: PolicyMode, user: UserMatcher | null) {
+  if (paths.length === 0) {
+    return processNames.map((processName) => sudoCommandSelector(processName, mode, user)).join('\n');
+  }
+  return processNames.flatMap((processName) => paths.map((path) => sudoPreEscalationSelector(processName, path, mode, user))).join('\n');
+}
+
+function sudoCommandSelector(processName: string, mode: PolicyMode, user: UserMatcher | null) {
+  return `    - matchArgs:
+      - index: 0
+        operator: Postfix
+        values:
+            - "sudo"
+      - index: 1
+        operator: Postfix
+        values:
+            - "${escapeYaml(processName)}"${matchUser(user)}${matchActions(mode)}`;
 }
 
 function parseCommandRules(rules: CommandArgRule[] | undefined, text: string | undefined) {
@@ -247,7 +324,7 @@ function uidDataBlock(user: UserMatcher | null) {
     - index: 0
       type: "int"
       source: "current_task"
-      resolve: "loginuid.val"`;
+      resolve: "${user.resolve ?? 'loginuid.val'}"`;
 }
 
 function matchUser(user: UserMatcher | null) {
@@ -271,6 +348,11 @@ function userMatcher(values: PolicyFormValues): UserMatcher | null {
     return ids.length > 0 ? { operator: 'Equal', values: ids } : null;
   }
   return null;
+}
+
+function actualUserMatcher(values: PolicyFormValues): UserMatcher | null {
+  const matcher = userMatcher(values);
+  return matcher ? { ...matcher, resolve: 'cred.uid.val' } : null;
 }
 
 export function isUserId(value: string) {
