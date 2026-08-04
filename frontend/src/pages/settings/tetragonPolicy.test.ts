@@ -29,6 +29,6 @@ assertIncludes(yaml, '- "diting-enforcement"');
 assertIncludes(yaml, '- "diting-blocked-command"');
 assertIncludes(yaml, '- index: 1\n        operator: Equal\n        values:\n            - "restart"\n            - "stop"');
 assertIncludes(yaml, '- index: 2\n        operator: Equal\n        values:\n            - "docker"\n            - "docker.service"');
-assertIncludes(yaml, 'source: "current_task"\n      resolve: "cred.uid.val"');
+assertIncludes(yaml, 'source: "current_task"\n      resolve: "loginuid.val"');
 assertIncludes(yaml, 'matchData:\n      - index: 0\n        operator: NotEqual\n        values:\n        - "0"');
 assertIncludes(yaml, 'matchActions:\n      - action: Sigkill');

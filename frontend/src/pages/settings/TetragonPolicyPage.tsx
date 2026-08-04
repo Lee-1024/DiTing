@@ -317,15 +317,15 @@ export default function TetragonPolicyPage() {
                 >
                   <Input.TextArea rows={4} placeholder="systemctl restart|stop docker|docker.service" />
                 </Form.Item>
-                <Form.Item name="userMatchMode" label="精细规则用户范围">
+                <Form.Item name="userMatchMode" label="精细规则登录用户范围">
                   <Select options={[
-                    { value: 'exclude_root', label: '除 root 外所有用户' },
-                    { value: 'include', label: '仅指定 UID' },
+                    { value: 'exclude_root', label: '除 root 登录会话外所有用户' },
+                    { value: 'include', label: '仅指定登录 UID' },
                     { value: 'all', label: '所有用户' },
                   ]} />
                 </Form.Item>
                 {userMatchMode === 'include' && (
-                  <Form.Item name="userIds" label="限定执行用户 UID" tooltip="Tetragon 策略按 UID 匹配用户；如 ubuntu 通常为 1000，可在主机上用 id -u ubuntu 查询。">
+                  <Form.Item name="userIds" label="限定登录用户 UID" tooltip="按 Linux audit loginuid 匹配，可覆盖 sudo 后 uid 变为 0 的场景；如 ubuntu 通常为 1000，可在主机上用 id -u ubuntu 查询。">
                     <Select mode="tags" tokenSeparators={[',']} placeholder="例如 1000 / 1001" />
                   </Form.Item>
                 )}
@@ -334,8 +334,8 @@ export default function TetragonPolicyPage() {
                     type="warning"
                     showIcon
                     style={{ marginBottom: 16 }}
-                    message="限定执行用户需要填写 UID"
-                    description="Tetragon 策略无法直接按用户名匹配，请在目标主机执行 id -u 用户名 后填写数字 UID。非数字项不会写入 YAML。"
+                    message="限定登录用户需要填写 UID"
+                    description="Tetragon 策略按 audit loginuid 匹配，请在目标主机执行 id -u 用户名 后填写数字 UID。非数字项不会写入 YAML。"
                   />
                 )}
               </>
@@ -361,15 +361,15 @@ export default function TetragonPolicyPage() {
                 <Form.Item name="processNames" label="限定进程（可选）" tooltip="留空表示不限制进程；填写 vim、rm、chmod 等可只拦截指定进程访问这些路径。">
                   <Select mode="tags" tokenSeparators={[',']} placeholder="例如 vim / rm / chmod，留空为不限进程" />
                 </Form.Item>
-                <Form.Item name="userMatchMode" label="用户范围">
+                <Form.Item name="userMatchMode" label="登录用户范围">
                   <Select options={[
-                    { value: 'exclude_root', label: '除 root 外所有用户' },
-                    { value: 'include', label: '仅指定 UID' },
+                    { value: 'exclude_root', label: '除 root 登录会话外所有用户' },
+                    { value: 'include', label: '仅指定登录 UID' },
                     { value: 'all', label: '所有用户' },
                   ]} />
                 </Form.Item>
                 {userMatchMode === 'include' && (
-                  <Form.Item name="userIds" label="限定执行用户 UID" tooltip="Tetragon 策略按 UID 匹配用户；如 ubuntu 通常为 1000，可在主机上用 id -u ubuntu 查询。">
+                  <Form.Item name="userIds" label="限定登录用户 UID" tooltip="按 Linux audit loginuid 匹配，可覆盖 sudo 后 uid 变为 0 的场景；如 ubuntu 通常为 1000，可在主机上用 id -u ubuntu 查询。">
                     <Select mode="tags" tokenSeparators={[',']} placeholder="例如 1000 / 1001" />
                   </Form.Item>
                 )}
@@ -378,8 +378,8 @@ export default function TetragonPolicyPage() {
                     type="warning"
                     showIcon
                     style={{ marginBottom: 16 }}
-                    message="限定执行用户需要填写 UID"
-                    description="Tetragon 策略无法直接按用户名匹配，请在目标主机执行 id -u 用户名 后填写数字 UID。非数字项不会写入 YAML。"
+                    message="限定登录用户需要填写 UID"
+                    description="Tetragon 策略按 audit loginuid 匹配，请在目标主机执行 id -u 用户名 后填写数字 UID。非数字项不会写入 YAML。"
                   />
                 )}
               </>

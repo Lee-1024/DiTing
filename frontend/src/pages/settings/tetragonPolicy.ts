@@ -247,7 +247,7 @@ function uidDataBlock(user: UserMatcher | null) {
     - index: 0
       type: "int"
       source: "current_task"
-      resolve: "cred.uid.val"`;
+      resolve: "loginuid.val"`;
 }
 
 function matchUser(user: UserMatcher | null) {
