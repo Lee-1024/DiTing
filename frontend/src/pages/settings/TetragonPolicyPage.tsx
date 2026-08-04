@@ -1,5 +1,5 @@
 import { CopyOutlined, DownloadOutlined } from '@ant-design/icons';
-import { Alert, Button, Card, Form, Input, Popconfirm, Select, Space, Switch, Table, Tag, Typography, message } from 'antd';
+import { Alert, Button, Card, Form, Input, Modal, Popconfirm, Select, Space, Switch, Table, Tag, Typography, message } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
@@ -402,6 +402,7 @@ export default function TetragonPolicyPage() {
           loading={loading}
           dataSource={policies}
           pagination={{ pageSize: 10 }}
+          scroll={{ x: 1320 }}
           expandable={{
             onExpand: (expanded, record) => {
               if (expanded && !deployments[record.id]) {
@@ -448,38 +449,56 @@ export default function TetragonPolicyPage() {
                   rowKey="id"
                   dataSource={deployments[record.id] ?? []}
                   pagination={false}
+                  scroll={{ x: 920 }}
                   columns={[
-                    { title: '主机 ID', dataIndex: 'hostId' },
-                    { title: '主机名', dataIndex: 'hostName', render: (value: string) => value || '-' },
-                    { title: '状态', dataIndex: 'status', render: deploymentTag },
-                    { title: '说明', dataIndex: 'message', render: (value: string) => value || '-' },
-                    { title: '部署时间', dataIndex: 'deployedAt', render: (value: string) => formatTime(value) },
-                    { title: '更新时间', dataIndex: 'updatedAt', render: (value: string) => formatTime(value) },
+                    { title: '主机 ID', dataIndex: 'hostId', width: 180, ellipsis: true },
+                    { title: '主机名', dataIndex: 'hostName', width: 160, ellipsis: true, render: (value: string) => value || '-' },
+                    { title: '状态', dataIndex: 'status', width: 120, render: deploymentTag },
+                    { title: '说明', dataIndex: 'message', width: 220, ellipsis: true, render: (value: string) => value || '-' },
+                    { title: '部署时间', dataIndex: 'deployedAt', width: 180, render: (value: string) => formatTime(value) },
+                    { title: '更新时间', dataIndex: 'updatedAt', width: 180, render: (value: string) => formatTime(value) },
                   ]}
                 />
               </div>
             ),
           }}
           columns={[
-            { title: '策略名称', dataIndex: 'name' },
-            { title: '模板', dataIndex: 'template', render: templateLabel },
-            { title: '模式', dataIndex: 'mode', render: modeTag },
-            { title: '启用', dataIndex: 'enabled', render: (value: boolean) => (value ? <Tag color="green">启用</Tag> : <Tag>停用</Tag>) },
-            { title: '适用主机', dataIndex: 'targetHosts', ellipsis: true, render: (hosts: string[]) => hosts?.length ? hosts.join(', ') : '通用' },
-            { title: '自动同步状态', render: (_: unknown, record: EnforcementPolicy) => deploymentSummary(record, deployments[record.id] ?? []) },
-            { title: '更新时间', dataIndex: 'updatedAt', render: (value: string) => formatTime(value) },
+            { title: '策略名称', dataIndex: 'name', width: 180, ellipsis: true },
+            { title: '模板', dataIndex: 'template', width: 140, render: templateLabel },
+            { title: '模式', dataIndex: 'mode', width: 120, render: modeTag },
+            { title: '启用', dataIndex: 'enabled', width: 110, render: (value: boolean) => (value ? <Tag color="green">启用</Tag> : <Tag>停用</Tag>) },
+            { title: '适用主机', dataIndex: 'targetHosts', width: 180, ellipsis: true, render: (hosts: string[]) => hosts?.length ? hosts.join(', ') : '通用' },
+            { title: '自动同步状态', width: 170, render: (_: unknown, record: EnforcementPolicy) => deploymentSummary(record, deployments[record.id] ?? []) },
+            { title: '更新时间', dataIndex: 'updatedAt', width: 180, render: (value: string) => formatTime(value) },
             {
               title: '操作',
+              width: 280,
+              fixed: 'right',
               render: (_: unknown, record: EnforcementPolicy) => (
-                <Space>
-                  <Button size="small" onClick={() => editPolicy(record)}>编辑</Button>
-                  <Button size="small" icon={<DownloadOutlined />} onClick={() => downloadContent(record.name, record.yaml)}>下载</Button>
-                  <Button size="small" onClick={() => void markDeployment(record.id, 'deployed', '人工校正为已部署')}>校正已部署</Button>
-                  <Button size="small" onClick={() => void markDeployment(record.id, 'failed', '人工校正为加载失败')}>校正失败</Button>
-                  <Popconfirm title="确认删除该拦截策略？" onConfirm={() => void removePolicy(record.id)}>
-                    <Button size="small" danger>删除</Button>
-                  </Popconfirm>
-                </Space>
+                <ActionCluster
+                  className="policy-action-cluster"
+                  maxVisible={2}
+                  actions={[
+                    { key: 'edit', label: '编辑', onClick: () => editPolicy(record) },
+                    { key: 'download', label: '下载', icon: <DownloadOutlined />, onClick: () => downloadContent(record.name, record.yaml) },
+                    { key: 'deployed', label: '校正已部署', onClick: () => void markDeployment(record.id, 'deployed', '人工校正为已部署') },
+                    { key: 'failed', label: '校正失败', onClick: () => void markDeployment(record.id, 'failed', '人工校正为加载失败') },
+                    {
+                      key: 'delete',
+                      label: '删除',
+                      danger: true,
+                      onClick: () => {
+                        Modal.confirm({
+                          title: '确认删除该拦截策略？',
+                          okText: '删除',
+                          okButtonProps: { danger: true },
+                          cancelText: '取消',
+                          onOk: () => removePolicy(record.id),
+                        });
+                      },
+                    },
+                  ]}
+                />
               ),
             },
           ]}

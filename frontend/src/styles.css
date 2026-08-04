@@ -347,6 +347,17 @@ body {
   border-color: transparent;
 }
 
+.policy-action-cluster {
+  width: auto;
+  flex-wrap: nowrap !important;
+}
+
+.policy-action-cluster .ant-btn {
+  min-width: 72px;
+  height: 32px;
+  padding-inline: 10px;
+}
+
 .live-filter-card .ant-card-body {
   padding: 18px 18px 0;
 }
