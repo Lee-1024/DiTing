@@ -16,24 +16,7 @@ import ActionCluster from '../../components/ActionCluster';
 import { InsightHero, MetricCard, SummaryPanel } from '../../components/InsightHeader';
 import type { EnforcementDeployment, EnforcementDeploymentStatus, EnforcementPolicy, EnforcementPolicyPayload } from '../../types/enforcement';
 import { copyText } from '../../utils/clipboard';
-
-type PolicyTemplate = 'dangerous_command' | 'sensitive_file' | 'permission_change' | 'delete_behavior' | 'suspicious_process';
-type PolicyMode = 'audit' | 'enforce' | 'disabled';
-type UserMatchMode = 'all' | 'include' | 'exclude_root';
-
-interface PolicyFormValues {
-  template: PolicyTemplate;
-  mode: PolicyMode;
-  name: string;
-  commands?: string[];
-  filePaths?: string[];
-  processNames?: string[];
-  userMatchMode?: UserMatchMode;
-  userIds?: string[];
-  enabled?: boolean;
-  description?: string;
-  targetHosts?: string[];
-}
+import { generatePolicy, isUserId, type PolicyFormValues, type PolicyTemplate } from './tetragonPolicy';
 
 const defaultValues: PolicyFormValues = {
   template: 'dangerous_command',
@@ -41,7 +24,8 @@ const defaultValues: PolicyFormValues = {
   name: 'diting-dangerous-command',
   description: '',
   enabled: true,
-  commands: ['curl', 'wget', 'bash'],
+  commands: ['reboot', 'shutdown', 'poweroff', 'halt'],
+  commandRuleText: 'systemctl restart|stop docker|docker.service',
   filePaths: ['/etc/passwd', '/etc/shadow', '/etc/sudoers', '/root/.ssh'],
   processNames: [],
   userMatchMode: 'exclude_root',
@@ -64,6 +48,7 @@ export default function TetragonPolicyPage() {
   const description = Form.useWatch('description', form) ?? defaultValues.description;
   const enabled = Form.useWatch('enabled', form) ?? defaultValues.enabled;
   const commands = Form.useWatch('commands', form) ?? defaultValues.commands;
+  const commandRuleText = Form.useWatch('commandRuleText', form) ?? defaultValues.commandRuleText;
   const filePaths = Form.useWatch('filePaths', form) ?? defaultValues.filePaths;
   const processNames = Form.useWatch('processNames', form) ?? defaultValues.processNames;
   const userMatchMode = Form.useWatch('userMatchMode', form) ?? defaultValues.userMatchMode;
@@ -76,12 +61,13 @@ export default function TetragonPolicyPage() {
     description,
     enabled,
     commands,
+    commandRuleText,
     filePaths,
     processNames,
     userMatchMode,
     userIds,
     targetHosts,
-  }), [template, mode, name, description, enabled, commands, filePaths, processNames, userMatchMode, userIds, targetHosts]);
+  }), [template, mode, name, description, enabled, commands, commandRuleText, filePaths, processNames, userMatchMode, userIds, targetHosts]);
   const yaml = useMemo(() => generatePolicy(policy), [policy]);
   const allDeployments = Object.values(deployments).flat();
   const enabledPolicyCount = policies.filter((item) => item.enabled && item.mode !== 'disabled').length;
@@ -316,14 +302,42 @@ export default function TetragonPolicyPage() {
                   type={mode === 'enforce' ? 'warning' : 'info'}
                   showIcon
                   style={{ marginBottom: 16 }}
-                  message={mode === 'enforce' ? '危险命令模板会按进程名拦截' : '危险命令模板适合先审计观察'}
+                  message={mode === 'enforce' ? '危险命令模板支持进程名和参数组合拦截' : '危险命令模板适合先审计观察'}
                   description={mode === 'enforce'
-                    ? '当前按二进制进程名拦截，适合明确禁止某类命令启动。不要直接拦截 rm、chmod 这类常用命令，避免影响正常运维。'
-                    : '该模板按进程执行命令匹配，建议先审计观察；参数级危险组合先进入风险告警，不在这里承诺强拦截。'}
+                    ? '命令/关键进程用于粗拦截；精细命令规则会同时匹配二进制和参数，适合 systemctl restart docker 这类高危组合。'
+                    : '该模板按进程执行命令匹配，也可以先审计参数级危险组合，确认无误后再切换拦截。'}
                 />
                 <Form.Item name="commands" label="命令/关键进程">
-                  <Select mode="tags" tokenSeparators={[',']} placeholder="例如 nc / ncat / socat，拦截会在命令启动时生效" />
+                  <Select mode="tags" tokenSeparators={[',']} placeholder="例如 reboot / shutdown / poweroff，拦截会在命令启动时生效" />
                 </Form.Item>
+                <Form.Item
+                  name="commandRuleText"
+                  label="精细命令规则"
+                  tooltip="每行一条：第一列是命令，后面依次是 argv 参数；同一位置多个允许值用 | 分隔。"
+                >
+                  <Input.TextArea rows={4} placeholder="systemctl restart|stop docker|docker.service" />
+                </Form.Item>
+                <Form.Item name="userMatchMode" label="精细规则用户范围">
+                  <Select options={[
+                    { value: 'exclude_root', label: '除 root 外所有用户' },
+                    { value: 'include', label: '仅指定 UID' },
+                    { value: 'all', label: '所有用户' },
+                  ]} />
+                </Form.Item>
+                {userMatchMode === 'include' && (
+                  <Form.Item name="userIds" label="限定执行用户 UID" tooltip="Tetragon 策略按 UID 匹配用户；如 ubuntu 通常为 1000，可在主机上用 id -u ubuntu 查询。">
+                    <Select mode="tags" tokenSeparators={[',']} placeholder="例如 1000 / 1001" />
+                  </Form.Item>
+                )}
+                {userMatchMode === 'include' && userIds?.some((item) => item && !isUserId(item)) && (
+                  <Alert
+                    type="warning"
+                    showIcon
+                    style={{ marginBottom: 16 }}
+                    message="限定执行用户需要填写 UID"
+                    description="Tetragon 策略无法直接按用户名匹配，请在目标主机执行 id -u 用户名 后填写数字 UID。非数字项不会写入 YAML。"
+                  />
+                )}
               </>
             )}
             {(template === 'sensitive_file' || template === 'permission_change' || template === 'delete_behavior') && (
@@ -597,223 +611,3 @@ function formatTime(value: string) {
   return value ? new Date(value).toLocaleString() : '-';
 }
 
-// generatePolicy 处理 generate Policy 相关逻辑。
-function generatePolicy(values: PolicyFormValues) {
-  const name = sanitizeName(values.name || 'diting-tetragon-policy');
-  if (values.mode === 'disabled' || values.enabled === false) {
-    return `# 当前策略已禁用，未生成可部署的 TracingPolicy。\n# 请选择“仅审计”或“拦截”后再复制/下载。`;
-  }
-  const template = policyTemplate(values);
-  return `apiVersion: cilium.io/v1alpha1
-kind: TracingPolicy
-metadata:
-  name: ${name}
-spec:
-${template}`;
-}
-
-// policyTemplate 处理 policy Template 相关逻辑。
-function policyTemplate(values: PolicyFormValues) {
-  switch (values.template) {
-    case 'sensitive_file':
-      return kprobeBlock('file-access', 'security_file_open', 'file_access', 'file', values.filePaths ?? [], values.processNames ?? [], userMatcher(values), values.mode);
-    case 'permission_change':
-      return syscallBlock('permission-change', [
-        { syscall: 'chmod', argIndex: 0 },
-        { syscall: 'fchmodat', argIndex: 1 },
-        { syscall: 'chown', argIndex: 0 },
-        { syscall: 'fchownat', argIndex: 1 },
-      ], 'file_access', values.filePaths ?? ['/'], values.processNames ?? [], userMatcher(values), values.mode, 'Prefix', false);
-    case 'delete_behavior':
-      return deleteBehaviorBlock(values.filePaths ?? ['/'], values.processNames ?? [], userMatcher(values));
-    case 'suspicious_process':
-      return syscallBlock('suspicious-process', [{ syscall: 'execve', argIndex: 0 }], 'process_exec', values.processNames ?? [], [], null, values.mode, 'Postfix', false);
-    default:
-      return syscallBlock('dangerous-command', [{ syscall: 'execve', argIndex: 0 }], 'process_exec', values.commands ?? [], [], null, values.mode, 'Postfix', false);
-  }
-}
-
-interface SyscallProbe {
-  syscall: string;
-  argIndex: number;
-}
-
-interface UserMatcher {
-  operator: 'Equal' | 'NotEqual';
-  values: string[];
-}
-
-// syscallBlock 处理 syscall Block 相关逻辑。
-function syscallBlock(name: string, syscalls: SyscallProbe[], tag: string, values: string[], processNames: string[], user: UserMatcher | null, mode: PolicyMode, operator: 'Prefix' | 'Postfix', returnProbe: boolean) {
-  // matchValues 处理 match Values 相关逻辑。
-  const matchValues = (values.filter(Boolean).length ? values.filter(Boolean) : ['']).map((item) => `            - "${escapeYaml(item)}"`).join('\n');
-  return `  kprobes:
-${syscalls.map(({ syscall, argIndex }) => `  - call: "sys_${syscall}"
-    syscall: true
-    return: ${returnProbe ? 'true' : 'false'}
-    args:
-    - index: ${argIndex}
-      type: "string"
-${uidDataBlock(user)}
-${returnArgBlock(returnProbe)}
-    tags:
-    - "${name}"
-    - "${tag}"
-    selectors:
-    - matchArgs:
-      - index: ${argIndex}
-        operator: ${operator}
-        values:
-${matchValues}${matchBinaries(processNames)}${matchUser(user)}${matchActions(mode)}`).join('\n')}`;
-}
-
-// returnArgBlock 处理 return Arg Block 相关逻辑。
-function returnArgBlock(returnProbe: boolean) {
-  if (!returnProbe) {
-    return '';
-  }
-  return `    returnArg:
-      index: 0
-      type: "int"
-`;
-}
-
-// kprobeBlock 处理 kprobe Block 相关逻辑。
-function kprobeBlock(name: string, call: string, tag: string, argType: string, paths: string[], processNames: string[], user: UserMatcher | null, mode: PolicyMode) {
-  // values 处理 values 相关逻辑。
-  const values = (paths.length ? paths : ['/etc/passwd']).map((path) => `            - "${escapeYaml(path)}"`).join('\n');
-  return `  kprobes:
-  - call: "${call}"
-    syscall: false
-    return: true
-    args:
-    - index: 0
-      type: "${argType}"
-${uidDataBlock(user)}
-    returnArg:
-      index: 0
-      type: "int"
-    tags:
-    - "${name}"
-    - "${tag}"
-    selectors:
-    - matchArgs:
-      - index: 0
-        operator: Prefix
-        values:
-${values}${matchBinaries(processNames)}${matchUser(user)}${matchActions(mode)}`;
-}
-
-// deleteBehaviorBlock 删除指定的 delete Behavior Block。
-function deleteBehaviorBlock(paths: string[], processNames: string[], user: UserMatcher | null) {
-  // values 处理 values 相关逻辑。
-  const values = (paths.filter(Boolean).length ? paths.filter(Boolean) : ['/']).map((path) => `            - "${escapeYaml(path)}"`).join('\n');
-  return `  kprobes:
-  - call: "security_path_unlink"
-    syscall: false
-    return: false
-    args:
-    - index: 0
-      type: "path"
-${uidDataBlock(user)}
-    tags:
-    - "delete-behavior"
-    - "file_access"
-    selectors:
-    - matchArgs:
-      - index: 0
-        operator: Prefix
-        values:
-${values}${matchBinaries(processNames)}${matchUser(user)}
-  - call: "security_path_rmdir"
-    syscall: false
-    return: false
-    args:
-    - index: 0
-      type: "path"
-${uidDataBlock(user)}
-    tags:
-    - "delete-behavior"
-    - "file_access"
-    selectors:
-    - matchArgs:
-      - index: 0
-        operator: Prefix
-        values:
-${values}${matchBinaries(processNames)}${matchUser(user)}`;
-}
-
-// matchBinaries 处理 match Binaries 相关逻辑。
-function matchBinaries(processNames: string[]) {
-  const values = processNames.filter(Boolean);
-  if (values.length === 0) {
-    return '';
-  }
-  return `
-      matchBinaries:
-      - operator: Postfix
-        values:
-${values.map((item) => `        - "${escapeYaml(item)}"`).join('\n')}`;
-}
-
-// uidDataBlock 处理 uid Data Block 相关逻辑。
-function uidDataBlock(user: UserMatcher | null) {
-  if (!user) {
-    return '';
-  }
-  return `    data:
-    - index: 0
-      type: "int"
-      source: "current_task"
-      resolve: "cred.uid.val"`;
-}
-
-// matchUser 处理 match User 相关逻辑。
-function matchUser(user: UserMatcher | null) {
-  if (!user) {
-    return '';
-  }
-  return `
-      matchData:
-      - index: 0
-        operator: ${user.operator}
-        values:
-${user.values.map((item) => `        - "${escapeYaml(item)}"`).join('\n')}`;
-}
-
-// userMatcher 封装 user Matcher 相关的状态和行为。
-function userMatcher(values: PolicyFormValues): UserMatcher | null {
-  if (values.userMatchMode === 'exclude_root') {
-    return { operator: 'NotEqual', values: ['0'] };
-  }
-  if (values.userMatchMode === 'include') {
-    const ids = (values.userIds ?? []).filter(isUserId);
-    return ids.length > 0 ? { operator: 'Equal', values: ids } : null;
-  }
-  return null;
-}
-
-// isUserId 处理 is User Id 相关逻辑。
-function isUserId(value: string) {
-  return /^\d+$/.test(value.trim());
-}
-
-// matchActions 处理 match Actions 相关逻辑。
-function matchActions(mode: PolicyMode) {
-  if (mode !== 'enforce') {
-    return '';
-  }
-  return `
-      matchActions:
-      - action: Sigkill`;
-}
-
-// sanitizeName 处理 sanitize Name 相关逻辑。
-function sanitizeName(value: string) {
-  return value.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '') || 'diting-tetragon-policy';
-}
-
-// escapeYaml 处理 escape Yaml 相关逻辑。
-function escapeYaml(value: string) {
-  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-}
