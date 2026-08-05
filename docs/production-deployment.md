@@ -143,7 +143,7 @@ Verify:
 tail -f /data/tetragon/logs/tetragon.log
 ```
 
-`--enable-process-cred` is required for UID/EUID credential fields. `--enable-ancestors=base,kprobe,tracepoint,lsm` exports ancestor context for enforcement events. DiTing sudo-aware policies avoid `--parents-map-enabled=true` because it can fail on some 5.4-era kernels with BPF rodata rewrite errors; sudo child tracking is generated through `matchBinaries` with `followChildren: true`. DiTing also reads `/etc/passwd` through `collector.passwd_file` so audit records can show both the login user (`auid`) and the execution user (`uid/euid`).
+`--enable-process-cred` is required for UID/EUID credential fields. `--enable-ancestors=base,kprobe,tracepoint,lsm` exports ancestor context for enforcement events. DiTing sudo-aware root exclusion is generated with `current_task` `loginuid.val`, so a sudo child process can still be blocked even when its current eUID is 0. DiTing avoids `--parents-map-enabled=true` by default because it can fail on some 5.4-era kernels with BPF rodata rewrite errors. DiTing also reads `/etc/passwd` through `collector.passwd_file` so audit records can show both the login user (`auid`) and the execution user (`uid/euid`).
 
 Before starting the container, ensure bpffs exists:
 

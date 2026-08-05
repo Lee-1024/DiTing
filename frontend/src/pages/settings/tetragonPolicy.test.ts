@@ -48,11 +48,11 @@ assertIncludes(yaml, '- "diting-enforcement"');
 assertIncludes(yaml, '- "diting-blocked-command"');
 assertIncludes(yaml, '- index: 1\n        operator: Equal\n        values:\n            - "restart"\n            - "stop"');
 assertIncludes(yaml, '- index: 2\n        operator: Equal\n        values:\n            - "docker"\n            - "docker.service"');
-assertIncludes(yaml, 'source: "current_task"\n      resolve: "cred.uid.val"');
+assertIncludes(yaml, 'source: "current_task"\n      resolve: "loginuid.val"');
 assertIncludes(yaml, 'matchData:\n      - index: 0\n        operator: NotEqual\n        values:\n        - "0"');
 assertIncludes(yaml, 'matchActions:\n      - action: Sigkill');
-assertIncludes(yaml, '- "diting-sudo-ancestry"');
-assertIncludes(yaml, 'matchBinaries:\n      - operator: In\n        values:\n        - "/usr/bin/sudo"\n        - "/bin/sudo"\n        followChildren: true');
+assertNotIncludes(yaml, '- "diting-sudo-ancestry"');
+assertNotIncludes(yaml, 'followChildren: true');
 assertNotIncludes(yaml, '            - "sudo"');
 
 const sensitiveFileYaml = generatePolicy({
@@ -65,16 +65,16 @@ const sensitiveFileYaml = generatePolicy({
   userMatchMode: 'exclude_root',
 });
 
-assertIncludes(sensitiveFileYaml, '- "diting-sudo-ancestry"');
 assertIncludes(sensitiveFileYaml, 'kprobes:\n  - call: "security_file_permission"');
 assertNotIncludes(sensitiveFileYaml, 'call: "security_file_open"');
 assertIncludes(sensitiveFileYaml, '- index: 1\n      type: "int"');
 assertIncludes(sensitiveFileYaml, '- index: 1\n        operator: Mask\n        values:\n            - "4"\n            - "2"');
 assertSensitivePermissionSelectorsUseMask(sensitiveFileYaml);
-assertIncludes(sensitiveFileYaml, 'matchBinaries:\n      - operator: In\n        values:\n        - "/usr/bin/sudo"\n        - "/bin/sudo"\n        followChildren: true');
-assertIncludes(sensitiveFileYaml, 'resolve: "comm"');
-assertIncludes(sensitiveFileYaml, 'matchData:\n      - index: 0\n        operator: In\n        values:\n        - "vim"');
+assertIncludes(sensitiveFileYaml, 'resolve: "loginuid.val"');
 assertIncludes(sensitiveFileYaml, 'matchData:\n      - index: 0\n        operator: NotEqual\n        values:\n        - "0"');
+assertIncludes(sensitiveFileYaml, 'matchBinaries:\n      - operator: Postfix\n        values:\n        - "vim"');
+assertNotIncludes(sensitiveFileYaml, '- "diting-sudo-ancestry"');
+assertNotIncludes(sensitiveFileYaml, 'followChildren: true');
 assertNotIncludes(sensitiveFileYaml, 'matchParentBinaries:');
 assertNotIncludes(sensitiveFileYaml, '- "diting-sudo-pre-escalation"');
 assertNotIncludes(sensitiveFileYaml, '            - "sudo"');
@@ -88,8 +88,8 @@ const suspiciousProcessYaml = generatePolicy({
   userMatchMode: 'exclude_root',
 });
 
-assertIncludes(suspiciousProcessYaml, '- "diting-sudo-ancestry"');
-assertIncludes(suspiciousProcessYaml, 'matchBinaries:\n      - operator: In\n        values:\n        - "/usr/bin/sudo"\n        - "/bin/sudo"\n        followChildren: true');
+assertNotIncludes(suspiciousProcessYaml, '- "diting-sudo-ancestry"');
+assertNotIncludes(suspiciousProcessYaml, 'followChildren: true');
 assertIncludes(suspiciousProcessYaml, 'matchData:\n      - index: 0\n        operator: NotEqual\n        values:\n        - "0"');
 assertNotIncludes(suspiciousProcessYaml, '            - "sudo"');
 

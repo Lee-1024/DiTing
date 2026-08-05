@@ -296,7 +296,7 @@ export default function TetragonPolicyPage() {
                 showIcon
                 style={{ marginBottom: 16 }}
                 message="拦截模式依赖 Tetragon 运行时能力"
-                description="sudo 链路使用 matchBinaries 的 followChildren 跟踪 sudo 子进程；请在 Tetragon 启动参数中开启 --enable-ancestors=base,kprobe,tracepoint,lsm 以便事件保留祖先上下文，并确保策略先加载再执行 sudo。"
+                description="排除 root 使用 Linux audit loginuid 匹配：直接 root 登录 loginuid 为 0，普通用户 sudo 后当前 eUID 可能为 0 但 loginuid 仍是原登录 UID。请确认目标主机登录会话能正确写入 audit loginuid。"
               />
             )}
             {template === 'dangerous_command' && (
