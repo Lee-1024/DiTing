@@ -15,7 +15,7 @@ DiTing uses Tetragon as its runtime observability and enforcement layer. Policy 
 | DiTing Template | Strong Enforcement Hooks | Primary Use | Boundary |
 |---|---|---|---|
 | Dangerous command | `sys_execve` | Block direct execution of known dangerous binaries | Complex shell semantics are not guaranteed by argv matching |
-| Sensitive file | `security_file_permission` | Block reading or writing sensitive files by process/user/ancestry context | Permission values use Linux MAY_READ/MAY_WRITE semantics |
+| Sensitive file | `security_file_permission` | Block reading or writing sensitive files by process/user/ancestry context | Permission is a bitmask; use `Mask` for `MAY_READ=4` and `MAY_WRITE=2` |
 | Delete protection | `security_path_unlink`, `security_path_rmdir` | Block deletion of files/directories by path | Preferred over `rm` command matching |
 | Permission change | `sys_chmod`, `sys_fchmodat`, `sys_chown`, `sys_fchownat`, path/security hooks when available | Block chmod/chown on protected paths | Path resolution differs by syscall/hook |
 | Sudo ancestry | `matchParentBinaries` with `followChildren: true` | Distinguish sudo-root process chains from direct root sessions | Requires parent tracking and verified binary paths |

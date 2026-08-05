@@ -12,6 +12,19 @@ function assertNotIncludes(text: string, unexpected: string) {
   }
 }
 
+function assertSensitivePermissionSelectorsUseMask(text: string) {
+  const selectors = text.match(/- index: 1\n        operator: .+?\n        values:\n(?:            - "[0-9]+"\n?)+/g) ?? [];
+  const permissionSelectors = selectors.filter((selector) => selector.includes('- "4"') || selector.includes('- "2"'));
+  if (permissionSelectors.length === 0) {
+    throw new Error('expected sensitive file permission selectors for MAY_READ/MAY_WRITE');
+  }
+  for (const selector of permissionSelectors) {
+    if (!selector.includes('operator: Mask')) {
+      throw new Error(`sensitive file permission selector must use Mask, got:\n${selector}`);
+    }
+  }
+}
+
 const policy: PolicyFormValues = {
   template: 'dangerous_command',
   mode: 'enforce',
@@ -56,8 +69,8 @@ assertIncludes(sensitiveFileYaml, '- "diting-sudo-ancestry"');
 assertIncludes(sensitiveFileYaml, 'kprobes:\n  - call: "security_file_permission"');
 assertNotIncludes(sensitiveFileYaml, 'call: "security_file_open"');
 assertIncludes(sensitiveFileYaml, '- index: 1\n      type: "int"');
-assertIncludes(sensitiveFileYaml, '- index: 1\n        operator: Equal\n        values:\n            - "4"');
-assertIncludes(sensitiveFileYaml, '- index: 1\n        operator: Equal\n        values:\n            - "2"');
+assertIncludes(sensitiveFileYaml, '- index: 1\n        operator: Mask\n        values:\n            - "4"\n            - "2"');
+assertSensitivePermissionSelectorsUseMask(sensitiveFileYaml);
 assertIncludes(sensitiveFileYaml, 'matchParentBinaries:\n      - operator: In\n        values:\n        - "/usr/bin/sudo"\n        - "/bin/sudo"\n        followChildren: true');
 assertIncludes(sensitiveFileYaml, 'matchData:\n      - index: 0\n        operator: NotEqual\n        values:\n        - "0"');
 assertNotIncludes(sensitiveFileYaml, '- "diting-sudo-pre-escalation"');

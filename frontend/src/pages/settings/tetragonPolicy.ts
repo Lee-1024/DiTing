@@ -201,15 +201,16 @@ ${filePermissionSelectors(values, processNames, user, mode, sudoAncestry)}`;
 }
 
 function filePermissionSelectors(pathValues: string, processNames: string[], user: UserMatcher | null, mode: PolicyMode, sudoAncestry: boolean) {
-  return ['4', '2'].map((permission) => `    - matchArgs:
+  return `    - matchArgs:
       - index: 0
         operator: Prefix
         values:
 ${pathValues}
       - index: 1
-        operator: Equal
+        operator: Mask
         values:
-            - "${permission}"${matchBinaries(processNames)}${matchUser(user)}${matchSudoAncestry(sudoAncestry)}${matchActions(mode)}`).join('\n');
+            - "4"
+            - "2"${matchBinaries(processNames)}${matchUser(user)}${matchSudoAncestry(sudoAncestry)}${matchActions(mode)}`;
 }
 
 function sudoAncestrySyscallBlock(name: string, syscalls: SyscallProbe[], paths: string[], processNames: string[], mode: PolicyMode, operator: 'Prefix' | 'Postfix') {
