@@ -41,7 +41,7 @@ ${template}`;
 function policyTemplate(values: PolicyFormValues) {
   switch (values.template) {
     case 'sensitive_file':
-      return sensitiveFileBlock(values.filePaths ?? [], values.processNames ?? [], userMatcher(values), values.mode);
+      return sensitiveFileTemplate(values.filePaths ?? [], values.processNames ?? [], userMatcher(values), values.mode, values.userMatchMode);
     case 'permission_change':
       return syscallBlock('permission-change', [
         { syscall: 'chmod', argIndex: 0 },
@@ -138,6 +138,15 @@ ${args.map((values, index) => `      - index: ${index + 1}
 ${values.map((value) => `            - "${escapeYaml(value)}"`).join('\n')}`).join('\n')}${matchUser(user)}${matchActions(mode)}`;
 }
 
+function sensitiveFileTemplate(paths: string[], processNames: string[], user: UserMatcher | null, mode: PolicyMode, userMatchMode: UserMatchMode | undefined) {
+  const base = sensitiveFileBlock(paths, processNames, user, mode);
+  if (mode !== 'enforce' || userMatchMode !== 'exclude_root' || processNames.filter(Boolean).length === 0) {
+    return base;
+  }
+  return `${base}
+${sudoAncestorFileInstallBlock(paths, processNames, mode)}`;
+}
+
 function sensitiveFileBlock(paths: string[], processNames: string[], user: UserMatcher | null, mode: PolicyMode, name = 'file-access') {
   const values = (paths.length ? paths : ['/etc/passwd']).map((path) => `            - "${escapeYaml(path)}"`).join('\n');
   return `  kprobes:
@@ -159,6 +168,34 @@ ${uidDataBlock(user)}
 ${enforcementTags(mode)}
     selectors:
 ${filePermissionSelectors(values, processNames, user, mode)}`;
+}
+
+function sudoAncestorFileInstallBlock(paths: string[], processNames: string[], mode: PolicyMode) {
+  const values = (paths.length ? paths : ['/etc/passwd']).map((path) => `            - "${escapeYaml(path)}"`).join('\n');
+  const binaries = processNames.filter(Boolean).map((item) => `        - "${escapeYaml(item)}"`).join('\n');
+  return `  - call: "fd_install"
+    syscall: false
+    args:
+    - index: 0
+      type: "int"
+    - index: 1
+      type: "file"
+    tags:
+    - "diting-sudo-ancestor"
+    - "file_access"
+${enforcementTags(mode)}
+    selectors:
+    - matchArgs:
+      - index: 1
+        operator: Equal
+        values:
+${values}
+      matchBinaries:
+      - operator: Postfix
+        values:
+${binaries}
+      matchAncestors:
+      - binary: "sudo"${matchActions(mode)}`;
 }
 
 function filePermissionSelectors(pathValues: string, processNames: string[], user: UserMatcher | null, mode: PolicyMode) {

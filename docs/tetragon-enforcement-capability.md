@@ -18,7 +18,7 @@ DiTing uses Tetragon as its runtime observability and enforcement layer. Policy 
 | Sensitive file | `security_file_permission` | Block reading or writing sensitive files by process/login user context | Permission is a bitmask; use `Mask` for `MAY_READ=4` and `MAY_WRITE=2` |
 | Delete protection | `security_path_unlink`, `security_path_rmdir` | Block deletion of files/directories by path | Preferred over `rm` command matching |
 | Permission change | `sys_chmod`, `sys_fchmodat`, `sys_chown`, `sys_fchownat`, path/security hooks when available | Block chmod/chown on protected paths | Path resolution differs by syscall/hook |
-| Root exclusion | `current_task` data resolve `loginuid.val` with `NotEqual 0` | Distinguish sudo-root processes from direct root login sessions | Requires audit loginuid to be populated on the host |
+| Root exclusion | `current_task` data resolve `loginuid.val` with `NotEqual 0`; sensitive-file sudo branch can use `fd_install` + `matchAncestors` | Distinguish sudo-root processes from direct root login sessions | `matchAncestors` must be accepted by the target Tetragon 1.7 policy loader |
 
 ## Tetragon 1.7 Runtime Parameters
 
@@ -31,7 +31,7 @@ Use this table instead of pasting the full `tetragon --help` output into deploym
 | `--tracing-policy-dir=/etc/tetragon/tetragon.tp.d` | Required for policy sync | Collector writes generated policies into this directory |
 | `--enable-process-cred` | Required | Adds UID/EUID/GID/EGID credential fields used by DiTing identity and root-exclusion logic |
 | `--enable-process-ns` | Recommended | Adds namespace context to process and kprobe events, useful for host/container separation |
-| `--enable-ancestors=base,kprobe,tracepoint,lsm` | Recommended for context, not required for root exclusion | Exports ancestor context on event records; `base` is required by other event types for correct reference counting |
+| `--enable-ancestors=base,kprobe,tracepoint,lsm` | Required when using `matchAncestors` policies | Exports ancestor context on event records; `base` is required by other event types for correct reference counting |
 | `--username-metadata=unix` | Optional | Lets Tetragon resolve host UIDs to usernames; DiTing can also resolve through `/etc/passwd`, so this is not required |
 | `--export-file-max-size-mb=100` and `--export-file-max-backups=10` | Recommended for production | Default rotation is small for busy hosts; increase retention to avoid losing audit data between collector outages |
 | `--export-file-perm=640` | Optional | Use when the collector runs outside the Tetragon container and needs group read access |
@@ -82,11 +82,11 @@ Run these checks on every target OS/kernel/Tetragon version before marking a hos
 | Tetragon bpffs mount | `mountpoint -q /sys/fs/bpf` | bpffs is mounted and `/sys/fs/bpf/tetragon` can be created by Tetragon |
 | Ancestor export enabled | Check container command | Tetragon was started with `--enable-ancestors=base,kprobe,tracepoint,lsm` |
 | Direct root excluded | Log in as root, then run a protected root-excluded action | Allowed when no sudo-child selector matches |
-| Sudo-root blocked | Ordinary user runs `sudo vim /etc/docker/daemon.json` against a protected file policy | The protected hook event has `loginuid.val != 0` and is blocked even though current eUID is 0 |
+| Sudo-root blocked | Ordinary user runs `sudo vim /etc/docker/daemon.json` against a protected file policy | The sensitive-file sudo branch matches `fd_install` file arg plus `matchAncestors: binary: "sudo"` and is blocked |
 | Sensitive file mask | Open protected file with `vim` | Event permission value matches `Mask` against `MAY_READ=4` or `MAY_WRITE=2`, including combined value `6` |
 | Delete file blocked | `rm /home/ubuntu/test` against a delete protection policy | Event function is `security_path_unlink`, action includes `Override` and `Sigkill`, file remains |
 | Delete directory blocked | `rmdir /home/ubuntu/testdir` against a delete protection policy | Event function is `security_path_rmdir`, directory remains |
 | Alert surfaced | Trigger any enforce policy | Header notification shows user, command, and target path when present |
 | Rule persisted | Trigger any enforce policy | Risk/rule data includes `diting-enforcement` and critical severity |
 
-If sudo-root is not blocked, verify the generated policy contains `resolve: "loginuid.val"`, then verify the host has a populated audit loginuid for SSH/login sessions.
+If sudo-root is not blocked, first check Tetragon accepted the `matchAncestors` selector at policy load time. If it did, verify the generated policy contains the expected `fd_install` block and that the event ancestry includes `sudo`.
