@@ -53,7 +53,13 @@ const sensitiveFileYaml = generatePolicy({
 });
 
 assertIncludes(sensitiveFileYaml, '- "diting-sudo-ancestry"');
+assertIncludes(sensitiveFileYaml, 'kprobes:\n  - call: "security_file_permission"');
+assertNotIncludes(sensitiveFileYaml, 'call: "security_file_open"');
+assertIncludes(sensitiveFileYaml, '- index: 1\n      type: "int"');
+assertIncludes(sensitiveFileYaml, '- index: 1\n        operator: Equal\n        values:\n            - "4"');
+assertIncludes(sensitiveFileYaml, '- index: 1\n        operator: Equal\n        values:\n            - "2"');
 assertIncludes(sensitiveFileYaml, 'matchParentBinaries:\n      - operator: In\n        values:\n        - "/usr/bin/sudo"\n        - "/bin/sudo"\n        followChildren: true');
+assertIncludes(sensitiveFileYaml, 'matchData:\n      - index: 0\n        operator: NotEqual\n        values:\n        - "0"');
 assertNotIncludes(sensitiveFileYaml, '- "diting-sudo-pre-escalation"');
 assertNotIncludes(sensitiveFileYaml, '            - "sudo"');
 

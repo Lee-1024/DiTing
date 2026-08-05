@@ -42,7 +42,7 @@ function policyTemplate(values: PolicyFormValues) {
   switch (values.template) {
     case 'sensitive_file':
       return withSudoAncestry(
-        kprobeBlock('file-access', 'security_file_open', 'file_access', 'file', values.filePaths ?? [], values.processNames ?? [], userMatcher(values), values.mode),
+        sensitiveFileBlock(values.filePaths ?? [], values.processNames ?? [], userMatcher(values), values.mode),
         values,
       );
     case 'permission_change':
@@ -175,21 +175,41 @@ function sudoAncestryBlock(template: PolicyTemplate, paths: string[], processNam
 }
 
 function sudoAncestryFileBlock(paths: string[], processNames: string[], mode: PolicyMode) {
-  return `  - call: "security_file_open"
+  return sensitiveFileBlock(paths, processNames, null, mode, 'diting-sudo-ancestry', true, false);
+}
+
+function sensitiveFileBlock(paths: string[], processNames: string[], user: UserMatcher | null, mode: PolicyMode, name = 'file-access', sudoAncestry = false, includeHeader = true) {
+  const values = (paths.length ? paths : ['/etc/passwd']).map((path) => `            - "${escapeYaml(path)}"`).join('\n');
+  return `${includeHeader ? '  kprobes:\n' : ''}  - call: "security_file_permission"
     syscall: false
     return: true
     args:
     - index: 0
       type: "file"
+    - index: 1
+      type: "int"
+${uidDataBlock(user)}
     returnArg:
       index: 0
       type: "int"
     tags:
-    - "diting-sudo-ancestry"
+    - "${name}"
     - "file_access"
 ${enforcementTags(mode)}
     selectors:
-${sudoAncestrySelector(0, 'Prefix', paths, processNames, mode)}`;
+${filePermissionSelectors(values, processNames, user, mode, sudoAncestry)}`;
+}
+
+function filePermissionSelectors(pathValues: string, processNames: string[], user: UserMatcher | null, mode: PolicyMode, sudoAncestry: boolean) {
+  return ['4', '2'].map((permission) => `    - matchArgs:
+      - index: 0
+        operator: Prefix
+        values:
+${pathValues}
+      - index: 1
+        operator: Equal
+        values:
+            - "${permission}"${matchBinaries(processNames)}${matchUser(user)}${matchSudoAncestry(sudoAncestry)}${matchActions(mode)}`).join('\n');
 }
 
 function sudoAncestrySyscallBlock(name: string, syscalls: SyscallProbe[], paths: string[], processNames: string[], mode: PolicyMode, operator: 'Prefix' | 'Postfix') {
@@ -220,6 +240,19 @@ ${matchValues}${matchBinaries(processNames)}
         - "/usr/bin/sudo"
         - "/bin/sudo"
         followChildren: true${matchActions(mode)}`;
+}
+
+function matchSudoAncestry(enabled: boolean) {
+  if (!enabled) {
+    return '';
+  }
+  return `
+      matchParentBinaries:
+      - operator: In
+        values:
+        - "/usr/bin/sudo"
+        - "/bin/sudo"
+        followChildren: true`;
 }
 
 function parseCommandRules(rules: CommandArgRule[] | undefined, text: string | undefined) {

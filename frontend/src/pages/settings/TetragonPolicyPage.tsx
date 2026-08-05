@@ -290,6 +290,15 @@ export default function TetragonPolicyPage() {
             <Form.Item name="targetHosts" label="适用主机（可选）" tooltip="用于记录这份 YAML 计划部署到哪些主机；当前版本仍需手动放到对应 Tetragon 策略目录。">
               <Select mode="tags" tokenSeparators={[',']} placeholder="例如 server-001 / 10.40.0.184，留空表示通用策略" />
             </Form.Item>
+            {mode === 'enforce' && (
+              <Alert
+                type="warning"
+                showIcon
+                style={{ marginBottom: 16 }}
+                message="拦截模式依赖 Tetragon 运行时能力"
+                description="sudo 链路识别必须在 Tetragon 启动参数中开启 --parents-map-enabled=true；否则 sudo 后的 vim/rm 等进程会以 UID 0 运行，root 排除规则会放行，祖先链选择器也无法命中。"
+              />
+            )}
             {template === 'dangerous_command' && (
               <>
                 <Alert
