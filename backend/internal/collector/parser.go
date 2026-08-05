@@ -13,10 +13,10 @@ import (
 )
 
 type tetragonEnvelope struct {
-	Time        string            `json:"time"`
-	NodeName    string            `json:"node_name"`
-	ProcessExec *processExecEvent `json:"process_exec"`
-	ProcessExit *processExitEvent `json:"process_exit"`
+	Time          string              `json:"time"`
+	NodeName      string              `json:"node_name"`
+	ProcessExec   *processExecEvent   `json:"process_exec"`
+	ProcessExit   *processExitEvent   `json:"process_exit"`
 	ProcessKprobe *processKprobeEvent `json:"process_kprobe"`
 }
 
@@ -32,22 +32,22 @@ type processExitEvent struct {
 }
 
 type processKprobeEvent struct {
-	FunctionName string        `json:"function_name"`
-	PolicyName   string        `json:"policy_name"`
-	Message      string        `json:"message"`
-	Tags         []string      `json:"tags"`
-	Process      processInfo   `json:"process"`
-	Parent       processInfo   `json:"parent"`
-	Args         []kprobeArg   `json:"args"`
-	Data         []kprobeArg   `json:"data"`
+	FunctionName string      `json:"function_name"`
+	PolicyName   string      `json:"policy_name"`
+	Message      string      `json:"message"`
+	Tags         []string    `json:"tags"`
+	Process      processInfo `json:"process"`
+	Parent       processInfo `json:"parent"`
+	Args         []kprobeArg `json:"args"`
+	Data         []kprobeArg `json:"data"`
 }
 
 type kprobeArg struct {
-	StringArg string          `json:"string_arg"`
-	PathArg   kprobePathArg   `json:"path_arg"`
-	FileArg   kprobePathArg   `json:"file_arg"`
-	Sockaddr  kprobeSockaddr  `json:"sockaddr_arg"`
-	SockaddrU kprobeSockaddr  `json:"sockaddrun_arg"`
+	StringArg string         `json:"string_arg"`
+	PathArg   kprobePathArg  `json:"path_arg"`
+	FileArg   kprobePathArg  `json:"file_arg"`
+	Sockaddr  kprobeSockaddr `json:"sockaddr_arg"`
+	SockaddrU kprobeSockaddr `json:"sockaddrun_arg"`
 }
 
 type kprobePathArg struct {
@@ -214,13 +214,18 @@ func parseProcessKprobe(envelope tetragonEnvelope, data []byte) (audit.Event, er
 
 	process := envelope.ProcessKprobe.Process
 	parent := envelope.ProcessKprobe.Parent
+	filePath, fileOperation := kprobeFileContextJSON(envelope.ProcessKprobe)
+	eventType := "process_kprobe"
+	if filePath != "" {
+		eventType = "file_access"
+	}
 
 	return audit.Event{
 		EventID:           stableID(data),
 		EventTime:         eventTime,
 		EventDate:         dateOnly(eventTime),
 		IngestTime:        time.Now().UTC(),
-		EventType:         "process_kprobe",
+		EventType:         eventType,
 		Action:            envelope.ProcessKprobe.FunctionName,
 		Severity:          "info",
 		RiskScore:         0,
@@ -245,8 +250,28 @@ func parseProcessKprobe(envelope tetragonEnvelope, data []byte) (audit.Event, er
 		AUID:              process.AUID,
 		EUID:              process.ProcessCredentials.EUID,
 		EGID:              process.ProcessCredentials.EGID,
+		FilePath:          filePath,
+		FileOperation:     fileOperation,
 		RawEvent:          string(data),
 	}, nil
+}
+
+func kprobeFileContextJSON(event *processKprobeEvent) (string, string) {
+	for _, arg := range append(event.Args, event.Data...) {
+		if arg.PathArg.Path != "" {
+			return arg.PathArg.Path, firstNonEmpty(arg.PathArg.Permission, arg.PathArg.Flags, event.FunctionName)
+		}
+		if arg.FileArg.Path != "" {
+			return arg.FileArg.Path, firstNonEmpty(arg.FileArg.Permission, arg.FileArg.Flags, event.FunctionName)
+		}
+		if arg.SockaddrU.Path != "" {
+			return arg.SockaddrU.Path, event.FunctionName
+		}
+		if arg.StringArg != "" && isFileSyscall(event.FunctionName) {
+			return arg.StringArg, event.FunctionName
+		}
+	}
+	return "", ""
 }
 
 // joinCmdline 处理 join Cmdline 相关逻辑。

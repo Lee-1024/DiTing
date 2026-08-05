@@ -109,6 +109,28 @@ func TestParseTetragonProcessKprobeEnforcementEvent(t *testing.T) {
 	}
 }
 
+func TestParseTetragonProcessKprobeFileEnforcementEvent(t *testing.T) {
+	line := `{"process_kprobe":{"function_name":"security_path_unlink","policy_name":"block-delete","tags":["delete-protection","file_access","diting-enforcement","diting-blocked-command"],"args":[{"path_arg":{"path":"/home/ubuntu/test"}}],"process":{"pid":11,"uid":1000,"binary":"/usr/bin/rm","arguments":"/home/ubuntu/test","process_credentials":{"uid":1000,"gid":1000,"euid":1000,"egid":1000},"pod":{}},"parent":{"pid":10,"binary":"/bin/bash","arguments":"-l"}},"node_name":"server-1","time":"2026-08-04T07:08:20.928822560Z"}`
+
+	event, err := ParseTetragonEvent([]byte(line))
+	if err != nil {
+		t.Fatalf("ParseTetragonEvent returned error: %v", err)
+	}
+
+	if event.EventType != "file_access" || event.Action != "security_path_unlink" {
+		t.Fatalf("expected file_access security_path_unlink, got type=%s action=%s", event.EventType, event.Action)
+	}
+	if event.FilePath != "/home/ubuntu/test" || event.FileOperation != "security_path_unlink" {
+		t.Fatalf("unexpected file context path=%s operation=%s", event.FilePath, event.FileOperation)
+	}
+	if event.ProcessName != "rm" || event.Cmdline != "/usr/bin/rm /home/ubuntu/test" {
+		t.Fatalf("unexpected command process=%s cmdline=%s", event.ProcessName, event.Cmdline)
+	}
+	if len(event.Tags) != 4 || event.Tags[2] != "diting-enforcement" {
+		t.Fatalf("unexpected enforcement tags %#v", event.Tags)
+	}
+}
+
 func TestParseTetragonEventIDIsUniquePerRawEvent(t *testing.T) {
 	execLine := `{"process_exec":{"process":{"exec_id":"same-exec","pid":10,"binary":"/usr/bin/bash","arguments":"-c id","pod":{}},"parent":{"pid":1}},"node_name":"node-1","time":"2026-07-09T07:08:20.928822560Z"}`
 	exitLine := `{"process_exit":{"process":{"exec_id":"same-exec","pid":10,"binary":"/usr/bin/bash"},"parent":{"pid":1},"time":"2026-07-09T07:08:21.928822560Z"},"node_name":"node-1","time":"2026-07-09T07:08:21.928822560Z"}`

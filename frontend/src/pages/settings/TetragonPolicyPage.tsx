@@ -78,12 +78,6 @@ export default function TetragonPolicyPage() {
     void loadPolicies();
   }, []);
 
-  useEffect(() => {
-    if (template === 'delete_behavior' && mode === 'enforce') {
-      form.setFieldValue('mode', 'audit');
-    }
-  }, [form, mode, template]);
-
   // loadPolicies 加载页面所需数据。
   async function loadPolicies() {
     setLoading(true);
@@ -280,7 +274,7 @@ export default function TetragonPolicyPage() {
             <Form.Item name="mode" label="策略模式" rules={[{ required: true }]}>
               <Select options={[
                 { value: 'audit', label: '仅审计' },
-                { value: 'enforce', label: '拦截', disabled: template === 'delete_behavior' },
+                { value: 'enforce', label: '拦截' },
                 { value: 'disabled', label: '禁用' },
               ]} />
             </Form.Item>
@@ -347,14 +341,14 @@ export default function TetragonPolicyPage() {
                     type="info"
                     showIcon
                     style={{ marginBottom: 16 }}
-                    message="删除行为模板仅用于审计和告警"
-                    description="Tetragon 当前不提供稳定的按路径删除强拦截能力。需要阻止 rm -rf / 这类危险操作时，请使用危险命令模板。"
+                    message="删除行为模板支持按路径拦截"
+                    description="拦截模式使用 security_path_unlink 与 security_path_rmdir，并对匹配路径执行 Override 与 Sigkill；部署前需在目标主机确认内核和 Tetragon 版本支持该 hook 与动作。"
                   />
                 )}
                 <Form.Item
                   name="filePaths"
                   label={template === 'sensitive_file' ? '敏感路径' : '监控路径'}
-                  tooltip={template === 'delete_behavior' ? '仅用于记录删除行为涉及的路径范围和风险命中，不承诺阻止删除。' : undefined}
+                  tooltip={template === 'delete_behavior' ? '删除保护按路径精确匹配；目录删除使用 security_path_rmdir，文件删除使用 security_path_unlink。' : undefined}
                 >
                   <Select mode="tags" tokenSeparators={[',']} />
                 </Form.Item>

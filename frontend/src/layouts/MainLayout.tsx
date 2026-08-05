@@ -233,7 +233,7 @@ function enforcementEventAlerts(items: AuditEvent[]): HeaderAlert[] {
     id: `enforcement:${item.eventId}`,
     type: 'enforcement',
     title: '拦截策略触发',
-    description: `${displayUser(item)} 执行 ${displayCommand(item)} 已被拦截`,
+    description: enforcementDescription(item),
     time: item.eventTime,
     target: '/audit/events',
   }));
@@ -259,6 +259,11 @@ function displayUser(event: AuditEvent) {
 
 function displayCommand(event: AuditEvent) {
   return event.cmdline || event.binaryPath || event.processName || '未知命令';
+}
+
+function enforcementDescription(event: AuditEvent) {
+  const target = event.filePath ? `，目标 ${event.filePath}` : '';
+  return `${displayUser(event)} 执行 ${displayCommand(event)} 已被拦截${target}`;
 }
 
 function serviceStatusTitle(item: CollectorHeartbeat) {

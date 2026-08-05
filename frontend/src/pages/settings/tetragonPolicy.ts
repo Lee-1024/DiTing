@@ -41,12 +41,12 @@ ${template}`;
 function policyTemplate(values: PolicyFormValues) {
   switch (values.template) {
     case 'sensitive_file':
-      return withSudoPreEscalation(
+      return withSudoAncestry(
         kprobeBlock('file-access', 'security_file_open', 'file_access', 'file', values.filePaths ?? [], values.processNames ?? [], userMatcher(values), values.mode),
         values,
       );
     case 'permission_change':
-      return withSudoPreEscalation(
+      return withSudoAncestry(
         syscallBlock('permission-change', [
           { syscall: 'chmod', argIndex: 0 },
           { syscall: 'fchmodat', argIndex: 1 },
@@ -56,10 +56,10 @@ function policyTemplate(values: PolicyFormValues) {
         values,
       );
     case 'delete_behavior':
-      return deleteBehaviorBlock(values.filePaths ?? ['/'], values.processNames ?? [], userMatcher(values));
+      return deleteBehaviorBlock(values.filePaths ?? ['/'], values.processNames ?? [], userMatcher(values), values.mode);
     case 'suspicious_process':
-      return withSudoPreEscalation(
-        syscallBlock('suspicious-process', [{ syscall: 'execve', argIndex: 0 }], 'process_exec', values.processNames ?? [], [], null, values.mode, 'Postfix', false),
+      return withSudoAncestry(
+        syscallBlock('suspicious-process', [{ syscall: 'execve', argIndex: 0 }], 'process_exec', values.processNames ?? [], [], userMatcher(values), values.mode, 'Postfix', false),
         values,
       );
     default:
@@ -67,9 +67,9 @@ function policyTemplate(values: PolicyFormValues) {
   }
 }
 
-function withSudoPreEscalation(base: string, values: PolicyFormValues) {
+function withSudoAncestry(base: string, values: PolicyFormValues) {
   const processNames = values.template === 'dangerous_command' ? values.commands ?? [] : values.processNames ?? [];
-  const block = sudoPreEscalationBlock(values.filePaths ?? [], processNames, values.mode, actualUserMatcher(values));
+  const block = sudoAncestryBlock(values.template, values.filePaths ?? [], processNames, values.mode);
   return block ? `${base}
 ${block}` : base;
 }
@@ -82,16 +82,16 @@ interface SyscallProbe {
 interface UserMatcher {
   operator: 'Equal' | 'NotEqual';
   values: string[];
-  resolve?: 'loginuid.val' | 'cred.uid.val';
+  resolve?: 'cred.uid.val';
 }
 
 function dangerousCommandBlock(values: PolicyFormValues) {
-  const broadBlock = syscallBlock('dangerous-command', [{ syscall: 'execve', argIndex: 0 }], 'process_exec', values.commands ?? [], [], null, values.mode, 'Postfix', false);
+  const broadBlock = syscallBlock('dangerous-command', [{ syscall: 'execve', argIndex: 0 }], 'process_exec', values.commands ?? [], [], userMatcher(values), values.mode, 'Postfix', false);
   const preciseRules = parseCommandRules(values.commandRules, values.commandRuleText);
   if (preciseRules.length === 0) {
-    return withSudoPreEscalation(broadBlock, values);
+    return withSudoAncestry(broadBlock, values);
   }
-  return withSudoPreEscalation(`${broadBlock}
+  return withSudoAncestry(`${broadBlock}
 ${preciseCommandBlock(preciseRules, values.mode, userMatcher(values))}`, values);
 }
 
@@ -154,64 +154,72 @@ ${args.map((values, index) => `      - index: ${index + 1}
 ${values.map((value) => `            - "${escapeYaml(value)}"`).join('\n')}`).join('\n')}${matchUser(user)}${matchActions(mode)}`;
 }
 
-function sudoPreEscalationBlock(paths: string[], processNames: string[], mode: PolicyMode, user: UserMatcher | null) {
+function sudoAncestryBlock(template: PolicyTemplate, paths: string[], processNames: string[], mode: PolicyMode) {
   const cleanPaths = paths.filter(Boolean);
   const cleanProcesses = processNames.filter(Boolean);
   if (mode !== 'enforce' || cleanProcesses.length === 0) {
     return '';
   }
-  return `  - call: "sys_execve"
+  if (template === 'sensitive_file') {
+    return sudoAncestryFileBlock(cleanPaths, cleanProcesses, mode);
+  }
+  if (template === 'permission_change') {
+    return sudoAncestrySyscallBlock('permission-change-sudo', [
+      { syscall: 'chmod', argIndex: 0 },
+      { syscall: 'fchmodat', argIndex: 1 },
+      { syscall: 'chown', argIndex: 0 },
+      { syscall: 'fchownat', argIndex: 1 },
+    ], cleanPaths, cleanProcesses, mode, 'Prefix');
+  }
+  return sudoAncestrySyscallBlock('sudo-command-ancestry', [{ syscall: 'execve', argIndex: 0 }], [], cleanProcesses, mode, 'Postfix');
+}
+
+function sudoAncestryFileBlock(paths: string[], processNames: string[], mode: PolicyMode) {
+  return `  - call: "security_file_open"
+    syscall: false
+    return: true
+    args:
+    - index: 0
+      type: "file"
+    returnArg:
+      index: 0
+      type: "int"
+    tags:
+    - "diting-sudo-ancestry"
+    - "file_access"
+${enforcementTags(mode)}
+    selectors:
+${sudoAncestrySelector(0, 'Prefix', paths, processNames, mode)}`;
+}
+
+function sudoAncestrySyscallBlock(name: string, syscalls: SyscallProbe[], paths: string[], processNames: string[], mode: PolicyMode, operator: 'Prefix' | 'Postfix') {
+  return syscalls.map(({ syscall, argIndex }) => `  - call: "sys_${syscall}"
     syscall: true
     return: false
     args:
-    - index: 0
+    - index: ${argIndex}
       type: "string"
-    - index: 1
-      type: "string"
-    - index: 2
-      type: "string"
-${uidDataBlock(user)}
     tags:
-    - "diting-sudo-pre-escalation"
-    - "process_exec"
+    - "diting-sudo-ancestry"
+    - "${name}"
 ${enforcementTags(mode)}
     selectors:
-${sudoPreEscalationSelectors(cleanProcesses, cleanPaths, mode, user)}`;
+${sudoAncestrySelector(argIndex, operator, paths.length > 0 ? paths : processNames, paths.length > 0 ? processNames : [], mode)}`).join('\n');
 }
 
-function sudoPreEscalationSelector(processName: string, path: string, mode: PolicyMode, user: UserMatcher | null) {
+function sudoAncestrySelector(argIndex: number, operator: 'Prefix' | 'Postfix', values: string[], processNames: string[], mode: PolicyMode) {
+  const matchValues = values.map((value) => `            - "${escapeYaml(value)}"`).join('\n');
   return `    - matchArgs:
-      - index: 0
-        operator: Postfix
+      - index: ${argIndex}
+        operator: ${operator}
         values:
-            - "sudo"
-      - index: 1
-        operator: Postfix
+${matchValues}${matchBinaries(processNames)}
+      matchParentBinaries:
+      - operator: In
         values:
-            - "${escapeYaml(processName)}"
-      - index: 2
-        operator: Equal
-        values:
-            - "${escapeYaml(path)}"${matchUser(user)}${matchActions(mode)}`;
-}
-
-function sudoPreEscalationSelectors(processNames: string[], paths: string[], mode: PolicyMode, user: UserMatcher | null) {
-  if (paths.length === 0) {
-    return processNames.map((processName) => sudoCommandSelector(processName, mode, user)).join('\n');
-  }
-  return processNames.flatMap((processName) => paths.map((path) => sudoPreEscalationSelector(processName, path, mode, user))).join('\n');
-}
-
-function sudoCommandSelector(processName: string, mode: PolicyMode, user: UserMatcher | null) {
-  return `    - matchArgs:
-      - index: 0
-        operator: Postfix
-        values:
-            - "sudo"
-      - index: 1
-        operator: Postfix
-        values:
-            - "${escapeYaml(processName)}"${matchUser(user)}${matchActions(mode)}`;
+        - "/usr/bin/sudo"
+        - "/bin/sudo"
+        followChildren: true${matchActions(mode)}`;
 }
 
 function parseCommandRules(rules: CommandArgRule[] | undefined, text: string | undefined) {
@@ -267,41 +275,49 @@ ${enforcementTags(mode)}
 ${values}${matchBinaries(processNames)}${matchUser(user)}${matchActions(mode)}`;
 }
 
-function deleteBehaviorBlock(paths: string[], processNames: string[], user: UserMatcher | null) {
+function deleteBehaviorBlock(paths: string[], processNames: string[], user: UserMatcher | null, mode: PolicyMode) {
   const values = (paths.filter(Boolean).length ? paths.filter(Boolean) : ['/']).map((path) => `            - "${escapeYaml(path)}"`).join('\n');
   return `  kprobes:
   - call: "security_path_unlink"
     syscall: false
-    return: false
+    return: true
     args:
     - index: 0
       type: "path"
 ${uidDataBlock(user)}
+    returnArg:
+      index: 0
+      type: "int"
     tags:
-    - "delete-behavior"
+    - "delete-protection"
     - "file_access"
+${enforcementTags(mode)}
     selectors:
     - matchArgs:
       - index: 0
-        operator: Prefix
+        operator: Equal
         values:
-${values}${matchBinaries(processNames)}${matchUser(user)}
+${values}${matchBinaries(processNames)}${matchUser(user)}${deleteProtectionActions(mode)}
   - call: "security_path_rmdir"
     syscall: false
-    return: false
+    return: true
     args:
     - index: 0
       type: "path"
 ${uidDataBlock(user)}
+    returnArg:
+      index: 0
+      type: "int"
     tags:
-    - "delete-behavior"
+    - "delete-protection"
     - "file_access"
+${enforcementTags(mode)}
     selectors:
     - matchArgs:
       - index: 0
-        operator: Prefix
+        operator: Equal
         values:
-${values}${matchBinaries(processNames)}${matchUser(user)}`;
+${values}${matchBinaries(processNames)}${matchUser(user)}${deleteProtectionActions(mode)}`;
 }
 
 function matchBinaries(processNames: string[]) {
@@ -324,7 +340,7 @@ function uidDataBlock(user: UserMatcher | null) {
     - index: 0
       type: "int"
       source: "current_task"
-      resolve: "${user.resolve ?? 'loginuid.val'}"`;
+      resolve: "${user.resolve ?? 'cred.uid.val'}"`;
 }
 
 function matchUser(user: UserMatcher | null) {
@@ -350,10 +366,6 @@ function userMatcher(values: PolicyFormValues): UserMatcher | null {
   return null;
 }
 
-function actualUserMatcher(values: PolicyFormValues): UserMatcher | null {
-  const matcher = userMatcher(values);
-  return matcher ? { ...matcher, resolve: 'cred.uid.val' } : null;
-}
 
 export function isUserId(value: string) {
   return /^\d+$/.test(value.trim());
@@ -365,6 +377,17 @@ function matchActions(mode: PolicyMode) {
   }
   return `
       matchActions:
+      - action: Sigkill`;
+}
+
+function deleteProtectionActions(mode: PolicyMode) {
+  if (mode !== 'enforce') {
+    return '';
+  }
+  return `
+      matchActions:
+      - action: Override
+        argError: -1
       - action: Sigkill`;
 }
 

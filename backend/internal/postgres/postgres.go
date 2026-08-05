@@ -34,7 +34,7 @@ func Connect(ctx context.Context, cfg config.PostgresConfig) (*pgxpool.Pool, err
 
 // ExecuteBootstrap 处理 Execute Bootstrap 相关逻辑。
 func ExecuteBootstrap(ctx context.Context, pool Execer) error {
-	return ExecuteSQL(ctx, pool, bootstrapSQL+"\n"+defaultProcessChainRiskRulesSQL)
+	return ExecuteSQL(ctx, pool, bootstrapSQL+"\n"+defaultProcessChainRiskRulesSQL+"\n"+defaultEnforcementAlertRulesSQL)
 }
 
 // MigrationFiles 处理 Migration Files 相关逻辑。
@@ -499,6 +499,38 @@ VALUES
     82,
     '{"operator":"and","conditions":[{"field":"event_type","op":"eq","value":"network_connect"},{"field":"parent_process_name","op":"in","values":["bash","sh","dash","zsh"]},{"field":"process_name","op":"in","values":["python","python3","perl","php","ruby","node"]}]}'::jsonb,
     '["process-chain","network","interpreter"]'::jsonb,
+    NOW(),
+    NOW()
+)
+ON CONFLICT (id) DO NOTHING;
+`
+
+const defaultEnforcementAlertRulesSQL = `
+INSERT INTO diting_audit_rules (id, name, description, event_type, enabled, severity, risk_score, match_expr, tags, created_at, updated_at)
+VALUES
+(
+    '00000000-0000-0000-0000-000000000306',
+    'Tetragon 拦截策略触发',
+    '检测所有带 diting-enforcement 标签的 Tetragon 进程类拦截事件，用于风险沉淀和右上角通知。',
+    'process_kprobe',
+    true,
+    'critical',
+    98,
+    '{"operator":"and","conditions":[{"field":"tags","op":"contains","value":"diting-enforcement"}]}'::jsonb,
+    '["tetragon","enforcement","blocked"]'::jsonb,
+    NOW(),
+    NOW()
+),
+(
+    '00000000-0000-0000-0000-000000000307',
+    'Tetragon 文件拦截策略触发',
+    '检测所有带 diting-enforcement 标签的 Tetragon 文件、权限和删除拦截事件，用于风险沉淀和右上角通知。',
+    'file_access',
+    true,
+    'critical',
+    98,
+    '{"operator":"and","conditions":[{"field":"tags","op":"contains","value":"diting-enforcement"}]}'::jsonb,
+    '["tetragon","enforcement","blocked","file-access"]'::jsonb,
     NOW(),
     NOW()
 )
