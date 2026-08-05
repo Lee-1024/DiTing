@@ -52,7 +52,7 @@ assertIncludes(yaml, 'source: "current_task"\n      resolve: "cred.uid.val"');
 assertIncludes(yaml, 'matchData:\n      - index: 0\n        operator: NotEqual\n        values:\n        - "0"');
 assertIncludes(yaml, 'matchActions:\n      - action: Sigkill');
 assertIncludes(yaml, '- "diting-sudo-ancestry"');
-assertIncludes(yaml, 'matchParentBinaries:\n      - operator: In\n        values:\n        - "/usr/bin/sudo"\n        - "/bin/sudo"\n        followChildren: true');
+assertIncludes(yaml, 'matchBinaries:\n      - operator: In\n        values:\n        - "/usr/bin/sudo"\n        - "/bin/sudo"\n        followChildren: true');
 assertNotIncludes(yaml, '            - "sudo"');
 
 const sensitiveFileYaml = generatePolicy({
@@ -71,8 +71,11 @@ assertNotIncludes(sensitiveFileYaml, 'call: "security_file_open"');
 assertIncludes(sensitiveFileYaml, '- index: 1\n      type: "int"');
 assertIncludes(sensitiveFileYaml, '- index: 1\n        operator: Mask\n        values:\n            - "4"\n            - "2"');
 assertSensitivePermissionSelectorsUseMask(sensitiveFileYaml);
-assertIncludes(sensitiveFileYaml, 'matchParentBinaries:\n      - operator: In\n        values:\n        - "/usr/bin/sudo"\n        - "/bin/sudo"\n        followChildren: true');
+assertIncludes(sensitiveFileYaml, 'matchBinaries:\n      - operator: In\n        values:\n        - "/usr/bin/sudo"\n        - "/bin/sudo"\n        followChildren: true');
+assertIncludes(sensitiveFileYaml, 'resolve: "comm"');
+assertIncludes(sensitiveFileYaml, 'matchData:\n      - index: 0\n        operator: In\n        values:\n        - "vim"');
 assertIncludes(sensitiveFileYaml, 'matchData:\n      - index: 0\n        operator: NotEqual\n        values:\n        - "0"');
+assertNotIncludes(sensitiveFileYaml, 'matchParentBinaries:');
 assertNotIncludes(sensitiveFileYaml, '- "diting-sudo-pre-escalation"');
 assertNotIncludes(sensitiveFileYaml, '            - "sudo"');
 
@@ -86,7 +89,7 @@ const suspiciousProcessYaml = generatePolicy({
 });
 
 assertIncludes(suspiciousProcessYaml, '- "diting-sudo-ancestry"');
-assertIncludes(suspiciousProcessYaml, 'matchParentBinaries:\n      - operator: In\n        values:\n        - "/usr/bin/sudo"\n        - "/bin/sudo"\n        followChildren: true');
+assertIncludes(suspiciousProcessYaml, 'matchBinaries:\n      - operator: In\n        values:\n        - "/usr/bin/sudo"\n        - "/bin/sudo"\n        followChildren: true');
 assertIncludes(suspiciousProcessYaml, 'matchData:\n      - index: 0\n        operator: NotEqual\n        values:\n        - "0"');
 assertNotIncludes(suspiciousProcessYaml, '            - "sudo"');
 
@@ -108,3 +111,4 @@ assertIncludes(deleteProtectionYaml, '- "diting-blocked-command"');
 assertIncludes(deleteProtectionYaml, 'operator: Equal\n        values:\n            - "/home/ubuntu/test"');
 assertIncludes(deleteProtectionYaml, 'matchBinaries:\n      - operator: Postfix\n        values:\n        - "rm"');
 assertIncludes(deleteProtectionYaml, 'matchActions:\n      - action: Override\n        argError: -1\n      - action: Sigkill');
+

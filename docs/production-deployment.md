@@ -134,7 +134,7 @@ services:
       - --export-filename
       - /data/tetragon/logs/tetragon.log
       - --enable-process-cred
-      - --parents-map-enabled=true
+      - --enable-ancestors=base,kprobe,tracepoint,lsm
 ```
 
 Verify:
@@ -143,7 +143,7 @@ Verify:
 tail -f /data/tetragon/logs/tetragon.log
 ```
 
-`--enable-process-cred` is required for UID/EUID credential fields. `--parents-map-enabled=true` is required for DiTing sudo ancestry policies that use Tetragon `matchParentBinaries` with `followChildren: true`; without it, `sudo vim /etc/docker/daemon.json` can bypass a root-excluded file policy because the final `vim` process runs as UID 0 and the sudo ancestry selector cannot match. DiTing also reads `/etc/passwd` through `collector.passwd_file` so audit records can show both the login user (`auid`) and the execution user (`uid/euid`).
+`--enable-process-cred` is required for UID/EUID credential fields. `--enable-ancestors=base,kprobe,tracepoint,lsm` exports ancestor context for enforcement events. DiTing sudo-aware policies avoid `--parents-map-enabled=true` because it can fail on some 5.4-era kernels with BPF rodata rewrite errors; sudo child tracking is generated through `matchBinaries` with `followChildren: true`. DiTing also reads `/etc/passwd` through `collector.passwd_file` so audit records can show both the login user (`auid`) and the execution user (`uid/euid`).
 
 Before starting the container, ensure bpffs exists:
 

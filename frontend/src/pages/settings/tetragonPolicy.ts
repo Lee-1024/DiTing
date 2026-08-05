@@ -188,7 +188,7 @@ function sensitiveFileBlock(paths: string[], processNames: string[], user: UserM
       type: "file"
     - index: 1
       type: "int"
-${uidDataBlock(user)}
+${sudoAncestry ? commDataBlock(processNames) : uidDataBlock(user)}
     returnArg:
       index: 0
       type: "int"
@@ -210,7 +210,7 @@ ${pathValues}
         operator: Mask
         values:
             - "4"
-            - "2"${matchBinaries(processNames)}${matchUser(user)}${matchSudoAncestry(sudoAncestry)}${matchActions(mode)}`;
+            - "2"${sudoAncestry ? matchSudoChildren() + matchComm(processNames) : matchBinaries(processNames) + matchUser(user)}${matchActions(mode)}`;
 }
 
 function sudoAncestrySyscallBlock(name: string, syscalls: SyscallProbe[], paths: string[], processNames: string[], mode: PolicyMode, operator: 'Prefix' | 'Postfix') {
@@ -235,7 +235,7 @@ function sudoAncestrySelector(argIndex: number, operator: 'Prefix' | 'Postfix', 
         operator: ${operator}
         values:
 ${matchValues}${matchBinaries(processNames)}
-      matchParentBinaries:
+      matchBinaries:
       - operator: In
         values:
         - "/usr/bin/sudo"
@@ -243,12 +243,9 @@ ${matchValues}${matchBinaries(processNames)}
         followChildren: true${matchActions(mode)}`;
 }
 
-function matchSudoAncestry(enabled: boolean) {
-  if (!enabled) {
-    return '';
-  }
+function matchSudoChildren() {
   return `
-      matchParentBinaries:
+      matchBinaries:
       - operator: In
         values:
         - "/usr/bin/sudo"
@@ -377,6 +374,17 @@ function uidDataBlock(user: UserMatcher | null) {
       resolve: "${user.resolve ?? 'cred.uid.val'}"`;
 }
 
+function commDataBlock(processNames: string[]) {
+  if (processNames.filter(Boolean).length === 0) {
+    return '';
+  }
+  return `    data:
+    - index: 0
+      type: "string"
+      source: "current_task"
+      resolve: "comm"`;
+}
+
 function matchUser(user: UserMatcher | null) {
   if (!user) {
     return '';
@@ -387,6 +395,19 @@ function matchUser(user: UserMatcher | null) {
         operator: ${user.operator}
         values:
 ${user.values.map((item) => `        - "${escapeYaml(item)}"`).join('\n')}`;
+}
+
+function matchComm(processNames: string[]) {
+  const values = processNames.filter(Boolean).map((item) => processNameValue(item));
+  if (values.length === 0) {
+    return '';
+  }
+  return `
+      matchData:
+      - index: 0
+        operator: In
+        values:
+${values.map((item) => `        - "${escapeYaml(item)}"`).join('\n')}`;
 }
 
 function userMatcher(values: PolicyFormValues): UserMatcher | null {
@@ -439,4 +460,10 @@ function sanitizeName(value: string) {
 
 function escapeYaml(value: string) {
   return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
+function processNameValue(value: string) {
+  const normalized = value.replace(/\\/g, '/');
+  const parts = normalized.split('/');
+  return parts[parts.length - 1] || normalized;
 }

@@ -296,7 +296,7 @@ export default function TetragonPolicyPage() {
                 showIcon
                 style={{ marginBottom: 16 }}
                 message="拦截模式依赖 Tetragon 运行时能力"
-                description="sudo 链路识别必须在 Tetragon 启动参数中开启 --parents-map-enabled=true；否则 sudo 后的 vim/rm 等进程会以 UID 0 运行，root 排除规则会放行，祖先链选择器也无法命中。"
+                description="sudo 链路使用 matchBinaries 的 followChildren 跟踪 sudo 子进程；请在 Tetragon 启动参数中开启 --enable-ancestors=base,kprobe,tracepoint,lsm 以便事件保留祖先上下文，并确保策略先加载再执行 sudo。"
               />
             )}
             {template === 'dangerous_command' && (
