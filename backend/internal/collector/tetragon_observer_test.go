@@ -3,6 +3,9 @@ package collector
 import (
 	"strings"
 	"testing"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func TestGenerateTetragonObserverPolicyIsMonitorOnly(t *testing.T) {
@@ -53,4 +56,17 @@ func containsString(values []string, expected string) bool {
 		}
 	}
 	return false
+}
+
+func TestIsMissingTracingPolicyErrorSupportsTetragonV17(t *testing.T) {
+	v17Missing := status.Error(codes.Unknown, "tracing policy {diting-apparmor-observer } does not exist")
+	if !isMissingTracingPolicyError(v17Missing) {
+		t.Fatal("expected Tetragon v1.7 missing-policy error to be ignored")
+	}
+	if !isMissingTracingPolicyError(status.Error(codes.NotFound, "not found")) {
+		t.Fatal("expected standard NotFound to be ignored")
+	}
+	if isMissingTracingPolicyError(status.Error(codes.Unknown, "sensor load failed")) {
+		t.Fatal("unrelated Unknown error must not be ignored")
+	}
 }

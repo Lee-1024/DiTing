@@ -426,7 +426,20 @@ export default function TetragonPolicyPage() {
                     { title: '主机 ID', dataIndex: 'hostId', width: 180, ellipsis: true },
                     { title: '主机名', dataIndex: 'hostName', width: 160, ellipsis: true, render: (value: string) => value || '-' },
                     { title: '状态', dataIndex: 'status', width: 120, render: deploymentTag },
-                    { title: '说明', dataIndex: 'message', width: 220, ellipsis: true, render: (value: string) => value || '-' },
+                    {
+                      title: '说明',
+                      dataIndex: 'message',
+                      width: 320,
+                      render: (value: string) => value ? (
+                        <Typography.Paragraph
+                          copyable={{ text: value, tooltips: ['复制完整错误信息', '已复制'] }}
+                          ellipsis={{ rows: 2, expandable: 'collapsible', symbol: '展开' }}
+                          style={{ marginBottom: 0, maxWidth: 300, userSelect: 'text', overflowWrap: 'anywhere' }}
+                        >
+                          {value}
+                        </Typography.Paragraph>
+                      ) : '-',
+                    },
                     { title: '部署时间', dataIndex: 'deployedAt', width: 180, render: (value: string) => formatTime(value) },
                     { title: '更新时间', dataIndex: 'updatedAt', width: 180, render: (value: string) => formatTime(value) },
                   ]}

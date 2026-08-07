@@ -30,7 +30,7 @@ func (m *TetragonObserverManager) Apply(ctx context.Context, policy string) erro
 		return err
 	}
 	defer closeConn()
-	if _, err := client.DeleteTracingPolicy(ctx, &tetragon.DeleteTracingPolicyRequest{Name: tetragonObserverPolicyName}); err != nil && status.Code(err) != codes.NotFound {
+	if _, err := client.DeleteTracingPolicy(ctx, &tetragon.DeleteTracingPolicyRequest{Name: tetragonObserverPolicyName}); err != nil && !isMissingTracingPolicyError(err) {
 		return fmt.Errorf("delete previous Tetragon observer policy: %w", err)
 	}
 	if _, err := client.AddTracingPolicy(ctx, &tetragon.AddTracingPolicyRequest{Yaml: policy}); err != nil {
@@ -46,7 +46,7 @@ func (m *TetragonObserverManager) Remove(ctx context.Context) error {
 	}
 	defer closeConn()
 	_, err = client.DeleteTracingPolicy(ctx, &tetragon.DeleteTracingPolicyRequest{Name: tetragonObserverPolicyName})
-	if status.Code(err) == codes.NotFound {
+	if isMissingTracingPolicyError(err) {
 		return nil
 	}
 	return err
@@ -58,4 +58,14 @@ func (m *TetragonObserverManager) client(ctx context.Context) (tetragon.FineGuid
 		return nil, nil, fmt.Errorf("connect Tetragon gRPC: %w", err)
 	}
 	return tetragon.NewFineGuidanceSensorsClient(conn), conn.Close, nil
+}
+
+func isMissingTracingPolicyError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if status.Code(err) == codes.NotFound {
+		return true
+	}
+	return status.Code(err) == codes.Unknown && strings.Contains(strings.ToLower(status.Convert(err).Message()), "does not exist")
 }
