@@ -26,7 +26,7 @@ func TestBuildAppArmorDeploymentUsesSensitiveFileDefinitions(t *testing.T) {
 		},
 	}
 
-	profile, results := buildAppArmorDeployment(policies)
+	profile, _, results := buildAppArmorDeployment(policies)
 
 	if !strings.Contains(profile, "audit deny \"/etc/docker/daemon.json\" wkl,") {
 		t.Fatalf("expected docker path in profile:\n%s", profile)
@@ -51,7 +51,7 @@ func TestBuildAppArmorDeploymentRejectsUnsupportedTemplates(t *testing.T) {
 		Definition: json.RawMessage("{\"commands\":[\"reboot\"]}"),
 	}}
 
-	profile, results := buildAppArmorDeployment(policies)
+	profile, _, results := buildAppArmorDeployment(policies)
 
 	if profile != "" {
 		t.Fatalf("expected no profile for unsupported policy, got %q", profile)
@@ -79,7 +79,7 @@ func TestBuildAppArmorDeploymentRejectsUnsafePolicyWithoutDroppingValidPolicy(t 
 		},
 	}
 
-	profile, results := buildAppArmorDeployment(policies)
+	profile, _, results := buildAppArmorDeployment(policies)
 
 	if !strings.Contains(profile, "/etc/docker/daemon.json") {
 		t.Fatalf("expected valid policy to remain deployable:\n%s", profile)

@@ -117,6 +117,14 @@ func parseGRPCProcessKprobe(response *tetragon.GetEventsResponse, event *tetrago
 	filePath, fileOperation := kprobeFileContext(event)
 	dstIP, dstPort, protocol := kprobeNetworkContext(event)
 	eventType := "process_kprobe"
+	severity := "info"
+	riskScore := uint8(0)
+	tags := append([]string(nil), event.GetTags()...)
+	if event.GetPolicyName() == tetragonObserverPolicyName && event.GetReturn().GetIntArg() < 0 {
+		severity = "critical"
+		riskScore = 98
+		tags = append(tags, "apparmor", "enforcement", "blocked", "file-access", "diting-enforcement")
+	}
 	if filePath != "" {
 		eventType = "file_access"
 	}
@@ -125,41 +133,16 @@ func parseGRPCProcessKprobe(response *tetragon.GetEventsResponse, event *tetrago
 	}
 
 	return audit.Event{
-		EventID:           stableID(data),
-		EventTime:         eventTime,
-		EventDate:         dateOnly(eventTime),
-		IngestTime:        time.Now().UTC(),
-		EventType:         eventType,
-		Action:            event.GetFunctionName(),
-		Severity:          "info",
-		RiskScore:         0,
-		Tags:              event.GetTags(),
-		NodeName:          response.GetNodeName(),
-		Namespace:         pod.GetNamespace(),
-		PodName:           pod.GetName(),
-		ContainerID:       container.GetId(),
-		ContainerName:     container.GetName(),
-		Image:             imageName(container),
-		PID:               uint32Value(process.GetPid()),
-		PPID:              uint32Value(parent.GetPid()),
-		ProcessName:       processName(process.GetBinary()),
-		BinaryPath:        process.GetBinary(),
-		Cmdline:           joinCmdline(process.GetBinary(), process.GetArguments()),
-		CWD:               process.GetCwd(),
-		ParentProcessName: processName(parent.GetBinary()),
-		ParentBinaryPath:  parent.GetBinary(),
-		ParentCmdline:     joinCmdline(parent.GetBinary(), parent.GetArguments()),
-		UID:               uint32Value(process.GetUid()),
-		GID:               uint32Value(process.GetProcessCredentials().GetGid()),
-		AUID:              uint32Value(process.GetAuid()),
-		EUID:              uint32Value(process.GetProcessCredentials().GetEuid()),
-		EGID:              uint32Value(process.GetProcessCredentials().GetEgid()),
-		FilePath:          filePath,
-		FileOperation:     fileOperation,
-		DstIP:             dstIP,
-		DstPort:           dstPort,
-		Protocol:          protocol,
-		RawEvent:          string(data),
+		EventID: stableID(data), EventTime: eventTime, EventDate: dateOnly(eventTime), IngestTime: time.Now().UTC(),
+		EventType: eventType, Action: event.GetFunctionName(), Severity: severity, RiskScore: riskScore, Tags: tags,
+		NodeName: response.GetNodeName(), Namespace: pod.GetNamespace(), PodName: pod.GetName(),
+		ContainerID: container.GetId(), ContainerName: container.GetName(), Image: imageName(container),
+		PID: uint32Value(process.GetPid()), PPID: uint32Value(parent.GetPid()), ProcessName: processName(process.GetBinary()),
+		BinaryPath: process.GetBinary(), Cmdline: joinCmdline(process.GetBinary(), process.GetArguments()), CWD: process.GetCwd(),
+		ParentProcessName: processName(parent.GetBinary()), ParentBinaryPath: parent.GetBinary(), ParentCmdline: joinCmdline(parent.GetBinary(), parent.GetArguments()),
+		UID: uint32Value(process.GetUid()), GID: uint32Value(process.GetProcessCredentials().GetGid()), AUID: uint32Value(process.GetAuid()),
+		EUID: uint32Value(process.GetProcessCredentials().GetEuid()), EGID: uint32Value(process.GetProcessCredentials().GetEgid()),
+		FilePath: filePath, FileOperation: fileOperation, DstIP: dstIP, DstPort: dstPort, Protocol: protocol, RawEvent: string(data),
 	}
 }
 

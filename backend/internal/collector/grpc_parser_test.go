@@ -177,3 +177,24 @@ func TestParseTetragonGRPCProcessKprobeIgnoresInvalidNetworkAddress(t *testing.T
 		t.Fatalf("expected invalid network address to be ignored, got type=%s dst=%s:%d", event.EventType, event.DstIP, event.DstPort)
 	}
 }
+
+func TestParseTetragonGRPCObserverDenialCreatesEnforcementEvent(t *testing.T) {
+	event, err := ParseTetragonGRPCEvent(&tetragon.GetEventsResponse{
+		NodeName: "node-1",
+		Time:     timestamppb.New(time.Date(2026, 8, 7, 6, 0, 0, 0, time.UTC)),
+		Event: &tetragon.GetEventsResponse_ProcessKprobe{ProcessKprobe: &tetragon.ProcessKprobe{
+			FunctionName: "security_file_open",
+			PolicyName:   tetragonObserverPolicyName,
+			Tags:         []string{"diting-apparmor-observer"},
+			Process:      &tetragon.Process{Pid: wrapperspb.UInt32(10), Binary: "/usr/bin/vim"},
+			Args:         []*tetragon.KprobeArgument{{Arg: &tetragon.KprobeArgument_FileArg{FileArg: &tetragon.KprobeFile{Path: "/etc/docker/daemon.json"}}}},
+			Return:       &tetragon.KprobeArgument{Arg: &tetragon.KprobeArgument_IntArg{IntArg: -13}},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if event.Severity != "critical" || event.RiskScore != 98 || !containsString(event.Tags, "diting-enforcement") {
+		t.Fatalf("expected gRPC enforcement event, got severity=%s score=%d tags=%#v", event.Severity, event.RiskScore, event.Tags)
+	}
+}

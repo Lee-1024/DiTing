@@ -469,6 +469,7 @@ func startEnforcementSyncIfEnabled(ctx context.Context, cfg config.Config, host 
 		host.ID,
 		host.Name,
 		policyDir,
+		cfg.Collector.TetragonGRPCAddr,
 	)
 	slog.Info("collector AppArmor enforcement sync starting", "policy_dir", policyDir, "interval_seconds", intervalSeconds)
 	go syncer.Run(ctx, time.Duration(intervalSeconds)*time.Second)
@@ -478,23 +479,28 @@ func startAppArmorAuditCollection(ctx context.Context, mode string, cfg config.C
 	if mode != "collector" || !cfg.Collector.EnforcementEnabled {
 		return
 	}
-	path := strings.TrimSpace(cfg.Collector.AppArmorAuditLogFile)
-	if path == "" {
-		path = "/var/log/audit/audit.log"
+	configured := strings.TrimSpace(cfg.Collector.AppArmorAuditLogFile)
+	if configured == "" {
+		configured = "/var/log/audit/audit.log"
 	}
-	go func() {
-		for {
-			auditCollector := collector.NewAppArmorAuditCollector(path, cfg.Collector.BatchSize, writer)
-			if err := auditCollector.Tail(ctx, time.Second); err != nil {
-				slog.Warn("AppArmor audit collector retrying", "path", path, "error", err)
+	paths := collector.DiscoverAppArmorAuditLogFiles(configured, []string{"/var/log/kern.log", "/var/log/syslog"})
+	slog.Info("AppArmor audit collection starting", "paths", paths)
+	for _, path := range paths {
+		path := path
+		go func() {
+			for {
+				auditCollector := collector.NewAppArmorAuditCollector(path, cfg.Collector.BatchSize, writer)
+				if err := auditCollector.Tail(ctx, time.Second); err != nil {
+					slog.Warn("AppArmor audit collector retrying", "path", path, "error", err)
+				}
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(5 * time.Second):
+				}
 			}
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(5 * time.Second):
-			}
-		}
-	}()
+		}()
+	}
 }
 
 // resolveMigrationDir 解析 resolve Migration Dir 的最终取值。

@@ -31,7 +31,7 @@ type sensitiveFileDefinition struct {
 	UserMatchMode string   `json:"userMatchMode"`
 }
 
-func buildAppArmorDeployment(policies []EnforcementPolicy) (string, map[string]appArmorDeploymentResult) {
+func buildAppArmorDeployment(policies []EnforcementPolicy) (string, string, map[string]appArmorDeploymentResult) {
 	results := make(map[string]appArmorDeploymentResult, len(policies))
 	var protectedPaths []string
 	for _, policy := range policies {
@@ -57,7 +57,7 @@ func buildAppArmorDeployment(policies []EnforcementPolicy) (string, map[string]a
 		results[policy.ID] = appArmorDeploymentResult{Status: "deployed", Message: "AppArmor 策略已加载"}
 	}
 	if len(protectedPaths) == 0 {
-		return "", results
+		return "", "", results
 	}
 	profile, err := GenerateAppArmorSudoProfile(protectedPaths)
 	if err != nil {
@@ -66,9 +66,13 @@ func buildAppArmorDeployment(policies []EnforcementPolicy) (string, map[string]a
 				results[id] = appArmorDeploymentResult{Status: "failed", Message: err.Error()}
 			}
 		}
-		return "", results
+		return "", "", results
 	}
-	return profile, results
+	observerPolicy, err := GenerateTetragonObserverPolicy(protectedPaths)
+	if err != nil {
+		return "", "", results
+	}
+	return profile, observerPolicy, results
 }
 
 type EnforcementSyncer struct {
@@ -79,7 +83,13 @@ type EnforcementSyncer struct {
 	policyDir     string
 	client        *http.Client
 	appArmor      appArmorProfileManager
+	observer      tetragonObserverPolicyManager
 	capabilityErr error
+}
+
+type tetragonObserverPolicyManager interface {
+	Apply(context.Context, string) error
+	Remove(context.Context) error
 }
 
 type appArmorProfileManager interface {
@@ -88,7 +98,7 @@ type appArmorProfileManager interface {
 }
 
 // NewEnforcementSyncer 创建并初始化 New Enforcement Syncer 实例。
-func NewEnforcementSyncer(ingestURL string, token string, hostID string, hostName string, policyDir string) *EnforcementSyncer {
+func NewEnforcementSyncer(ingestURL string, token string, hostID string, hostName string, policyDir string, tetragonGRPCAddr string) *EnforcementSyncer {
 	syncer := &EnforcementSyncer{
 		baseURL:   enforcementBaseURL(ingestURL),
 		token:     strings.TrimSpace(token),
@@ -103,6 +113,12 @@ func NewEnforcementSyncer(ingestURL string, token string, hostID string, hostNam
 		return syncer
 	}
 	syncer.appArmor = manager
+	observer, observerErr := NewTetragonObserverManager(tetragonGRPCAddr)
+	if observerErr != nil {
+		syncer.capabilityErr = observerErr
+		return syncer
+	}
+	syncer.observer = observer
 	return syncer
 }
 
@@ -118,7 +134,7 @@ func (s *EnforcementSyncer) SyncOnce(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	profile, results := buildAppArmorDeployment(policies)
+	profile, observerPolicy, results := buildAppArmorDeployment(policies)
 	var applyErr error
 	if s.appArmor == nil {
 		applyErr = s.capabilityErr
@@ -127,13 +143,23 @@ func (s *EnforcementSyncer) SyncOnce(ctx context.Context) error {
 		}
 	} else if profile == "" {
 		_, applyErr = s.appArmor.Remove(ctx)
+		if applyErr == nil && s.observer != nil {
+			applyErr = s.observer.Remove(ctx)
+		}
 	} else {
 		_, applyErr = s.appArmor.Apply(ctx, profile)
+		if applyErr == nil {
+			if s.observer == nil {
+				applyErr = fmt.Errorf("Tetragon observer manager is unavailable")
+			} else {
+				applyErr = s.observer.Apply(ctx, observerPolicy)
+			}
+		}
 	}
 	if applyErr != nil {
 		for id, result := range results {
 			if result.Status == "deployed" {
-				results[id] = appArmorDeploymentResult{Status: "failed", Message: "AppArmor 策略加载失败: " + applyErr.Error()}
+				results[id] = appArmorDeploymentResult{Status: "failed", Message: "拦截或观测策略加载失败: " + applyErr.Error()}
 			}
 		}
 	}

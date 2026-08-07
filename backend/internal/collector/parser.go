@@ -40,10 +40,12 @@ type processKprobeEvent struct {
 	Parent       processInfo `json:"parent"`
 	Args         []kprobeArg `json:"args"`
 	Data         []kprobeArg `json:"data"`
+	Return       kprobeArg   `json:"return"`
 }
 
 type kprobeArg struct {
 	StringArg string         `json:"string_arg"`
+	IntArg    int32          `json:"int_arg"`
 	PathArg   kprobePathArg  `json:"path_arg"`
 	FileArg   kprobePathArg  `json:"file_arg"`
 	Sockaddr  kprobeSockaddr `json:"sockaddr_arg"`
@@ -216,6 +218,14 @@ func parseProcessKprobe(envelope tetragonEnvelope, data []byte) (audit.Event, er
 	parent := envelope.ProcessKprobe.Parent
 	filePath, fileOperation := kprobeFileContextJSON(envelope.ProcessKprobe)
 	eventType := "process_kprobe"
+	severity := "info"
+	riskScore := uint8(0)
+	tags := append([]string(nil), envelope.ProcessKprobe.Tags...)
+	if envelope.ProcessKprobe.PolicyName == tetragonObserverPolicyName && envelope.ProcessKprobe.Return.IntArg < 0 {
+		severity = "critical"
+		riskScore = 98
+		tags = append(tags, "apparmor", "enforcement", "blocked", "file-access", "diting-enforcement")
+	}
 	if filePath != "" {
 		eventType = "file_access"
 	}
@@ -227,9 +237,9 @@ func parseProcessKprobe(envelope tetragonEnvelope, data []byte) (audit.Event, er
 		IngestTime:        time.Now().UTC(),
 		EventType:         eventType,
 		Action:            envelope.ProcessKprobe.FunctionName,
-		Severity:          "info",
-		RiskScore:         0,
-		Tags:              envelope.ProcessKprobe.Tags,
+		Severity:          severity,
+		RiskScore:         riskScore,
+		Tags:              tags,
 		NodeName:          envelope.NodeName,
 		Namespace:         process.Pod.Namespace,
 		PodName:           process.Pod.Name,

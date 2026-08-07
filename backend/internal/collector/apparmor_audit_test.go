@@ -31,6 +31,24 @@ func TestParseAppArmorDenialCreatesEnforcementEvent(t *testing.T) {
 	}
 }
 
+func TestDiscoverAppArmorAuditLogFilesIncludesExistingFallbacks(t *testing.T) {
+	dir := t.TempDir()
+	configured := filepath.Join(dir, "audit.log")
+	kernLog := filepath.Join(dir, "kern.log")
+	syslog := filepath.Join(dir, "syslog")
+	if err := os.WriteFile(kernLog, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(syslog, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	paths := DiscoverAppArmorAuditLogFiles(configured, []string{kernLog, syslog})
+	if len(paths) != 3 || paths[0] != configured || paths[1] != kernLog || paths[2] != syslog {
+		t.Fatalf("unexpected AppArmor audit log paths: %#v", paths)
+	}
+}
+
 func TestParseAppArmorAuditEventIgnoresOtherProfiles(t *testing.T) {
 	line := `type=AVC msg=audit(1786060201.123:456): apparmor="DENIED" operation="open" profile="snap.foo" name="/tmp/file" pid=321 comm="foo"`
 
