@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { exportAuditEvents, queryAuditEvents, queryAuditOperations } from '../../api/audit';
 import { getRiskDispositions } from '../../api/riskDispositions';
+import { AuditHostSelect, AuditUserSelect } from '../../components/AuditEntitySelect';
 import CommandText from '../../components/CommandText';
 import FilterToolbar from '../../components/FilterToolbar';
 import { InsightHero, LatestPanel, MetricCard } from '../../components/InsightHeader';
@@ -31,6 +32,11 @@ export default function AuditEventsPage() {
   const [pageSize, setPageSize] = useState(10);
   const [form] = Form.useForm();
   const requestSeq = useRef(0);
+  const filterRange = Form.useWatch('timeRange', form) ?? defaultRange;
+  const optionRange = {
+    startTime: filterRange?.[0]?.startOf('day').toISOString(),
+    endTime: filterRange?.[1]?.endOf('day').toISOString(),
+  };
 
   // buildQuery 构建 build Query 所需的数据结构。
   function buildQuery(nextPage = page, nextPageSize = pageSize, formValues = form.getFieldsValue()): AuditEventQuery {
@@ -152,7 +158,7 @@ export default function AuditEventsPage() {
           <Select className="filter-control-compact" allowClear options={severityOptions} />
         </Form.Item>
         <Form.Item name="hostName" label="主机">
-          <Input className="filter-control-compact" placeholder="主机名 / 节点" allowClear />
+          <AuditHostSelect className="filter-control-compact" {...optionRange} />
         </Form.Item>
         <Form.Item name="namespace" label="Namespace">
           <Input className="filter-control-compact" allowClear />
@@ -161,10 +167,10 @@ export default function AuditEventsPage() {
           <Input className="filter-control-compact" allowClear />
         </Form.Item>
         <Form.Item name="loginUsername" label="登录用户">
-          <Input className="filter-control-compact" allowClear />
+          <AuditUserSelect className="filter-control-compact" {...optionRange} />
         </Form.Item>
         <Form.Item name="execUsername" label="执行用户">
-          <Input className="filter-control-compact" allowClear />
+          <AuditUserSelect className="filter-control-compact" {...optionRange} />
         </Form.Item>
         <Form.Item name="keyword" label="关键字">
           <Input className="filter-control-compact" placeholder="命令 / 用户 / 进程" allowClear />

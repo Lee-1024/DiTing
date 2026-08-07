@@ -4,6 +4,7 @@ import dayjs from 'dayjs';
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { queryAuditEvents } from '../../api/audit';
+import { AuditHostSelect } from '../../components/AuditEntitySelect';
 import CommandText from '../../components/CommandText';
 import { InsightHero, LatestPanel, MetricCard } from '../../components/InsightHeader';
 import SeverityTag from '../../components/SeverityTag';
@@ -24,6 +25,11 @@ export default function CollectorDebugPage() {
   const [total, setTotal] = useState(0);
   const [form] = Form.useForm();
   const requestSeq = useRef(0);
+  const filterRange = Form.useWatch('timeRange', form) ?? defaultRange;
+  const optionRange = {
+    startTime: filterRange?.[0]?.toISOString(),
+    endTime: filterRange?.[1]?.toISOString(),
+  };
 
   // buildQuery 构建 build Query 所需的数据结构。
   function buildQuery(values = form.getFieldsValue()): AuditEventQuery {
@@ -133,7 +139,7 @@ export default function CollectorDebugPage() {
               <Select allowClear options={eventTypeOptions} />
             </Form.Item>
             <Form.Item name="hostName" label="主机">
-              <Input allowClear placeholder="主机名 / Host ID" />
+              <AuditHostSelect {...optionRange} />
             </Form.Item>
             <Form.Item name="keyword" label="关键字">
               <Input allowClear placeholder="命令 / 文件 / IP" />

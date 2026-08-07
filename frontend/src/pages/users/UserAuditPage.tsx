@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { exportAuditEvents, queryAuditEvents } from '../../api/audit';
 import { getUserAudits } from '../../api/stats';
+import { AuditHostSelect, AuditUserSelect } from '../../components/AuditEntitySelect';
 import CommandText from '../../components/CommandText';
 import FilterToolbar from '../../components/FilterToolbar';
 import { InsightHero, InvestigationBrief, LatestPanel, MetricCard } from '../../components/InsightHeader';
@@ -46,6 +47,11 @@ export default function UserAuditPage() {
   const [detailTotal, setDetailTotal] = useState(0);
   const [tablePageSize, setTablePageSize] = useState(10);
   const [form] = Form.useForm();
+  const filterRange = Form.useWatch('timeRange', form) ?? defaultRange;
+  const optionRange = {
+    startTime: filterRange?.[0]?.startOf('day').toISOString(),
+    endTime: filterRange?.[1]?.endOf('day').toISOString(),
+  };
 
   // buildQuery 构建 build Query 所需的数据结构。
   function buildQuery(): UserAuditQuery {
@@ -238,10 +244,10 @@ export default function UserAuditPage() {
           <DatePicker.RangePicker />
         </Form.Item>
         <Form.Item name="keyword" label="用户">
-          <Input className="filter-control-compact" placeholder="root / ubuntu" allowClear />
+          <AuditUserSelect className="filter-control-compact" {...optionRange} />
         </Form.Item>
         <Form.Item name="hostName" label="主机">
-          <Input className="filter-control-compact" placeholder="主机名 / Host ID" allowClear />
+          <AuditHostSelect className="filter-control-compact" {...optionRange} />
         </Form.Item>
       </FilterToolbar>
       <Card className="data-card">
@@ -345,12 +351,11 @@ export default function UserAuditPage() {
             />
             <Typography.Title level={5}>命令明细</Typography.Title>
             <Space wrap>
-              <Input
-                allowClear
-                placeholder="主机名 / Host ID"
+              <AuditHostSelect
+                {...optionRange}
                 style={{ width: 180 }}
                 value={detailFilters.hostName}
-                onChange={(event) => setDetailFilters((current) => ({ ...current, hostName: event.target.value }))}
+                onChange={(value) => setDetailFilters((current) => ({ ...current, hostName: value }))}
               />
               <Input
                 allowClear

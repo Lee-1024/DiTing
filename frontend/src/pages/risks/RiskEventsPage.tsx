@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { exportAuditEvents, queryAuditEvents } from '../../api/audit';
 import { analyzeRiskEvent, getRiskAnalyses } from '../../api/riskAnalyses';
 import { getRiskDispositions, listRiskDispositions, updateRiskDisposition } from '../../api/riskDispositions';
+import { AuditHostSelect, AuditUserSelect } from '../../components/AuditEntitySelect';
 import CommandText from '../../components/CommandText';
 import FilterToolbar from '../../components/FilterToolbar';
 import { InsightHero, LatestPanel, MetricCard } from '../../components/InsightHeader';
@@ -46,6 +47,11 @@ export default function RiskEventsPage() {
   const [dispositionForm] = Form.useForm();
   const [batchDispositionForm] = Form.useForm();
   const requestSeq = useRef(0);
+  const filterRange = Form.useWatch('timeRange', form) ?? defaultRange;
+  const optionRange = {
+    startTime: filterRange?.[0]?.startOf('day').toISOString(),
+    endTime: filterRange?.[1]?.endOf('day').toISOString(),
+  };
 
   // buildQuery 构建 build Query 所需的数据结构。
   function buildQuery(nextPage = page, nextPageSize = pageSize, formValues = form.getFieldsValue()): AuditEventQuery {
@@ -394,10 +400,10 @@ export default function RiskEventsPage() {
           />
         </Form.Item>
         <Form.Item name="username" label="用户">
-          <Input className="filter-control-compact" placeholder="root / ubuntu" allowClear />
+          <AuditUserSelect className="filter-control-compact" {...optionRange} />
         </Form.Item>
         <Form.Item name="hostName" label="主机">
-          <Input className="filter-control-compact" placeholder="主机名 / 节点 / Host ID" allowClear />
+          <AuditHostSelect className="filter-control-compact" {...optionRange} />
         </Form.Item>
         <Form.Item name="dispositionStatus" label="处置状态">
           <Select

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { exportAuditEvents, queryAuditEvents } from '../../api/audit';
 import { exportCommandStats, getCommandStats } from '../../api/stats';
+import { AuditHostSelect, AuditUserSelect } from '../../components/AuditEntitySelect';
 import CommandText from '../../components/CommandText';
 import FilterToolbar from '../../components/FilterToolbar';
 import { InsightHero, InvestigationBrief, LatestPanel, MetricCard } from '../../components/InsightHeader';
@@ -35,6 +36,11 @@ export default function CommandStatsPage() {
   const [detailTotal, setDetailTotal] = useState(0);
   const [tablePageSize, setTablePageSize] = useState(10);
   const [form] = Form.useForm();
+  const filterRange = Form.useWatch('timeRange', form) ?? defaultRange;
+  const optionRange = {
+    startTime: filterRange?.[0]?.startOf('day').toISOString(),
+    endTime: filterRange?.[1]?.endOf('day').toISOString(),
+  };
 
   // buildQuery 构建 build Query 所需的数据结构。
   function buildQuery(): CommandStatsQuery {
@@ -222,10 +228,10 @@ export default function CommandStatsPage() {
           <Input className="filter-control-compact" placeholder="whoami / docker" allowClear />
         </Form.Item>
         <Form.Item name="username" label="用户">
-          <Input className="filter-control-compact" placeholder="root / ubuntu" allowClear />
+          <AuditUserSelect className="filter-control-compact" {...optionRange} />
         </Form.Item>
         <Form.Item name="hostName" label="主机">
-          <Input className="filter-control-compact" placeholder="主机名 / Host ID" allowClear />
+          <AuditHostSelect className="filter-control-compact" {...optionRange} />
         </Form.Item>
       </FilterToolbar>
       <Card className="data-card">

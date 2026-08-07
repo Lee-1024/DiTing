@@ -5,6 +5,8 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { exportAuditEvents, queryAuditEvents } from '../../api/audit';
 import { exportHostAudits, getHostAudits, getHostBehavior, getHostUsers } from '../../api/stats';
+import { AuditHostSelect } from '../../components/AuditEntitySelect';
+import { buildUserOptions } from '../../components/auditEntityOptions';
 import CommandText from '../../components/CommandText';
 import FilterToolbar from '../../components/FilterToolbar';
 import { InsightHero, InvestigationBrief, LatestPanel, MetricCard } from '../../components/InsightHeader';
@@ -56,6 +58,11 @@ export default function HostAuditPage() {
   const [timelineLoaded, setTimelineLoaded] = useState(false);
   const [tablePageSize, setTablePageSize] = useState(10);
   const [form] = Form.useForm();
+  const filterRange = Form.useWatch('timeRange', form) ?? defaultRange;
+  const optionRange = {
+    startTime: filterRange?.[0]?.startOf('day').toISOString(),
+    endTime: filterRange?.[1]?.endOf('day').toISOString(),
+  };
 
   // buildQuery 构建 build Query 所需的数据结构。
   function buildQuery(): HostAuditQuery {
@@ -326,7 +333,7 @@ export default function HostAuditPage() {
           <DatePicker.RangePicker />
         </Form.Item>
         <Form.Item name="keyword" label="主机">
-          <Input className="filter-control-compact" placeholder="节点 / 主机名" allowClear />
+          <AuditHostSelect className="filter-control-compact" {...optionRange} />
         </Form.Item>
       </FilterToolbar>
       <Card className="data-card">
@@ -551,11 +558,14 @@ export default function HostAuditPage() {
             <Space wrap>
               <Select
                 allowClear
+                showSearch
+                optionFilterProp="label"
                 placeholder="用户"
                 style={{ width: 180 }}
                 value={detailFilters.username}
                 onChange={(value) => setDetailFilters((current) => ({ ...current, username: value }))}
-                options={hostUsers.map((item) => ({ value: item.username, label: item.username }))}
+                options={buildUserOptions(hostUsers)}
+                notFoundContent="暂无审计用户"
               />
               <Input
                 allowClear
