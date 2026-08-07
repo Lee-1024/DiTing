@@ -7,42 +7,103 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"strings"
 	"time"
 )
 
 type EnforcementPolicy struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-	YAML string `json:"yaml"`
+	ID         string          `json:"id"`
+	Name       string          `json:"name"`
+	Template   string          `json:"template"`
+	Mode       string          `json:"mode"`
+	Enabled    bool            `json:"enabled"`
+	Definition json.RawMessage `json:"definition"`
+	YAML       string          `json:"yaml"`
+}
+
+type appArmorDeploymentResult struct {
+	Status  string
+	Message string
+}
+
+type sensitiveFileDefinition struct {
+	FilePaths     []string `json:"filePaths"`
+	UserMatchMode string   `json:"userMatchMode"`
+}
+
+func buildAppArmorDeployment(policies []EnforcementPolicy) (string, map[string]appArmorDeploymentResult) {
+	results := make(map[string]appArmorDeploymentResult, len(policies))
+	var protectedPaths []string
+	for _, policy := range policies {
+		if !policy.Enabled || policy.Mode == "disabled" {
+			results[policy.ID] = appArmorDeploymentResult{Status: "disabled", Message: "策略已停用"}
+			continue
+		}
+		if policy.Template != "sensitive_file" || policy.Mode != "enforce" {
+			results[policy.ID] = appArmorDeploymentResult{Status: "failed", Message: "当前 AppArmor 首版不支持该拦截模板"}
+			continue
+		}
+		var definition sensitiveFileDefinition
+		if err := json.Unmarshal(policy.Definition, &definition); err != nil {
+			results[policy.ID] = appArmorDeploymentResult{Status: "failed", Message: "策略 definition 无效: " + err.Error()}
+			continue
+		}
+		paths, err := normalizeAppArmorPaths(definition.FilePaths)
+		if err != nil {
+			results[policy.ID] = appArmorDeploymentResult{Status: "failed", Message: err.Error()}
+			continue
+		}
+		protectedPaths = append(protectedPaths, paths...)
+		results[policy.ID] = appArmorDeploymentResult{Status: "deployed", Message: "AppArmor 策略已加载"}
+	}
+	if len(protectedPaths) == 0 {
+		return "", results
+	}
+	profile, err := GenerateAppArmorSudoProfile(protectedPaths)
+	if err != nil {
+		for id, result := range results {
+			if result.Status == "deployed" {
+				results[id] = appArmorDeploymentResult{Status: "failed", Message: err.Error()}
+			}
+		}
+		return "", results
+	}
+	return profile, results
 }
 
 type EnforcementSyncer struct {
-	baseURL        string
-	token          string
-	hostID         string
-	hostName       string
-	policyDir      string
-	restartCommand string
-	client         *http.Client
-	runCommand     func(context.Context, string) error
+	baseURL       string
+	token         string
+	hostID        string
+	hostName      string
+	policyDir     string
+	client        *http.Client
+	appArmor      appArmorProfileManager
+	capabilityErr error
+}
+
+type appArmorProfileManager interface {
+	Apply(context.Context, string) (bool, error)
+	Remove(context.Context) (bool, error)
 }
 
 // NewEnforcementSyncer 创建并初始化 New Enforcement Syncer 实例。
-func NewEnforcementSyncer(ingestURL string, token string, hostID string, hostName string, policyDir string, restartCommand string) *EnforcementSyncer {
-	return &EnforcementSyncer{
-		baseURL:        enforcementBaseURL(ingestURL),
-		token:          strings.TrimSpace(token),
-		hostID:         strings.TrimSpace(hostID),
-		hostName:       strings.TrimSpace(hostName),
-		policyDir:      strings.TrimSpace(policyDir),
-		restartCommand: strings.TrimSpace(restartCommand),
-		client:         &http.Client{Timeout: 30 * time.Second},
-		runCommand:     runShellCommand,
+func NewEnforcementSyncer(ingestURL string, token string, hostID string, hostName string, policyDir string) *EnforcementSyncer {
+	syncer := &EnforcementSyncer{
+		baseURL:   enforcementBaseURL(ingestURL),
+		token:     strings.TrimSpace(token),
+		hostID:    strings.TrimSpace(hostID),
+		hostName:  strings.TrimSpace(hostName),
+		policyDir: strings.TrimSpace(policyDir),
+		client:    &http.Client{Timeout: 30 * time.Second},
 	}
+	manager, err := discoverAppArmorManager(syncer.policyDir)
+	if err != nil {
+		syncer.capabilityErr = err
+		return syncer
+	}
+	syncer.appArmor = manager
+	return syncer
 }
 
 // SyncOnce 处理 Sync Once 相关逻辑。
@@ -57,24 +118,30 @@ func (s *EnforcementSyncer) SyncOnce(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	changed, err := s.applyPolicies(policies)
-	if err != nil {
-		return err
+	profile, results := buildAppArmorDeployment(policies)
+	var applyErr error
+	if s.appArmor == nil {
+		applyErr = s.capabilityErr
+		if applyErr == nil {
+			applyErr = fmt.Errorf("AppArmor manager is unavailable")
+		}
+	} else if profile == "" {
+		_, applyErr = s.appArmor.Remove(ctx)
+	} else {
+		_, applyErr = s.appArmor.Apply(ctx, profile)
 	}
-	status := "deployed"
-	message := "策略已同步"
-	if changed && s.restartCommand != "" {
-		if err := s.runCommand(ctx, s.restartCommand); err != nil {
-			status = "failed"
-			message = "策略已写入但重启 Tetragon 失败: " + err.Error()
-		} else {
-			message = "策略已同步并重启 Tetragon"
+	if applyErr != nil {
+		for id, result := range results {
+			if result.Status == "deployed" {
+				results[id] = appArmorDeploymentResult{Status: "failed", Message: "AppArmor 策略加载失败: " + applyErr.Error()}
+			}
 		}
 	}
 	for _, policy := range policies {
-		_ = s.reportDeployment(ctx, policy.ID, status, message)
+		result := results[policy.ID]
+		_ = s.reportDeployment(ctx, policy.ID, result.Status, result.Message)
 	}
-	return nil
+	return applyErr
 }
 
 // Run 运行 Run 的主流程。
@@ -117,43 +184,6 @@ func (s *EnforcementSyncer) fetchPolicies(ctx context.Context) ([]EnforcementPol
 		return nil, err
 	}
 	return policies, nil
-}
-
-// applyPolicies 处理 apply Policies 相关逻辑。
-func (s *EnforcementSyncer) applyPolicies(policies []EnforcementPolicy) (bool, error) {
-	if err := os.MkdirAll(s.policyDir, 0o755); err != nil {
-		return false, err
-	}
-	desired := map[string]string{}
-	for _, policy := range policies {
-		desired[policyFileName(policy)] = policy.YAML
-	}
-	changed := false
-	for fileName, content := range desired {
-		path := filepath.Join(s.policyDir, fileName)
-		current, err := os.ReadFile(path)
-		if err == nil && string(current) == content {
-			continue
-		}
-		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-			return changed, err
-		}
-		changed = true
-	}
-	files, err := filepath.Glob(filepath.Join(s.policyDir, "diting-*.yaml"))
-	if err != nil {
-		return changed, err
-	}
-	for _, path := range files {
-		if _, ok := desired[filepath.Base(path)]; ok {
-			continue
-		}
-		if err := os.Remove(path); err != nil {
-			return changed, err
-		}
-		changed = true
-	}
-	return changed, nil
 }
 
 // reportDeployment 处理 report Deployment 相关逻辑。
@@ -199,50 +229,4 @@ func enforcementBaseURL(ingestURL string) string {
 		return strings.TrimSuffix(trimmed, "/events")
 	}
 	return trimmed
-}
-
-// sanitizePolicyFileName 处理 sanitize Policy File Name 相关逻辑。
-func sanitizePolicyFileName(value string) string {
-	name := strings.ToLower(value)
-	var builder strings.Builder
-	lastDash := false
-	for _, r := range name {
-		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
-			builder.WriteRune(r)
-			lastDash = false
-			continue
-		}
-		if !lastDash {
-			builder.WriteRune('-')
-			lastDash = true
-		}
-	}
-	result := strings.Trim(builder.String(), "-")
-	if result == "" {
-		return "diting-policy"
-	}
-	if !strings.HasPrefix(result, "diting-") {
-		return "diting-" + result
-	}
-	return result
-}
-
-// policyFileName 处理 policy File Name 相关逻辑。
-func policyFileName(policy EnforcementPolicy) string {
-	name := sanitizePolicyFileName(policy.Name)
-	id := sanitizePolicyFileName(policy.ID)
-	if id == "diting-policy" {
-		return name + ".yaml"
-	}
-	return name + "-" + strings.TrimPrefix(id, "diting-") + ".yaml"
-}
-
-// runShellCommand 运行 run Shell Command 的主流程。
-func runShellCommand(ctx context.Context, command string) error {
-	cmd := exec.CommandContext(ctx, "sh", "-c", command)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("%w: %s", err, strings.TrimSpace(string(output)))
-	}
-	return nil
 }

@@ -70,6 +70,7 @@ func main() {
 				eventWriter = collector.NewIdentityWriter(resolver, eventWriter)
 			}
 			eventWriter = collector.NewHostMetadataWriter(hostMetadata, eventWriter)
+			startAppArmorAuditCollection(context.Background(), mode, cfg, eventWriter)
 			go collectorAPIHeartbeatLoop(context.Background(), apiWriter, hostMetadata, inputMode, 30*time.Second)
 			slog.Info("collector starting", "mode", mode, "input_mode", inputMode, "output_mode", outputMode, "ingest_url", cfg.Collector.IngestURL, "tetragon_log_file", cfg.Collector.TetragonLogFile, "tetragon_grpc_addr", cfg.Collector.TetragonGRPCAddr, "passwd_file", cfg.Collector.PasswdFile, "batch_size", cfg.Collector.BatchSize, "flush_interval_seconds", cfg.Collector.FlushIntervalSeconds)
 			if err := runCollectorInput(context.Background(), mode, inputMode, cfg, eventWriter, func() {
@@ -139,6 +140,7 @@ func main() {
 		writer.SetHeartbeatRecorder(collectorHealthRepository, inputMode)
 		go collectorHeartbeatLoop(context.Background(), collectorHealthRepository, hostMetadata, inputMode, 30*time.Second)
 		eventWriter = collector.NewHostMetadataWriter(hostMetadata, eventWriter)
+		startAppArmorAuditCollection(context.Background(), mode, cfg, eventWriter)
 
 		slog.Info("collector starting", "mode", mode, "input_mode", inputMode, "output_mode", outputMode, "tetragon_log_file", cfg.Collector.TetragonLogFile, "tetragon_grpc_addr", cfg.Collector.TetragonGRPCAddr, "passwd_file", cfg.Collector.PasswdFile, "batch_size", cfg.Collector.BatchSize, "flush_interval_seconds", cfg.Collector.FlushIntervalSeconds)
 		if err := runCollectorInput(context.Background(), mode, inputMode, cfg, eventWriter, func() {
@@ -455,7 +457,7 @@ func startEnforcementSyncIfEnabled(ctx context.Context, cfg config.Config, host 
 	}
 	policyDir := cfg.Collector.EnforcementPolicyDir
 	if strings.TrimSpace(policyDir) == "" {
-		policyDir = "/data/tetragon/policies"
+		policyDir = "/data/diting/apparmor"
 	}
 	intervalSeconds := cfg.Collector.EnforcementSyncIntervalSeconds
 	if intervalSeconds <= 0 {
@@ -467,10 +469,32 @@ func startEnforcementSyncIfEnabled(ctx context.Context, cfg config.Config, host 
 		host.ID,
 		host.Name,
 		policyDir,
-		cfg.Collector.TetragonRestartCommand,
 	)
-	slog.Info("collector enforcement sync starting", "policy_dir", policyDir, "interval_seconds", intervalSeconds)
+	slog.Info("collector AppArmor enforcement sync starting", "policy_dir", policyDir, "interval_seconds", intervalSeconds)
 	go syncer.Run(ctx, time.Duration(intervalSeconds)*time.Second)
+}
+
+func startAppArmorAuditCollection(ctx context.Context, mode string, cfg config.Config, writer collector.EventWriter) {
+	if mode != "collector" || !cfg.Collector.EnforcementEnabled {
+		return
+	}
+	path := strings.TrimSpace(cfg.Collector.AppArmorAuditLogFile)
+	if path == "" {
+		path = "/var/log/audit/audit.log"
+	}
+	go func() {
+		for {
+			auditCollector := collector.NewAppArmorAuditCollector(path, cfg.Collector.BatchSize, writer)
+			if err := auditCollector.Tail(ctx, time.Second); err != nil {
+				slog.Warn("AppArmor audit collector retrying", "path", path, "error", err)
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(5 * time.Second):
+			}
+		}
+	}()
 }
 
 // resolveMigrationDir 解析 resolve Migration Dir 的最终取值。

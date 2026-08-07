@@ -1,56 +1,93 @@
 package collector
 
 import (
-	"os"
-	"path/filepath"
+	"encoding/json"
+	"strings"
 	"testing"
 )
 
-func TestEnforcementSyncerApplyPoliciesWritesAndPrunesManagedFiles(t *testing.T) {
-	dir := t.TempDir()
-	stale := filepath.Join(dir, "diting-old.yaml")
-	if err := os.WriteFile(stale, []byte("old"), 0o644); err != nil {
-		t.Fatalf("write stale policy: %v", err)
+func TestBuildAppArmorDeploymentUsesSensitiveFileDefinitions(t *testing.T) {
+	policies := []EnforcementPolicy{
+		{
+			ID:         "policy-1",
+			Name:       "docker config",
+			Template:   "sensitive_file",
+			Mode:       "enforce",
+			Enabled:    true,
+			Definition: json.RawMessage("{\"filePaths\":[\"/etc/docker/daemon.json\"],\"userMatchMode\":\"exclude_root\"}"),
+		},
+		{
+			ID:         "policy-2",
+			Name:       "diting data",
+			Template:   "sensitive_file",
+			Mode:       "enforce",
+			Enabled:    true,
+			Definition: json.RawMessage("{\"filePaths\":[\"/var/lib/diting\"],\"userMatchMode\":\"exclude_root\"}"),
+		},
 	}
-	other := filepath.Join(dir, "custom-policy.yaml")
-	if err := os.WriteFile(other, []byte("keep"), 0o644); err != nil {
-		t.Fatalf("write custom policy: %v", err)
-	}
-	syncer := NewEnforcementSyncer("http://api/api/v1/ingest/events", "", "host-1", "host", dir, "")
 
-	changed, err := syncer.applyPolicies([]EnforcementPolicy{{ID: "p1", Name: "敏感文件", YAML: "kind: TracingPolicy"}})
+	profile, results := buildAppArmorDeployment(policies)
 
-	if err != nil {
-		t.Fatalf("apply policies: %v", err)
+	if !strings.Contains(profile, "audit deny \"/etc/docker/daemon.json\" wkl,") {
+		t.Fatalf("expected docker path in profile:\n%s", profile)
 	}
-	if !changed {
-		t.Fatalf("expected changed")
+	if !strings.Contains(profile, "audit deny \"/var/lib/diting\" wkl,") {
+		t.Fatalf("expected diting path in profile:\n%s", profile)
 	}
-	if _, err := os.Stat(filepath.Join(dir, "diting-policy-p1.yaml")); err != nil {
-		t.Fatalf("expected new policy file: %v", err)
-	}
-	if _, err := os.Stat(stale); !os.IsNotExist(err) {
-		t.Fatalf("expected stale managed file removed, got %v", err)
-	}
-	if _, err := os.Stat(other); err != nil {
-		t.Fatalf("expected custom policy kept: %v", err)
+	for _, id := range []string{"policy-1", "policy-2"} {
+		if results[id].Status != "deployed" {
+			t.Fatalf("expected %s deployable, got %#v", id, results[id])
+		}
 	}
 }
 
-func TestEnforcementSyncerApplyPoliciesDoesNotChangeSameContent(t *testing.T) {
-	dir := t.TempDir()
-	syncer := NewEnforcementSyncer("http://api/api/v1/ingest/events", "", "host-1", "host", dir, "")
-	policies := []EnforcementPolicy{{ID: "p1", Name: "diting-sensitive", YAML: "kind: TracingPolicy"}}
-	if _, err := syncer.applyPolicies(policies); err != nil {
-		t.Fatalf("first apply policies: %v", err)
+func TestBuildAppArmorDeploymentRejectsUnsupportedTemplates(t *testing.T) {
+	policies := []EnforcementPolicy{{
+		ID:         "policy-1",
+		Name:       "legacy command",
+		Template:   "dangerous_command",
+		Mode:       "enforce",
+		Enabled:    true,
+		Definition: json.RawMessage("{\"commands\":[\"reboot\"]}"),
+	}}
+
+	profile, results := buildAppArmorDeployment(policies)
+
+	if profile != "" {
+		t.Fatalf("expected no profile for unsupported policy, got %q", profile)
+	}
+	if results["policy-1"].Status != "failed" || !strings.Contains(results["policy-1"].Message, "不支持") {
+		t.Fatalf("expected explicit unsupported result, got %#v", results["policy-1"])
+	}
+}
+
+func TestBuildAppArmorDeploymentRejectsUnsafePolicyWithoutDroppingValidPolicy(t *testing.T) {
+	policies := []EnforcementPolicy{
+		{
+			ID:         "valid",
+			Template:   "sensitive_file",
+			Mode:       "enforce",
+			Enabled:    true,
+			Definition: json.RawMessage("{\"filePaths\":[\"/etc/docker/daemon.json\"]}"),
+		},
+		{
+			ID:         "invalid",
+			Template:   "sensitive_file",
+			Mode:       "enforce",
+			Enabled:    true,
+			Definition: json.RawMessage("{\"filePaths\":[\"/etc/*\"]}"),
+		},
 	}
 
-	changed, err := syncer.applyPolicies(policies)
+	profile, results := buildAppArmorDeployment(policies)
 
-	if err != nil {
-		t.Fatalf("second apply policies: %v", err)
+	if !strings.Contains(profile, "/etc/docker/daemon.json") {
+		t.Fatalf("expected valid policy to remain deployable:\n%s", profile)
 	}
-	if changed {
-		t.Fatalf("expected unchanged policies")
+	if results["valid"].Status != "deployed" {
+		t.Fatalf("expected valid result, got %#v", results["valid"])
+	}
+	if results["invalid"].Status != "failed" {
+		t.Fatalf("expected invalid result, got %#v", results["invalid"])
 	}
 }

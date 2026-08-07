@@ -20,6 +20,7 @@ type FileCollector struct {
 	path      string
 	batchSize int
 	writer    EventWriter
+	parse     func([]byte) (audit.Event, error)
 }
 
 // NewFileCollector 创建并初始化 New File Collector 实例。
@@ -27,7 +28,15 @@ func NewFileCollector(path string, batchSize int, writer EventWriter) *FileColle
 	if batchSize <= 0 {
 		batchSize = 1000
 	}
-	return &FileCollector{path: path, batchSize: batchSize, writer: writer}
+	return &FileCollector{path: path, batchSize: batchSize, writer: writer, parse: ParseTetragonEvent}
+}
+
+func NewAppArmorAuditCollector(path string, batchSize int, writer EventWriter) *FileCollector {
+	collector := NewFileCollector(path, batchSize, writer)
+	collector.parse = func(data []byte) (audit.Event, error) {
+		return ParseAppArmorAuditEvent(string(data))
+	}
+	return collector
 }
 
 // RunOnce 运行 Run Once 的主流程。
@@ -44,7 +53,7 @@ func (c *FileCollector) RunOnce(ctx context.Context) error {
 	var total int
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
-		event, err := ParseTetragonEvent(scanner.Bytes())
+		event, err := c.parse(scanner.Bytes())
 		if err != nil {
 			if errors.Is(err, ErrUnsupportedEvent) {
 				continue
@@ -199,7 +208,7 @@ func (c *FileCollector) readAvailable(ctx context.Context, file *os.File, partia
 		if len(line) == 0 {
 			continue
 		}
-		event, err := ParseTetragonEvent(line)
+		event, err := c.parse(line)
 		if err != nil {
 			if errors.Is(err, ErrUnsupportedEvent) {
 				continue

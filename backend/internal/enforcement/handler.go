@@ -33,7 +33,7 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !validPolicy(request) {
-		http.Error(w, "name, template and yaml are required", http.StatusBadRequest)
+		http.Error(w, "name, template and valid definition are required", http.StatusBadRequest)
 		return
 	}
 	created, err := h.repository.Create(r.Context(), request)
@@ -87,7 +87,7 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !validPolicy(request) {
-		http.Error(w, "name, template and yaml are required", http.StatusBadRequest)
+		http.Error(w, "name, template and valid definition are required", http.StatusBadRequest)
 		return
 	}
 	updated, err := h.repository.Update(r.Context(), r.PathValue("id"), request)
@@ -169,7 +169,7 @@ func (h *Handler) ListDeployments(w http.ResponseWriter, r *http.Request) {
 
 // validPolicy 校验 valid Policy 是否满足要求。
 func validPolicy(policy Policy) bool {
-	return policy.Name != "" && policy.Template != "" && policy.YAML != ""
+	return policy.Name != "" && policy.Template != "" && len(policy.Definition) > 0 && json.Valid(policy.Definition)
 }
 
 // validDeploymentStatus 校验 valid Deployment Status 是否满足要求。

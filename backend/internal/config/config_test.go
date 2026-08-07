@@ -38,6 +38,12 @@ func TestLoadReadsServerAndDatabaseConfig(t *testing.T) {
 	if cfg.Collector.IngestURL != "http://127.0.0.1:8080/api/v1/ingest/events" {
 		t.Fatalf("expected ingest url from config, got %q", cfg.Collector.IngestURL)
 	}
+	if cfg.Collector.EnforcementPolicyDir != "/data/diting/apparmor" {
+		t.Fatalf("expected AppArmor policy directory, got %q", cfg.Collector.EnforcementPolicyDir)
+	}
+	if cfg.Collector.AppArmorAuditLogFile != "/var/log/audit/audit.log" {
+		t.Fatalf("expected AppArmor audit log path, got %q", cfg.Collector.AppArmorAuditLogFile)
+	}
 	if !cfg.Redis.Enabled {
 		t.Fatal("expected redis to be enabled in example config")
 	}

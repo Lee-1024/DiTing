@@ -1,4 +1,4 @@
-import { CopyOutlined, DownloadOutlined } from '@ant-design/icons';
+import { CopyOutlined } from '@ant-design/icons';
 import { Alert, Button, Card, Form, Input, Modal, Popconfirm, Select, Space, Switch, Table, Tag, Typography, message } from 'antd';
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -19,14 +19,14 @@ import { copyText } from '../../utils/clipboard';
 import { generatePolicy, isUserId, type PolicyFormValues, type PolicyTemplate } from './tetragonPolicy';
 
 const defaultValues: PolicyFormValues = {
-  template: 'dangerous_command',
-  mode: 'audit',
-  name: 'diting-dangerous-command',
+  template: 'sensitive_file',
+  mode: 'enforce',
+  name: 'diting-sensitive-file',
   description: '',
   enabled: true,
   commands: ['reboot', 'shutdown', 'poweroff', 'halt'],
   commandRuleText: 'systemctl restart|stop docker|docker.service',
-  filePaths: ['/etc/passwd', '/etc/shadow', '/etc/sudoers', '/root/.ssh'],
+  filePaths: ['/etc/docker/daemon.json'],
   processNames: [],
   userMatchMode: 'exclude_root',
   userIds: [],
@@ -98,26 +98,10 @@ export default function TetragonPolicyPage() {
     setDeployments(Object.fromEntries(entries));
   }
 
-  // copyYaml 复制 copy Yaml 到剪贴板。
+  // copyYaml copies the non-executable deployment preview.
   async function copyYaml() {
     await copyText(yaml);
-    message.success('策略 YAML 已复制');
-  }
-
-  // downloadYaml 导出或下载 download Yaml 数据。
-  function downloadYaml() {
-    downloadContent(name || 'diting-tetragon-policy', yaml);
-  }
-
-  // downloadContent 导出或下载 download Content 数据。
-  function downloadContent(fileName: string, content: string) {
-    const blob = new Blob([content], { type: 'text/yaml;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${fileName || 'diting-tetragon-policy'}.yaml`;
-    link.click();
-    URL.revokeObjectURL(url);
+    message.success('部署预览已复制');
   }
 
   // savePolicy 保存或更新 save Policy。
@@ -131,7 +115,7 @@ export default function TetragonPolicyPage() {
       enabled: values.enabled ?? true,
       targetHosts: values.targetHosts ?? [],
       definition: values as unknown as Record<string, unknown>,
-      yaml: generatePolicy(values),
+      yaml: '',
       deploymentStatus: editing?.deploymentStatus ?? 'draft',
       deploymentMessage: editing?.deploymentMessage ?? '',
     };
@@ -225,8 +209,7 @@ export default function TetragonPolicyPage() {
             actions={[
               { key: 'save', label: editing ? '保存修改' : '保存策略', type: 'primary', loading: saving, onClick: () => void savePolicy() },
               ...(editing ? [{ key: 'cancel', label: '取消编辑', onClick: () => { setEditing(null); form.setFieldsValue(defaultValues); } }] : []),
-              { key: 'copy', label: '复制 YAML', icon: <CopyOutlined />, onClick: () => void copyYaml() },
-              { key: 'download', label: '下载 YAML', icon: <DownloadOutlined />, onClick: downloadYaml },
+              { key: 'copy', label: '复制预览', icon: <CopyOutlined />, onClick: () => void copyYaml() },
             ]}
           />
         </div>
@@ -234,13 +217,13 @@ export default function TetragonPolicyPage() {
       <section className="system-hero">
         <InsightHero
           className="policy-summary"
-          kicker="TETRAGON ENFORCEMENT"
-          title="运行时拦截策略控制"
-          description="将危险命令、敏感路径、权限变更和可疑进程链路沉淀为可审计、可同步、可紧急停用的 Tetragon 策略。"
+          kicker="APPARMOR ENFORCEMENT"
+          title="敏感文件拦截"
+          description="Collector 将结构化敏感路径规则加载为 AppArmor sudo profile；原生 root 保持放行，sudo 及其子进程受到限制。"
           actions={(
             <>
             <Link to="/settings/collectors"><Button ghost>检查同步状态</Button></Link>
-            <Button ghost icon={<CopyOutlined />} onClick={() => void copyYaml()}>复制当前 YAML</Button>
+            <Button ghost icon={<CopyOutlined />} onClick={() => void copyYaml()}>复制部署预览</Button>
             </>
           )}
         />
@@ -263,17 +246,12 @@ export default function TetragonPolicyPage() {
               <Select
                 onChange={(nextTemplate: PolicyTemplate) => form.setFieldsValue({ name: defaultPolicyName(nextTemplate) })}
                 options={[
-                  { value: 'dangerous_command', label: '危险命令' },
-                  { value: 'sensitive_file', label: '敏感文件读写' },
-                  { value: 'permission_change', label: '权限变更' },
-                  { value: 'delete_behavior', label: '删除行为' },
-                  { value: 'suspicious_process', label: '可疑进程链路' },
+                  { value: 'sensitive_file', label: '敏感文件保护（AppArmor）' },
                 ]}
               />
             </Form.Item>
             <Form.Item name="mode" label="策略模式" rules={[{ required: true }]}>
               <Select options={[
-                { value: 'audit', label: '仅审计' },
                 { value: 'enforce', label: '拦截' },
                 { value: 'disabled', label: '禁用' },
               ]} />
@@ -287,7 +265,7 @@ export default function TetragonPolicyPage() {
             <Form.Item name="enabled" label="启用策略" valuePropName="checked">
               <Switch checkedChildren="启用" unCheckedChildren="停用" />
             </Form.Item>
-            <Form.Item name="targetHosts" label="适用主机（可选）" tooltip="用于记录这份 YAML 计划部署到哪些主机；当前版本仍需手动放到对应 Tetragon 策略目录。">
+            <Form.Item name="targetHosts" label="适用主机（可选）" tooltip="留空表示所有启用AppArmor同步的Collector节点。">
               <Select mode="tags" tokenSeparators={[',']} placeholder="例如 server-001 / 10.40.0.184，留空表示通用策略" />
             </Form.Item>
             {mode === 'enforce' && (
@@ -295,8 +273,8 @@ export default function TetragonPolicyPage() {
                 type="warning"
                 showIcon
                 style={{ marginBottom: 16 }}
-                message="拦截模式依赖 Tetragon 运行时能力"
-                description="排除 root 使用 Linux audit loginuid 匹配：直接 root 登录 loginuid 为 0，普通用户 sudo 后当前 eUID 可能为 0 但 loginuid 仍是原登录 UID。请确认目标主机登录会话能正确写入 audit loginuid。"
+                message="拦截模式依赖宿主机 AppArmor"
+                description="Collector必须以root运行，系统需启用AppArmor并能从PATH找到apparmor_parser。规则约束sudo及其子进程，直接登录root不进入该profile。"
               />
             )}
             {template === 'dangerous_command' && (
@@ -361,30 +339,7 @@ export default function TetragonPolicyPage() {
                 >
                   <Select mode="tags" tokenSeparators={[',']} />
                 </Form.Item>
-                <Form.Item name="processNames" label="限定进程（可选）" tooltip="留空表示不限制进程；填写 vim、rm、chmod 等可只拦截指定进程访问这些路径。">
-                  <Select mode="tags" tokenSeparators={[',']} placeholder="例如 vim / rm / chmod，留空为不限进程" />
-                </Form.Item>
-                <Form.Item name="userMatchMode" label="登录用户范围">
-                  <Select options={[
-                    { value: 'exclude_root', label: '除 root 登录会话外所有用户' },
-                    { value: 'include', label: '仅指定登录 UID' },
-                    { value: 'all', label: '所有用户' },
-                  ]} />
-                </Form.Item>
-                {userMatchMode === 'include' && (
-                  <Form.Item name="userIds" label="限定登录用户 UID" tooltip="按 Linux audit loginuid 匹配，可覆盖 sudo 后 uid 变为 0 的场景；如 ubuntu 通常为 1000，可在主机上用 id -u ubuntu 查询。">
-                    <Select mode="tags" tokenSeparators={[',']} placeholder="例如 1000 / 1001" />
-                  </Form.Item>
-                )}
-                {userMatchMode === 'include' && userIds?.some((item) => item && !isUserId(item)) && (
-                  <Alert
-                    type="warning"
-                    showIcon
-                    style={{ marginBottom: 16 }}
-                    message="限定登录用户需要填写 UID"
-                    description="Tetragon 策略按 audit loginuid 匹配，请在目标主机执行 id -u 用户名 后填写数字 UID。非数字项不会写入 YAML。"
-                  />
-                )}
+                <Alert type="info" showIcon message="用户范围固定" description="首版固定放行原生root，并拦截通过sudo启动的进程，不按编辑器或命令名称过滤。" />
               </>
             )}
             {template === 'suspicious_process' && (
@@ -394,7 +349,7 @@ export default function TetragonPolicyPage() {
             )}
           </Form>
         </Card>
-        <Card className="data-card yaml-card" title="TracingPolicy YAML">
+        <Card className="data-card yaml-card" title="AppArmor 部署预览">
           <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontSize: 13 }}>{yaml}</pre>
         </Card>
       </div>
@@ -404,7 +359,7 @@ export default function TetragonPolicyPage() {
           showIcon
           style={{ marginBottom: 16 }}
           message="自动下发依赖 Collector 开启拦截策略同步"
-          description="保存并启用策略后，不需要手动点击部署。开启同步的 Collector 会在下个同步周期自动拉取适用于本机的策略，写入本机 Tetragon 策略目录、重启 Tetragon 并上报主机部署结果。"
+          description="保存并启用策略后，root Collector会在下个同步周期生成、校验并动态加载AppArmor profile，无需重启Tetragon或服务器。"
           action={(
             <Space>
               <Button onClick={() => void loadPolicies()}>刷新同步状态</Button>
@@ -497,7 +452,6 @@ export default function TetragonPolicyPage() {
                   maxVisible={2}
                   actions={[
                     { key: 'edit', label: '编辑', onClick: () => editPolicy(record) },
-                    { key: 'download', label: '下载', icon: <DownloadOutlined />, onClick: () => downloadContent(record.name, record.yaml) },
                     { key: 'deployed', label: '校正已部署', onClick: () => void markDeployment(record.id, 'deployed', '人工校正为已部署') },
                     { key: 'failed', label: '校正失败', onClick: () => void markDeployment(record.id, 'failed', '人工校正为加载失败') },
                     {

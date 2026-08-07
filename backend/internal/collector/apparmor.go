@@ -1,0 +1,189 @@
+package collector
+
+import (
+	"bytes"
+	"context"
+	"fmt"
+	"os"
+	"os/exec"
+	"path"
+	"path/filepath"
+	"sort"
+	"strings"
+)
+
+const appArmorProfileName = "diting-sudo"
+const appArmorEnabledPath = "/sys/module/apparmor/parameters/enabled"
+
+type appArmorCommandRunner func(context.Context, string, ...string) error
+
+type AppArmorManager struct {
+	policyDir string
+	parser    string
+	run       appArmorCommandRunner
+}
+
+func NewAppArmorManager(policyDir string, parser string) *AppArmorManager {
+	return &AppArmorManager{
+		policyDir: policyDir,
+		parser:    parser,
+		run:       runAppArmorCommand,
+	}
+}
+
+func discoverAppArmorManager(policyDir string) (*AppArmorManager, error) {
+	enabled, err := os.ReadFile(appArmorEnabledPath)
+	if err != nil {
+		return nil, fmt.Errorf("read AppArmor kernel status: %w", err)
+	}
+	if !appArmorKernelEnabled(enabled) {
+		return nil, fmt.Errorf("AppArmor is disabled in the kernel")
+	}
+	parser, err := exec.LookPath("apparmor_parser")
+	if err != nil {
+		return nil, fmt.Errorf("apparmor_parser command not found")
+	}
+	return NewAppArmorManager(policyDir, parser), nil
+}
+
+func appArmorKernelEnabled(value []byte) bool {
+	return strings.EqualFold(strings.TrimSpace(string(value)), "Y")
+}
+
+func (m *AppArmorManager) Apply(ctx context.Context, profile string) (bool, error) {
+	if err := os.MkdirAll(m.policyDir, 0o700); err != nil {
+		return false, fmt.Errorf("create AppArmor policy directory: %w", err)
+	}
+	profilePath := filepath.Join(m.policyDir, appArmorProfileName)
+	previous, readErr := os.ReadFile(profilePath)
+	if readErr == nil && bytes.Equal(previous, []byte(profile)) {
+		return false, nil
+	}
+	if readErr != nil && !os.IsNotExist(readErr) {
+		return false, fmt.Errorf("read active AppArmor profile: %w", readErr)
+	}
+
+	nextPath := profilePath + ".next"
+	if err := os.WriteFile(nextPath, []byte(profile), 0o600); err != nil {
+		return false, fmt.Errorf("write candidate AppArmor profile: %w", err)
+	}
+	defer os.Remove(nextPath)
+
+	if err := m.run(ctx, m.parser, "-Q", nextPath); err != nil {
+		return false, fmt.Errorf("validate AppArmor profile: %w", err)
+	}
+	if err := m.run(ctx, m.parser, "-r", nextPath); err != nil {
+		if readErr == nil {
+			_ = m.run(ctx, m.parser, "-r", profilePath)
+		}
+		return false, fmt.Errorf("activate AppArmor profile: %w", err)
+	}
+	if err := replaceAppArmorProfile(nextPath, profilePath); err != nil {
+		if readErr == nil {
+			_ = m.run(ctx, m.parser, "-r", profilePath)
+		}
+		return false, fmt.Errorf("promote AppArmor profile: %w", err)
+	}
+	return true, nil
+}
+
+func (m *AppArmorManager) Remove(ctx context.Context) (bool, error) {
+	profilePath := filepath.Join(m.policyDir, appArmorProfileName)
+	if _, err := os.Stat(profilePath); os.IsNotExist(err) {
+		return false, nil
+	} else if err != nil {
+		return false, fmt.Errorf("stat managed AppArmor profile: %w", err)
+	}
+	if err := m.run(ctx, m.parser, "-R", profilePath); err != nil {
+		return false, fmt.Errorf("unload AppArmor profile: %w", err)
+	}
+	if err := os.Remove(profilePath); err != nil {
+		return false, fmt.Errorf("remove managed AppArmor profile: %w", err)
+	}
+	return true, nil
+}
+
+func replaceAppArmorProfile(nextPath string, profilePath string) error {
+	if err := os.Rename(nextPath, profilePath); err == nil {
+		return nil
+	}
+	if err := os.Remove(profilePath); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return os.Rename(nextPath, profilePath)
+}
+
+func runAppArmorCommand(ctx context.Context, name string, args ...string) error {
+	output, err := exec.CommandContext(ctx, name, args...).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("%w: %s", err, strings.TrimSpace(string(output)))
+	}
+	return nil
+}
+
+// GenerateAppArmorSudoProfile builds the single AppArmor profile managed by DiTing.
+func GenerateAppArmorSudoProfile(paths []string) (string, error) {
+	normalized, err := normalizeAppArmorPaths(paths)
+	if err != nil {
+		return "", err
+	}
+
+	var profile strings.Builder
+	profile.WriteString(`#include <tunables/global>
+
+profile diting-sudo /{usr/,}bin/sudo flags=(attach_disconnected,mediate_deleted) {
+  #include <abstractions/base>
+
+  file,
+  capability,
+  network,
+  mount,
+  remount,
+  umount,
+  pivot_root,
+  signal,
+  ptrace,
+  dbus,
+  unix,
+
+  /** ix,
+`)
+	for _, path := range normalized {
+		fmt.Fprintf(&profile, "\n  audit deny %q wkl,\n", path)
+		fmt.Fprintf(&profile, "  audit deny %q wkl,\n", strings.TrimSuffix(path, "/")+"/**")
+	}
+	profile.WriteString("}\n")
+	return profile.String(), nil
+}
+
+func normalizeAppArmorPaths(paths []string) ([]string, error) {
+	unique := make(map[string]struct{}, len(paths))
+	for _, raw := range paths {
+		path := strings.TrimSpace(raw)
+		if path == "" || !strings.HasPrefix(path, "/") {
+			return nil, fmt.Errorf("AppArmor protected path must be absolute: %q", raw)
+		}
+		if strings.ContainsAny(path, "\x00\r\n*?[]{}@^\"\\") {
+			return nil, fmt.Errorf("AppArmor protected path contains unsupported characters: %q", raw)
+		}
+		path = cleanAppArmorPath(path)
+		if path == "/" {
+			return nil, fmt.Errorf("refusing to protect filesystem root")
+		}
+		unique[path] = struct{}{}
+	}
+	if len(unique) == 0 {
+		return nil, fmt.Errorf("at least one protected path is required")
+	}
+
+	result := make([]string, 0, len(unique))
+	for path := range unique {
+		result = append(result, path)
+	}
+	sort.Strings(result)
+	return result, nil
+}
+
+func cleanAppArmorPath(value string) string {
+	return path.Clean(value)
+}

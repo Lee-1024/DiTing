@@ -10,7 +10,7 @@ import (
 
 func TestHandlerCreatesAndListsPolicies(t *testing.T) {
 	handler := NewHandler(NewMemoryRepository())
-	body := bytes.NewBufferString(`{"name":"保护敏感文件","template":"sensitive_file","mode":"enforce","enabled":true,"targetHosts":["host-1"],"yaml":"kind: TracingPolicy"}`)
+	body := bytes.NewBufferString(`{"name":"保护敏感文件","template":"sensitive_file","mode":"enforce","enabled":true,"targetHosts":["host-1"],"definition":{"filePaths":["/etc/docker/daemon.json"]}}`)
 	createReq := httptest.NewRequest(http.MethodPost, "/api/v1/enforcement-policies", body)
 	createResp := httptest.NewRecorder()
 
@@ -43,15 +43,15 @@ func TestHandlerCreatesAndListsPolicies(t *testing.T) {
 	}
 }
 
-func TestHandlerRejectsPolicyWithoutYAML(t *testing.T) {
+func TestHandlerAcceptsStructuredPolicyWithoutYAML(t *testing.T) {
 	handler := NewHandler(NewMemoryRepository())
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/enforcement-policies", bytes.NewBufferString(`{"name":"bad","template":"sensitive_file"}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/enforcement-policies", bytes.NewBufferString(`{"name":"保护配置","template":"sensitive_file","mode":"enforce","enabled":true,"definition":{"filePaths":["/etc/docker/daemon.json"]}}`))
 	resp := httptest.NewRecorder()
 
 	handler.Create(resp, req)
 
-	if resp.Code != http.StatusBadRequest {
-		t.Fatalf("expected status 400, got %d", resp.Code)
+	if resp.Code != http.StatusCreated {
+		t.Fatalf("expected status 201, got %d: %s", resp.Code, resp.Body.String())
 	}
 }
 
