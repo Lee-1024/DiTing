@@ -12,6 +12,7 @@ import (
 	"diting/backend/internal/enforcement"
 	"diting/backend/internal/hostasset"
 	"diting/backend/internal/ingest"
+	"diting/backend/internal/notification"
 	"diting/backend/internal/operationlog"
 	"diting/backend/internal/riskanalysis"
 	"diting/backend/internal/riskstatus"
@@ -31,6 +32,7 @@ type routerOptions struct {
 	responseCacheFlights   *cache.Singleflight
 	riskAnalysisRepository riskanalysis.Repository
 	riskAnalyzer           riskanalysis.Analyzer
+	notificationRepository notification.Repository
 }
 
 type RouterOption func(*routerOptions)
@@ -75,6 +77,12 @@ func WithResponseCacheTTL(namespace string, ttl time.Duration) RouterOption {
 	}
 }
 
+func WithNotificationRepository(repository notification.Repository) RouterOption {
+	return func(options *routerOptions) {
+		options.notificationRepository = repository
+	}
+}
+
 func WithRiskAnalysis(repository riskanalysis.Repository, analyzer riskanalysis.Analyzer) RouterOption {
 	return func(options *routerOptions) {
 		options.riskAnalysisRepository = repository
@@ -115,6 +123,10 @@ func NewRouter(repository audit.Repository, ruleRepository rule.Repository, stat
 		options.enforcementRepository = enforcement.NewMemoryRepository()
 	}
 	enforcementHandler := enforcement.NewHandler(options.enforcementRepository)
+	if options.notificationRepository == nil {
+		options.notificationRepository = notification.NewMemoryRepository()
+	}
+	notificationHandler := notification.NewHandler(options.notificationRepository)
 	var riskStatusHandler *riskstatus.Handler
 	if riskStatusRepository != nil {
 		riskStatusHandler = riskstatus.NewHandler(riskStatusRepository)
@@ -148,6 +160,35 @@ func NewRouter(repository audit.Repository, ruleRepository rule.Repository, stat
 		mux.Handle("/api/v1/auth/me", protect(http.HandlerFunc(authHandler.Me)))
 		mux.Handle("/api/v1/auth/password", protect(http.HandlerFunc(authHandler.ChangePassword)))
 	}
+	mux.Handle("/api/v1/notifications", protect(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			notificationHandler.List(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	})))
+	mux.Handle("/api/v1/notifications/read-all", protect(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		notificationHandler.MarkAllRead(w, r)
+	})))
+	mux.Handle("/api/v1/notifications/{id}/read", protect(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		notificationHandler.MarkRead(w, r)
+	})))
+	mux.Handle("/api/v1/notifications/{id}/handle", protect(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		notificationHandler.Handle(w, r)
+	})))
 	mux.Handle("/api/v1/audit/events", protect(http.HandlerFunc(auditHandler.ListEvents)))
 	mux.Handle("/api/v1/audit/events/export", protect(http.HandlerFunc(auditHandler.ExportEvents)))
 	mux.Handle("/api/v1/audit/events/{event_id}", protect(http.HandlerFunc(auditHandler.GetEvent)))

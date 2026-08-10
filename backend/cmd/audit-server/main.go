@@ -20,6 +20,7 @@ import (
 	"diting/backend/internal/config"
 	"diting/backend/internal/enforcement"
 	"diting/backend/internal/hostasset"
+	"diting/backend/internal/notification"
 	"diting/backend/internal/operationlog"
 	"diting/backend/internal/postgres"
 	"diting/backend/internal/riskanalysis"
@@ -295,15 +296,18 @@ func main() {
 	riskAnalyzer := riskanalysis.NewDynamicAnalyzer(systemConfigRepository)
 	userAdminRepository := useradmin.NewPostgresRepository(pool)
 	collectorHealthRepository := collectorhealth.NewPostgresRepository(pool)
+	notificationRepository := notification.NewPostgresRepository(pool)
 	enforcementRepository := enforcement.NewPostgresRepository(pool)
 	ingestWriter := newRefreshingRuleWriter(eventSink(clickHouseClient), repositoryRuleProvider{repository: ruleRepository})
 	ingestWriter.SetCollectorFilterProvider(systemConfigRepository)
+	ingestWriter.SetNotificationRepository(notificationRepository)
 	if err := ingestWriter.Refresh(context.Background()); err != nil {
 		slog.Error("load ingest rules failed", "error", err)
 		fmt.Fprintf(os.Stderr, "load ingest rules: %v\n", err)
 		os.Exit(1)
 	}
 	go ingestWriter.RefreshLoop(context.Background(), 30*time.Second)
+	go notification.RunHealthReconciler(context.Background(), notificationRepository, collectorHealthRepository, 10*time.Second)
 
 	responseCache, responseCacheTTL, err := newRequiredResponseCache(context.Background(), cfg.Redis)
 	if err != nil {
@@ -330,6 +334,7 @@ func main() {
 		server.WithIngestWriter(ingestWriter),
 		server.WithCollectorToken(cfg.Collector.Token),
 		server.WithEnforcementRepository(enforcementRepository),
+		server.WithNotificationRepository(notificationRepository),
 		server.WithRiskAnalysis(riskAnalysisRepository, riskAnalyzer),
 		server.WithResponseCache(responseCache, responseCacheTTL),
 		server.WithResponseCacheTTL("stats.hosts", hostProfileCacheTTL),
@@ -711,6 +716,7 @@ type refreshingRuleWriter struct {
 	filterProvider     collectorFilterProvider
 	heartbeat          collectorHeartbeatRecorder
 	heartbeatInputMode string
+	notifications      notification.Repository
 	mu                 sync.RWMutex
 	rules              []rule.Rule
 	filter             collectorNoiseFilter
@@ -736,6 +742,12 @@ func (w *refreshingRuleWriter) SetCollectorFilterProvider(provider collectorFilt
 }
 
 // SetHeartbeatRecorder 设置 Set Heartbeat Recorder。
+func (w *refreshingRuleWriter) SetNotificationRepository(repository notification.Repository) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.notifications = repository
+}
+
 func (w *refreshingRuleWriter) SetHeartbeatRecorder(recorder collectorHeartbeatRecorder, inputMode string) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -968,6 +980,7 @@ func (w *refreshingRuleWriter) Write(ctx context.Context, events []audit.Event) 
 	filter := w.filter
 	heartbeat := w.heartbeat
 	heartbeatInputMode := w.heartbeatInputMode
+	notifications := w.notifications
 	w.mu.RUnlock()
 
 	enriched := make([]audit.Event, 0, len(events))
@@ -994,6 +1007,16 @@ func (w *refreshingRuleWriter) Write(ctx context.Context, events []audit.Event) 
 	if err := w.sink.WriteEvents(ctx, enriched); err != nil {
 		slog.Error("write events failed", "events", len(enriched), "rules", len(rules), "error", err)
 		return err
+	}
+	if notifications != nil {
+		for _, event := range enriched {
+			if !notification.IsEnforcementEvent(event) {
+				continue
+			}
+			if _, err := notifications.Upsert(ctx, notification.EnforcementInput(event)); err != nil {
+				slog.Error("create enforcement notification failed", "event_id", event.EventID, "error", err)
+			}
+		}
 	}
 	if heartbeat != nil {
 		lastEventTime := newestEventTime(enriched)

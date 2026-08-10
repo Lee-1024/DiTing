@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "tsc -b && vite build",
-    "test": "vitest run src/components/auditEntityOptions.test.ts",
+    "test": "vitest run src/components/auditEntityOptions.test.ts src/components/notificationPresentation.test.ts",
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {

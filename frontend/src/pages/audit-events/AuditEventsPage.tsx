@@ -1,8 +1,8 @@
 import { Button, Card, DatePicker, Empty, Form, Input, Select, Space, Table, Tag, Typography } from 'antd';
 import dayjs from 'dayjs';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { exportAuditEvents, queryAuditEvents, queryAuditOperations } from '../../api/audit';
+import { Link, useSearchParams } from 'react-router-dom';
+import { exportAuditEvents, getAuditEvent, queryAuditEvents, queryAuditOperations } from '../../api/audit';
 import { getRiskDispositions } from '../../api/riskDispositions';
 import { AuditHostSelect, AuditUserSelect } from '../../components/AuditEntitySelect';
 import CommandText from '../../components/CommandText';
@@ -21,6 +21,7 @@ import EventDetailDrawer from './EventDetailDrawer';
 const defaultRange = [dayjs().subtract(7, 'day'), dayjs()] as const;
 // AuditEventsPage 渲染 Audit Events Page 组件。
 export default function AuditEventsPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [groups, setGroups] = useState<AuditOperationGroup[]>([]);
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<AuditEvent>();
@@ -108,6 +109,22 @@ export default function AuditEventsPage() {
   useEffect(() => {
     void load();
   }, []);
+  useEffect(() => {
+    const eventID = searchParams.get('eventId');
+    if (!eventID) {
+      return;
+    }
+    let cancelled = false;
+    void getAuditEvent(eventID).then((event) => {
+      if (!cancelled) {
+        setSelected(event);
+        setRelatedEvents([event]);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [searchParams]);
 
   const riskyEvents = groups.filter((item) => isOpenRiskOperation(item, riskDispositions)).length;
   const criticalEvents = groups.filter((item) => item.maxSeverity === 'critical' && isOpenRiskOperation(item, riskDispositions)).length;
@@ -228,6 +245,11 @@ export default function AuditEventsPage() {
       <EventDetailDrawer event={selected} relatedEvents={relatedEvents} open={Boolean(selected)} onClose={() => {
         setSelected(undefined);
         setRelatedEvents([]);
+        if (searchParams.has('eventId')) {
+          const next = new URLSearchParams(searchParams);
+          next.delete('eventId');
+          setSearchParams(next, { replace: true });
+        }
       }} />
     </>
   );

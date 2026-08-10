@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"diting/backend/internal/audit"
+	"diting/backend/internal/notification"
 	"diting/backend/internal/rule"
 	"diting/backend/internal/systemconfig"
 )
@@ -842,5 +843,28 @@ func TestRuleApplyingWriterRefreshesCollectorFilterFromProvider(t *testing.T) {
 	}
 	if len(sink.events) != 1 {
 		t.Fatalf("expected healthcheck event to be written after disabling filter, got %d events", len(sink.events))
+	}
+}
+
+func TestRuleApplyingWriterPublishesEnforcementNotification(t *testing.T) {
+	sink := &fakeEventSink{}
+	notifications := notification.NewMemoryRepository()
+	writer := newRefreshingRuleWriter(sink, &fakeRuleProvider{sets: [][]rule.Rule{{}}})
+	writer.SetNotificationRepository(notifications)
+	if err := writer.Refresh(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	event := audit.Event{EventID: "event-1", EventType: "process_kprobe", Cmdline: "rm /etc/passwd", Severity: "critical", Tags: []string{"diting-enforcement"}}
+	if err := writer.Write(context.Background(), []audit.Event{event}); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := notifications.List(context.Background(), "user-1", "all", 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Items) != 1 || result.Items[0].SourceID != "event-1" {
+		t.Fatalf("enforcement notification was not published: %#v", result)
 	}
 }
