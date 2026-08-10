@@ -479,11 +479,7 @@ func startAppArmorAuditCollection(ctx context.Context, mode string, cfg config.C
 	if mode != "collector" || !cfg.Collector.EnforcementEnabled {
 		return
 	}
-	configured := strings.TrimSpace(cfg.Collector.AppArmorAuditLogFile)
-	if configured == "" {
-		configured = "/var/log/audit/audit.log"
-	}
-	paths := collector.DiscoverAppArmorAuditLogFiles(configured, []string{"/var/log/kern.log", "/var/log/syslog"})
+	paths := collector.DefaultAppArmorAuditFallbackPaths()
 	slog.Info("AppArmor audit collection starting", "paths", paths)
 	for _, path := range paths {
 		path := path

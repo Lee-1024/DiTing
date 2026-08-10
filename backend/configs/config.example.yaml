@@ -45,4 +45,3 @@ collector:
   # Collector must run as root and discover apparmor_parser from PATH.
   enforcement_policy_dir: /data/diting/apparmor
   enforcement_sync_interval_seconds: 30
-  apparmor_audit_log_file: /var/log/audit/audit.log

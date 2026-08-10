@@ -2,7 +2,6 @@ package collector
 
 import (
 	"fmt"
-	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -94,27 +93,7 @@ func firstNonEmptyValue(values ...string) string {
 	return ""
 }
 
-// DiscoverAppArmorAuditLogFiles returns the configured source plus existing
-// Ubuntu fallback logs. Duplicate paths are removed while preserving order.
-func DiscoverAppArmorAuditLogFiles(configured string, fallbacks []string) []string {
-	candidates := append([]string{strings.TrimSpace(configured)}, fallbacks...)
-	seen := make(map[string]struct{}, len(candidates))
-	paths := make([]string, 0, len(candidates))
-	for index, candidate := range candidates {
-		candidate = strings.TrimSpace(candidate)
-		if candidate == "" {
-			continue
-		}
-		if _, exists := seen[candidate]; exists {
-			continue
-		}
-		if index > 0 {
-			if info, err := os.Stat(candidate); err != nil || info.IsDir() {
-				continue
-			}
-		}
-		seen[candidate] = struct{}{}
-		paths = append(paths, candidate)
-	}
-	return paths
+// DefaultAppArmorAuditFallbackPaths covers the standard Ubuntu audit sinks.
+func DefaultAppArmorAuditFallbackPaths() []string {
+	return []string{"/var/log/audit/audit.log", "/var/log/kern.log", "/var/log/syslog"}
 }

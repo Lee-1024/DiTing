@@ -69,7 +69,6 @@ type CollectorConfig struct {
 	EnforcementEnabled             bool
 	EnforcementPolicyDir           string
 	EnforcementSyncIntervalSeconds int
-	AppArmorAuditLogFile           string
 }
 
 type AIConfig struct {
@@ -208,8 +207,6 @@ func assignValue(cfg *Config, section, key, value string) error {
 			cfg.Collector.EnforcementPolicyDir = value
 		case "enforcement_sync_interval_seconds":
 			cfg.Collector.EnforcementSyncIntervalSeconds = mustInt(key, value)
-		case "apparmor_audit_log_file":
-			cfg.Collector.AppArmorAuditLogFile = value
 		}
 	case "ai":
 		switch key {
