@@ -32,6 +32,7 @@ func ReconcileHealth(ctx context.Context, notifications Repository, health Healt
 		}
 		offlineKey := "collector:offline:" + hostID
 		tetragonKey := "collector:tetragon:" + hostID
+		warningKey := "collector:warning:" + hostID
 		if item.Status == "offline" {
 			if _, err := notifications.Upsert(ctx, Input{
 				Type: TypeCollector, DedupeKey: offlineKey, SourceID: hostID,
@@ -40,7 +41,7 @@ func ReconcileHealth(ctx context.Context, notifications Repository, health Healt
 			}); err != nil {
 				return err
 			}
-			if err := notifications.Resolve(ctx, tetragonKey); err != nil {
+			if err := resolveNotifications(ctx, notifications, tetragonKey, warningKey); err != nil {
 				return err
 			}
 			continue
@@ -56,11 +57,49 @@ func ReconcileHealth(ctx context.Context, notifications Repository, health Healt
 			if _, err := notifications.Upsert(ctx, Input{
 				Type: TypeTetragon, DedupeKey: tetragonKey, SourceID: hostID,
 				Title: "Tetragon 服务异常：" + displayName, Description: message,
-				Severity: "warning", Target: "/settings/collector-health",
+				Severity: collectorNotificationSeverity(item.HealthLevel), Target: "/settings/collector-health",
 			}); err != nil {
 				return err
 			}
-		} else if err := notifications.Resolve(ctx, tetragonKey); err != nil {
+			if err := notifications.Resolve(ctx, warningKey); err != nil {
+				return err
+			}
+			continue
+		}
+		if item.HealthLevel == "warning" || item.HealthLevel == "critical" {
+			title := "采集服务预警：" + displayName
+			if item.HealthLevel == "critical" {
+				title = "采集服务异常：" + displayName
+			}
+			if _, err := notifications.Upsert(ctx, Input{
+				Type: TypeCollector, DedupeKey: warningKey, SourceID: hostID,
+				Title: title, Description: message,
+				Severity: collectorNotificationSeverity(item.HealthLevel), Target: "/settings/collector-health",
+			}); err != nil {
+				return err
+			}
+			if err := notifications.Resolve(ctx, tetragonKey); err != nil {
+				return err
+			}
+			continue
+		}
+		if err := resolveNotifications(ctx, notifications, tetragonKey, warningKey); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func collectorNotificationSeverity(healthLevel string) string {
+	if healthLevel == "critical" {
+		return "critical"
+	}
+	return "warning"
+}
+
+func resolveNotifications(ctx context.Context, notifications Repository, keys ...string) error {
+	for _, key := range keys {
+		if err := notifications.Resolve(ctx, key); err != nil {
 			return err
 		}
 	}
