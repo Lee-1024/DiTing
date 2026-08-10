@@ -18,6 +18,9 @@ func TestGenerateTetragonObserverPolicyIsMonitorOnly(t *testing.T) {
 			t.Fatalf("expected %q in observer policy:\n%s", expected, policy)
 		}
 	}
+	if !strings.Contains(policy, "values:\n                - ") {
+		t.Fatalf("path values must be nested under values:\n%s", policy)
+	}
 	for _, forbidden := range []string{"Sigkill", "Override"} {
 		if strings.Contains(policy, forbidden) {
 			t.Fatalf("observer policy must not enforce with %s:\n%s", forbidden, policy)

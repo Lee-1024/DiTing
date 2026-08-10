@@ -17,8 +17,8 @@ func GenerateTetragonObserverPolicy(paths []string) (string, error) {
 	var exact strings.Builder
 	var children strings.Builder
 	for _, path := range normalized {
-		fmt.Fprintf(&exact, "            - %q\n", path)
-		fmt.Fprintf(&children, "            - %q\n", strings.TrimSuffix(path, "/")+"/")
+		fmt.Fprintf(&exact, "                - %q\n", path)
+		fmt.Fprintf(&children, "                - %q\n", strings.TrimSuffix(path, "/")+"/")
 	}
 	return fmt.Sprintf(`apiVersion: cilium.io/v1alpha1
 kind: TracingPolicy
