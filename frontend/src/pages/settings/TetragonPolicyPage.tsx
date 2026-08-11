@@ -12,11 +12,13 @@ import {
   updateEnforcementPolicy,
   upsertEnforcementDeployment,
 } from '../../api/enforcement';
+import { listCollectorHealth } from '../../api/collectorHealth';
 import ActionCluster from '../../components/ActionCluster';
 import { InsightHero, MetricCard, SummaryPanel } from '../../components/InsightHeader';
+import type { CollectorHeartbeat } from '../../types/collectorHealth';
 import type { EnforcementDeployment, EnforcementDeploymentStatus, EnforcementPolicy, EnforcementPolicyPayload } from '../../types/enforcement';
 import { copyText } from '../../utils/clipboard';
-import { generatePolicy, isUserId, type PolicyFormValues, type PolicyTemplate } from './tetragonPolicy';
+import { buildCollectorHostOptions, generatePolicy, isUserId, type PolicyFormValues, type PolicyTemplate } from './tetragonPolicy';
 
 const defaultValues: PolicyFormValues = {
   template: 'sensitive_file',
@@ -43,6 +45,8 @@ export default function TetragonPolicyPage() {
   const [editing, setEditing] = useState<EnforcementPolicy | null>(null);
   const [deployments, setDeployments] = useState<Record<string, EnforcementDeployment[]>>({});
   const [deploymentForms, setDeploymentForms] = useState<Record<string, Partial<EnforcementDeployment>>>({});
+  const [collectorHosts, setCollectorHosts] = useState<CollectorHeartbeat[]>([]);
+  const [collectorHostsLoading, setCollectorHostsLoading] = useState(false);
   const template = Form.useWatch('template', form) ?? defaultValues.template;
   const mode = Form.useWatch('mode', form) ?? defaultValues.mode;
   const name = Form.useWatch('name', form) ?? defaultValues.name;
@@ -73,12 +77,14 @@ export default function TetragonPolicyPage() {
   }), [template, mode, name, description, enabled, commands, commandRuleText, filePaths, operations, processNames, userMatchMode, userIds, targetHosts]);
   const yaml = useMemo(() => generatePolicy(policy), [policy]);
   const allDeployments = Object.values(deployments).flat();
+  const collectorHostOptions = useMemo(() => buildCollectorHostOptions(collectorHosts, targetHosts), [collectorHosts, targetHosts]);
   const enabledPolicyCount = policies.filter((item) => item.enabled && item.mode !== 'disabled').length;
   const enforcePolicyCount = policies.filter((item) => item.enabled && item.mode === 'enforce').length;
   const failedDeploymentCount = allDeployments.filter((item) => item.status === 'failed').length;
 
   useEffect(() => {
     void loadPolicies();
+    void loadCollectorHosts();
   }, []);
 
   // loadPolicies 加载页面所需数据。
@@ -99,6 +105,16 @@ export default function TetragonPolicyPage() {
       nextPolicies.map(async (item) => [item.id, await listEnforcementDeployments(item.id)] as const),
     );
     setDeployments(Object.fromEntries(entries));
+  }
+
+  // loadCollectorHosts 加载可选 Collector 主机。
+  async function loadCollectorHosts() {
+    setCollectorHostsLoading(true);
+    try {
+      setCollectorHosts(await listCollectorHealth());
+    } finally {
+      setCollectorHostsLoading(false);
+    }
   }
 
   // copyYaml copies the non-executable deployment preview.
@@ -269,7 +285,15 @@ export default function TetragonPolicyPage() {
               <Switch checkedChildren="启用" unCheckedChildren="停用" />
             </Form.Item>
             <Form.Item name="targetHosts" label="适用主机（可选）" tooltip="留空表示所有启用AppArmor同步的Collector节点。">
-              <Select mode="tags" tokenSeparators={[',']} placeholder="例如 server-001 / 10.40.0.184，留空表示通用策略" />
+              <Select
+                mode="multiple"
+                showSearch
+                allowClear
+                loading={collectorHostsLoading}
+                optionFilterProp="label"
+                options={collectorHostOptions}
+                placeholder="请选择 Collector 主机，留空表示通用策略"
+              />
             </Form.Item>
             {mode === 'enforce' && (
               <Alert

@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { generatePolicy, type PolicyFormValues } from './tetragonPolicy';
+import { buildCollectorHostOptions, generatePolicy, type PolicyFormValues } from './tetragonPolicy';
 
 const policy: PolicyFormValues = {
   template: 'sensitive_file',
@@ -52,4 +52,17 @@ it('defaults sensitive file operations to write', () => {
   });
 
   expect(preview).toContain('  - write');
+});
+
+it('builds collector host select options and keeps legacy host ids', () => {
+  const options = buildCollectorHostOptions([
+    { hostId: 'server-002', hostName: 'diting-test-113', status: 'online' },
+    { hostId: 'server-001', hostName: '10.40.0.184', status: 'offline' },
+  ], ['legacy-host']);
+
+  expect(options).toEqual([
+    { value: 'server-001', label: 'server-001 / 10.40.0.184（离线）' },
+    { value: 'server-002', label: 'server-002 / diting-test-113（在线）' },
+    { value: 'legacy-host', label: 'legacy-host（历史主机）' },
+  ]);
 });
