@@ -204,7 +204,7 @@ func mergeAppArmorPermissions(values ...string) string {
 		}
 	}
 	var result strings.Builder
-	for _, permission := range "rwkldcm" {
+	for _, permission := range "rwklm" {
 		if _, ok := permissions[permission]; ok {
 			result.WriteRune(permission)
 		}
@@ -258,21 +258,21 @@ func normalizeAppArmorOperations(operations []string) (string, error) {
 			permissions['k'] = struct{}{}
 			permissions['l'] = struct{}{}
 		case "create":
-			permissions['c'] = struct{}{}
 			permissions['w'] = struct{}{}
 			permissions['k'] = struct{}{}
 			permissions['l'] = struct{}{}
 		case "delete":
-			permissions['d'] = struct{}{}
+			permissions['w'] = struct{}{}
+			permissions['k'] = struct{}{}
+			permissions['l'] = struct{}{}
 		case "rename":
-			permissions['d'] = struct{}{}
 			permissions['w'] = struct{}{}
 			permissions['k'] = struct{}{}
 			permissions['l'] = struct{}{}
 		case "chmod", "chown":
 			permissions['m'] = struct{}{}
 		case "all":
-			for _, permission := range "rwkldcm" {
+			for _, permission := range "rwklm" {
 				permissions[permission] = struct{}{}
 			}
 		default:
@@ -281,7 +281,7 @@ func normalizeAppArmorOperations(operations []string) (string, error) {
 	}
 
 	var result strings.Builder
-	for _, permission := range "rwkldcm" {
+	for _, permission := range "rwklm" {
 		if _, ok := permissions[permission]; ok {
 			result.WriteRune(permission)
 		}

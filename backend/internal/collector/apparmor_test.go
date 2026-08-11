@@ -42,12 +42,31 @@ func TestGenerateAppArmorSudoProfileUsesSelectedOperations(t *testing.T) {
 	}
 
 	for _, expected := range []string{
-		`audit deny "/etc/docker/daemon.json" rwkld,`,
-		`audit deny "/etc/docker/daemon.json/**" rwkld,`,
+		`audit deny "/etc/docker/daemon.json" rwkl,`,
+		`audit deny "/etc/docker/daemon.json/**" rwkl,`,
 	} {
 		if !strings.Contains(profile, expected) {
 			t.Fatalf("expected profile to contain %q:\n%s", expected, profile)
 		}
+	}
+}
+
+func TestGenerateAppArmorSudoProfileUsesParserSupportedModesForLifecycleOperations(t *testing.T) {
+	profile, err := GenerateAppArmorSudoProfile([]AppArmorPathRule{{
+		Path:       "/tmp/diting-enforce-test",
+		Operations: []string{"create", "delete", "rename"},
+	}})
+	if err != nil {
+		t.Fatalf("generate profile: %v", err)
+	}
+
+	for _, forbidden := range []string{" wklc,", " wkld,", " wklcd,"} {
+		if strings.Contains(profile, forbidden) {
+			t.Fatalf("expected profile to avoid unsupported AppArmor mode %q:\n%s", forbidden, profile)
+		}
+	}
+	if !strings.Contains(profile, `audit deny "/tmp/diting-enforce-test" wkl,`) {
+		t.Fatalf("expected lifecycle operations to use parser-supported wkl mode:\n%s", profile)
 	}
 }
 
@@ -69,13 +88,13 @@ func TestNormalizeAppArmorOperationsUsesStablePermissions(t *testing.T) {
 	}{
 		{name: "read", operation: []string{"read"}, permission: "r"},
 		{name: "write", operation: []string{"write"}, permission: "wkl"},
-		{name: "create", operation: []string{"create"}, permission: "wklc"},
-		{name: "delete", operation: []string{"delete"}, permission: "d"},
-		{name: "rename", operation: []string{"rename"}, permission: "wkld"},
+		{name: "create", operation: []string{"create"}, permission: "wkl"},
+		{name: "delete", operation: []string{"delete"}, permission: "wkl"},
+		{name: "rename", operation: []string{"rename"}, permission: "wkl"},
 		{name: "chmod", operation: []string{"chmod"}, permission: "m"},
 		{name: "chown", operation: []string{"chown"}, permission: "m"},
-		{name: "all", operation: []string{"all"}, permission: "rwkldcm"},
-		{name: "deduplicated", operation: []string{"delete", "read", "delete"}, permission: "rd"},
+		{name: "all", operation: []string{"all"}, permission: "rwklm"},
+		{name: "deduplicated", operation: []string{"delete", "read", "delete"}, permission: "rwkl"},
 	}
 
 	for _, test := range tests {
@@ -105,7 +124,7 @@ func TestNormalizeAppArmorPathRulesMergesDuplicatePathPermissions(t *testing.T) 
 	if err != nil {
 		t.Fatalf("normalize path rules: %v", err)
 	}
-	if len(rules) != 1 || rules[0].Permission != "rd" {
+	if len(rules) != 1 || rules[0].Permission != "rwkl" {
 		t.Fatalf("expected duplicate path permissions to merge, got %#v", rules)
 	}
 }

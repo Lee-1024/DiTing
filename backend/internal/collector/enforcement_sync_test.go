@@ -55,7 +55,7 @@ func TestBuildAppArmorDeploymentUsesSensitiveFileOperations(t *testing.T) {
 	if results["policy-1"].Status != "deployed" {
 		t.Fatalf("expected deployed result, got %#v", results["policy-1"])
 	}
-	if !strings.Contains(profile, `audit deny "/etc/docker/daemon.json" rd,`) {
+	if !strings.Contains(profile, `audit deny "/etc/docker/daemon.json" rwkl,`) {
 		t.Fatalf("expected read/delete permissions in profile:\n%s", profile)
 	}
 	if !strings.Contains(results["policy-1"].Message, "read, delete") {
