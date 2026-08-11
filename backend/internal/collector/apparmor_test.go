@@ -10,9 +10,9 @@ import (
 )
 
 func TestGenerateAppArmorSudoProfileProtectsFilesAndChildren(t *testing.T) {
-	profile, err := GenerateAppArmorSudoProfile([]string{
-		"/etc/docker/daemon.json",
-		"/opt/diting/protected",
+	profile, err := GenerateAppArmorSudoProfile([]AppArmorPathRule{
+		{Path: "/etc/docker/daemon.json"},
+		{Path: "/opt/diting/protected"},
 	})
 	if err != nil {
 		t.Fatalf("generate profile: %v", err)
@@ -29,6 +29,84 @@ func TestGenerateAppArmorSudoProfileProtectsFilesAndChildren(t *testing.T) {
 		if !strings.Contains(profile, expected) {
 			t.Fatalf("expected profile to contain %q:\n%s", expected, profile)
 		}
+	}
+}
+
+func TestGenerateAppArmorSudoProfileUsesSelectedOperations(t *testing.T) {
+	profile, err := GenerateAppArmorSudoProfile([]AppArmorPathRule{{
+		Path:       "/etc/docker/daemon.json",
+		Operations: []string{"read", "write", "delete"},
+	}})
+	if err != nil {
+		t.Fatalf("generate profile: %v", err)
+	}
+
+	for _, expected := range []string{
+		`audit deny "/etc/docker/daemon.json" rwkld,`,
+		`audit deny "/etc/docker/daemon.json/**" rwkld,`,
+	} {
+		if !strings.Contains(profile, expected) {
+			t.Fatalf("expected profile to contain %q:\n%s", expected, profile)
+		}
+	}
+}
+
+func TestNormalizeAppArmorOperationsDefaultsToWrite(t *testing.T) {
+	permissions, err := normalizeAppArmorOperations(nil)
+	if err != nil {
+		t.Fatalf("normalize operations: %v", err)
+	}
+	if permissions != "wkl" {
+		t.Fatalf("expected legacy default wkl, got %q", permissions)
+	}
+}
+
+func TestNormalizeAppArmorOperationsUsesStablePermissions(t *testing.T) {
+	tests := []struct {
+		name       string
+		operation  []string
+		permission string
+	}{
+		{name: "read", operation: []string{"read"}, permission: "r"},
+		{name: "write", operation: []string{"write"}, permission: "wkl"},
+		{name: "create", operation: []string{"create"}, permission: "wklc"},
+		{name: "delete", operation: []string{"delete"}, permission: "d"},
+		{name: "rename", operation: []string{"rename"}, permission: "wkld"},
+		{name: "chmod", operation: []string{"chmod"}, permission: "m"},
+		{name: "chown", operation: []string{"chown"}, permission: "m"},
+		{name: "all", operation: []string{"all"}, permission: "rwkldcm"},
+		{name: "deduplicated", operation: []string{"delete", "read", "delete"}, permission: "rd"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			permission, err := normalizeAppArmorOperations(test.operation)
+			if err != nil {
+				t.Fatalf("normalize operations: %v", err)
+			}
+			if permission != test.permission {
+				t.Fatalf("expected %q, got %q", test.permission, permission)
+			}
+		})
+	}
+}
+
+func TestNormalizeAppArmorOperationsRejectsUnknownNames(t *testing.T) {
+	if _, err := normalizeAppArmorOperations([]string{"network"}); err == nil {
+		t.Fatal("expected unknown operation to be rejected")
+	}
+}
+
+func TestNormalizeAppArmorPathRulesMergesDuplicatePathPermissions(t *testing.T) {
+	rules, err := normalizeAppArmorPathRules([]AppArmorPathRule{
+		{Path: "/etc/docker/daemon.json", Operations: []string{"read"}},
+		{Path: "/etc/docker/daemon.json", Operations: []string{"delete"}},
+	})
+	if err != nil {
+		t.Fatalf("normalize path rules: %v", err)
+	}
+	if len(rules) != 1 || rules[0].Permission != "rd" {
+		t.Fatalf("expected duplicate path permissions to merge, got %#v", rules)
 	}
 }
 
@@ -50,7 +128,7 @@ func TestGenerateAppArmorSudoProfileRejectsUnsafePaths(t *testing.T) {
 	}
 	for _, path := range tests {
 		t.Run(path, func(t *testing.T) {
-			if _, err := GenerateAppArmorSudoProfile([]string{path}); err == nil {
+			if _, err := GenerateAppArmorSudoProfile([]AppArmorPathRule{{Path: path}}); err == nil {
 				t.Fatalf("expected path %q to be rejected", path)
 			}
 		})
@@ -58,11 +136,18 @@ func TestGenerateAppArmorSudoProfileRejectsUnsafePaths(t *testing.T) {
 }
 
 func TestGenerateAppArmorSudoProfileIsDeterministic(t *testing.T) {
-	first, err := GenerateAppArmorSudoProfile([]string{"/var/lib/diting", "/etc/docker/daemon.json", "/var/lib/diting"})
+	first, err := GenerateAppArmorSudoProfile([]AppArmorPathRule{
+		{Path: "/var/lib/diting"},
+		{Path: "/etc/docker/daemon.json"},
+		{Path: "/var/lib/diting"},
+	})
 	if err != nil {
 		t.Fatalf("generate first profile: %v", err)
 	}
-	second, err := GenerateAppArmorSudoProfile([]string{"/etc/docker/daemon.json", "/var/lib/diting"})
+	second, err := GenerateAppArmorSudoProfile([]AppArmorPathRule{
+		{Path: "/etc/docker/daemon.json"},
+		{Path: "/var/lib/diting"},
+	})
 	if err != nil {
 		t.Fatalf("generate second profile: %v", err)
 	}

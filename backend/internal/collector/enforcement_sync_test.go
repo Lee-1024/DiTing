@@ -41,6 +41,66 @@ func TestBuildAppArmorDeploymentUsesSensitiveFileDefinitions(t *testing.T) {
 	}
 }
 
+func TestBuildAppArmorDeploymentUsesSensitiveFileOperations(t *testing.T) {
+	policy := EnforcementPolicy{
+		ID:         "policy-1",
+		Template:   "sensitive_file",
+		Mode:       "enforce",
+		Enabled:    true,
+		Definition: json.RawMessage(`{"filePaths":["/etc/docker/daemon.json"],"operations":["read","delete"]}`),
+	}
+
+	profile, _, results := buildAppArmorDeployment([]EnforcementPolicy{policy})
+
+	if results["policy-1"].Status != "deployed" {
+		t.Fatalf("expected deployed result, got %#v", results["policy-1"])
+	}
+	if !strings.Contains(profile, `audit deny "/etc/docker/daemon.json" rd,`) {
+		t.Fatalf("expected read/delete permissions in profile:\n%s", profile)
+	}
+	if !strings.Contains(results["policy-1"].Message, "read, delete") {
+		t.Fatalf("expected deployment message to include operations, got %#v", results["policy-1"])
+	}
+}
+
+func TestBuildAppArmorDeploymentDefaultsLegacySensitiveFileToWrite(t *testing.T) {
+	policy := EnforcementPolicy{
+		ID:         "policy-1",
+		Template:   "sensitive_file",
+		Mode:       "enforce",
+		Enabled:    true,
+		Definition: json.RawMessage(`{"filePaths":["/etc/docker/daemon.json"]}`),
+	}
+
+	profile, _, results := buildAppArmorDeployment([]EnforcementPolicy{policy})
+
+	if results["policy-1"].Status != "deployed" || !strings.Contains(profile, `wkl`) {
+		t.Fatalf("expected legacy write protection, result=%#v profile=%s", results["policy-1"], profile)
+	}
+}
+
+func TestBuildAppArmorDeploymentRejectsInvalidSensitiveFileOperation(t *testing.T) {
+	policy := EnforcementPolicy{
+		ID:         "policy-1",
+		Template:   "sensitive_file",
+		Mode:       "enforce",
+		Enabled:    true,
+		Definition: json.RawMessage(`{"filePaths":["/etc/docker/daemon.json"],"operations":["network"]}`),
+	}
+
+	profile, _, results := buildAppArmorDeployment([]EnforcementPolicy{policy})
+
+	if results["policy-1"].Status != "failed" {
+		t.Fatalf("expected failed result, got %#v", results["policy-1"])
+	}
+	if !strings.HasPrefix(results["policy-1"].Message, "策略 operations 无效: ") {
+		t.Fatalf("expected invalid operations message, got %#v", results["policy-1"])
+	}
+	if strings.Contains(profile, "/etc/docker/daemon.json") {
+		t.Fatalf("expected invalid policy path not to be deployed:\n%s", profile)
+	}
+}
+
 func TestBuildAppArmorDeploymentRejectsUnsupportedTemplates(t *testing.T) {
 	policies := []EnforcementPolicy{{
 		ID:         "policy-1",

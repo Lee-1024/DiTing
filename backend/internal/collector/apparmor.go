@@ -23,6 +23,16 @@ type AppArmorManager struct {
 	run       appArmorCommandRunner
 }
 
+type AppArmorPathRule struct {
+	Path       string
+	Operations []string
+}
+
+type normalizedAppArmorPathRule struct {
+	Path       string
+	Permission string
+}
+
 func NewAppArmorManager(policyDir string, parser string) *AppArmorManager {
 	return &AppArmorManager{
 		policyDir: policyDir,
@@ -122,8 +132,8 @@ func runAppArmorCommand(ctx context.Context, name string, args ...string) error 
 }
 
 // GenerateAppArmorSudoProfile builds the single AppArmor profile managed by DiTing.
-func GenerateAppArmorSudoProfile(paths []string) (string, error) {
-	normalized, err := normalizeAppArmorPaths(paths)
+func GenerateAppArmorSudoProfile(rules []AppArmorPathRule) (string, error) {
+	normalized, err := normalizeAppArmorPathRules(rules)
 	if err != nil {
 		return "", err
 	}
@@ -148,40 +158,135 @@ profile diting-sudo /{usr/,}bin/sudo flags=(attach_disconnected,mediate_deleted)
 
   /** ix,
 `)
-	for _, path := range normalized {
-		fmt.Fprintf(&profile, "\n  audit deny %q wkl,\n", path)
-		fmt.Fprintf(&profile, "  audit deny %q wkl,\n", strings.TrimSuffix(path, "/")+"/**")
+	for _, rule := range normalized {
+		fmt.Fprintf(&profile, "\n  audit deny %q %s,\n", rule.Path, rule.Permission)
+		fmt.Fprintf(&profile, "  audit deny %q %s,\n", strings.TrimSuffix(rule.Path, "/")+"/**", rule.Permission)
 	}
 	profile.WriteString("}\n")
 	return profile.String(), nil
 }
 
-func normalizeAppArmorPaths(paths []string) ([]string, error) {
-	unique := make(map[string]struct{}, len(paths))
-	for _, raw := range paths {
-		path := strings.TrimSpace(raw)
-		if path == "" || !strings.HasPrefix(path, "/") {
-			return nil, fmt.Errorf("AppArmor protected path must be absolute: %q", raw)
+func normalizeAppArmorPathRules(rules []AppArmorPathRule) ([]normalizedAppArmorPathRule, error) {
+	unique := make(map[string]normalizedAppArmorPathRule, len(rules))
+	for _, rule := range rules {
+		path, err := normalizeAppArmorPath(rule.Path)
+		if err != nil {
+			return nil, err
 		}
-		if strings.ContainsAny(path, "\x00\r\n*?[]{}@^\"\\") {
-			return nil, fmt.Errorf("AppArmor protected path contains unsupported characters: %q", raw)
+		permission, err := normalizeAppArmorOperations(rule.Operations)
+		if err != nil {
+			return nil, err
 		}
-		path = cleanAppArmorPath(path)
-		if path == "/" {
-			return nil, fmt.Errorf("refusing to protect filesystem root")
+		if existing, ok := unique[path]; ok {
+			permission = mergeAppArmorPermissions(existing.Permission, permission)
 		}
-		unique[path] = struct{}{}
+		unique[path] = normalizedAppArmorPathRule{Path: path, Permission: permission}
 	}
 	if len(unique) == 0 {
 		return nil, fmt.Errorf("at least one protected path is required")
 	}
 
-	result := make([]string, 0, len(unique))
-	for path := range unique {
-		result = append(result, path)
+	result := make([]normalizedAppArmorPathRule, 0, len(unique))
+	for _, rule := range unique {
+		result = append(result, rule)
 	}
-	sort.Strings(result)
+	sort.Slice(result, func(left, right int) bool {
+		return result[left].Path < result[right].Path
+	})
 	return result, nil
+}
+
+func mergeAppArmorPermissions(values ...string) string {
+	permissions := make(map[rune]struct{})
+	for _, value := range values {
+		for _, permission := range value {
+			permissions[permission] = struct{}{}
+		}
+	}
+	var result strings.Builder
+	for _, permission := range "rwkldcm" {
+		if _, ok := permissions[permission]; ok {
+			result.WriteRune(permission)
+		}
+	}
+	return result.String()
+}
+
+func normalizeAppArmorPaths(paths []string) ([]string, error) {
+	pathRules := make([]AppArmorPathRule, 0, len(paths))
+	for _, path := range paths {
+		pathRules = append(pathRules, AppArmorPathRule{Path: path})
+	}
+	rules, err := normalizeAppArmorPathRules(pathRules)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]string, 0, len(rules))
+	for _, rule := range rules {
+		result = append(result, rule.Path)
+	}
+	return result, nil
+}
+
+func normalizeAppArmorPath(raw string) (string, error) {
+	path := strings.TrimSpace(raw)
+	if path == "" || !strings.HasPrefix(path, "/") {
+		return "", fmt.Errorf("AppArmor protected path must be absolute: %q", raw)
+	}
+	if strings.ContainsAny(path, "\x00\r\n*?[]{}@^\"\\") {
+		return "", fmt.Errorf("AppArmor protected path contains unsupported characters: %q", raw)
+	}
+	path = cleanAppArmorPath(path)
+	if path == "/" {
+		return "", fmt.Errorf("refusing to protect filesystem root")
+	}
+	return path, nil
+}
+
+func normalizeAppArmorOperations(operations []string) (string, error) {
+	if len(operations) == 0 {
+		operations = []string{"write"}
+	}
+
+	permissions := make(map[rune]struct{})
+	for _, raw := range operations {
+		switch strings.TrimSpace(strings.ToLower(raw)) {
+		case "read":
+			permissions['r'] = struct{}{}
+		case "write":
+			permissions['w'] = struct{}{}
+			permissions['k'] = struct{}{}
+			permissions['l'] = struct{}{}
+		case "create":
+			permissions['c'] = struct{}{}
+			permissions['w'] = struct{}{}
+			permissions['k'] = struct{}{}
+			permissions['l'] = struct{}{}
+		case "delete":
+			permissions['d'] = struct{}{}
+		case "rename":
+			permissions['d'] = struct{}{}
+			permissions['w'] = struct{}{}
+			permissions['k'] = struct{}{}
+			permissions['l'] = struct{}{}
+		case "chmod", "chown":
+			permissions['m'] = struct{}{}
+		case "all":
+			for _, permission := range "rwkldcm" {
+				permissions[permission] = struct{}{}
+			}
+		default:
+			return "", fmt.Errorf("unsupported AppArmor operation: %q", raw)
+		}
+	}
+
+	var result strings.Builder
+	for _, permission := range "rwkldcm" {
+		if _, ok := permissions[permission]; ok {
+			result.WriteRune(permission)
+		}
+	}
+	return result.String(), nil
 }
 
 func cleanAppArmorPath(value string) string {

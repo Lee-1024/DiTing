@@ -27,6 +27,7 @@ const defaultValues: PolicyFormValues = {
   commands: ['reboot', 'shutdown', 'poweroff', 'halt'],
   commandRuleText: 'systemctl restart|stop docker|docker.service',
   filePaths: ['/etc/docker/daemon.json'],
+  operations: ['write'],
   processNames: [],
   userMatchMode: 'exclude_root',
   userIds: [],
@@ -50,6 +51,7 @@ export default function TetragonPolicyPage() {
   const commands = Form.useWatch('commands', form) ?? defaultValues.commands;
   const commandRuleText = Form.useWatch('commandRuleText', form) ?? defaultValues.commandRuleText;
   const filePaths = Form.useWatch('filePaths', form) ?? defaultValues.filePaths;
+  const operations = Form.useWatch('operations', form) ?? defaultValues.operations;
   const processNames = Form.useWatch('processNames', form) ?? defaultValues.processNames;
   const userMatchMode = Form.useWatch('userMatchMode', form) ?? defaultValues.userMatchMode;
   const userIds = Form.useWatch('userIds', form) ?? defaultValues.userIds;
@@ -63,11 +65,12 @@ export default function TetragonPolicyPage() {
     commands,
     commandRuleText,
     filePaths,
+    operations,
     processNames,
     userMatchMode,
     userIds,
     targetHosts,
-  }), [template, mode, name, description, enabled, commands, commandRuleText, filePaths, processNames, userMatchMode, userIds, targetHosts]);
+  }), [template, mode, name, description, enabled, commands, commandRuleText, filePaths, operations, processNames, userMatchMode, userIds, targetHosts]);
   const yaml = useMemo(() => generatePolicy(policy), [policy]);
   const allDeployments = Object.values(deployments).flat();
   const enabledPolicyCount = policies.filter((item) => item.enabled && item.mode !== 'disabled').length;
@@ -114,7 +117,7 @@ export default function TetragonPolicyPage() {
       mode: values.mode,
       enabled: values.enabled ?? true,
       targetHosts: values.targetHosts ?? [],
-      definition: values as unknown as Record<string, unknown>,
+      definition: policy as unknown as Record<string, unknown>,
       yaml: '',
       deploymentStatus: editing?.deploymentStatus ?? 'draft',
       deploymentMessage: editing?.deploymentMessage ?? '',
@@ -339,6 +342,23 @@ export default function TetragonPolicyPage() {
                 >
                   <Select mode="tags" tokenSeparators={[',']} />
                 </Form.Item>
+                {template === 'sensitive_file' && (
+                  <Form.Item name="operations" label="保护操作" rules={[{ required: true, message: '请选择至少一种保护操作' }]}>
+                    <Select
+                      mode="multiple"
+                      options={[
+                        { value: 'read', label: '读取' },
+                        { value: 'write', label: '写入/编辑' },
+                        { value: 'create', label: '创建' },
+                        { value: 'delete', label: '删除' },
+                        { value: 'rename', label: '重命名/移动' },
+                        { value: 'chmod', label: '权限变更' },
+                        { value: 'chown', label: '属主变更' },
+                        { value: 'all', label: '全部保护' },
+                      ]}
+                    />
+                  </Form.Item>
+                )}
                 <Alert type="info" showIcon message="用户范围固定" description="首版固定放行原生root，并拦截通过sudo启动的进程，不按编辑器或命令名称过滤。" />
               </>
             )}

@@ -28,3 +28,28 @@ it('marks disabled policies in the preview', () => {
 
   expect(preview).toContain('enabled: false');
 });
+
+it('includes sensitive file operations in preview', () => {
+  const preview = generatePolicy({
+    template: 'sensitive_file',
+    mode: 'enforce',
+    name: 'protect',
+    filePaths: ['/etc/docker/daemon.json'],
+    operations: ['read', 'write', 'delete'],
+  });
+
+  expect(preview).toContain('operations:');
+  expect(preview).toContain('  - read');
+  expect(preview).toContain('  - delete');
+});
+
+it('defaults sensitive file operations to write', () => {
+  const preview = generatePolicy({
+    template: 'sensitive_file',
+    mode: 'enforce',
+    name: 'protect',
+    filePaths: ['/etc/docker/daemon.json'],
+  });
+
+  expect(preview).toContain('  - write');
+});

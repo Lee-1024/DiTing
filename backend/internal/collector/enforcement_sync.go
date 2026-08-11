@@ -28,12 +28,14 @@ type appArmorDeploymentResult struct {
 
 type sensitiveFileDefinition struct {
 	FilePaths     []string `json:"filePaths"`
+	Operations    []string `json:"operations"`
 	UserMatchMode string   `json:"userMatchMode"`
 }
 
 func buildAppArmorDeployment(policies []EnforcementPolicy) (string, string, map[string]appArmorDeploymentResult) {
 	results := make(map[string]appArmorDeploymentResult, len(policies))
 	var protectedPaths []string
+	var appArmorRules []AppArmorPathRule
 	for _, policy := range policies {
 		if !policy.Enabled || policy.Mode == "disabled" {
 			results[policy.ID] = appArmorDeploymentResult{Status: "disabled", Message: "策略已停用"}
@@ -48,18 +50,25 @@ func buildAppArmorDeployment(policies []EnforcementPolicy) (string, string, map[
 			results[policy.ID] = appArmorDeploymentResult{Status: "failed", Message: "策略 definition 无效: " + err.Error()}
 			continue
 		}
+		if _, err := normalizeAppArmorOperations(definition.Operations); err != nil {
+			results[policy.ID] = appArmorDeploymentResult{Status: "failed", Message: "策略 operations 无效: " + err.Error()}
+			continue
+		}
 		paths, err := normalizeAppArmorPaths(definition.FilePaths)
 		if err != nil {
 			results[policy.ID] = appArmorDeploymentResult{Status: "failed", Message: err.Error()}
 			continue
 		}
 		protectedPaths = append(protectedPaths, paths...)
-		results[policy.ID] = appArmorDeploymentResult{Status: "deployed", Message: "AppArmor 策略已加载"}
+		for _, path := range paths {
+			appArmorRules = append(appArmorRules, AppArmorPathRule{Path: path, Operations: definition.Operations})
+		}
+		results[policy.ID] = appArmorDeploymentResult{Status: "deployed", Message: "AppArmor 策略已加载，保护操作: " + strings.Join(normalizeSensitiveFileOperations(definition.Operations), ", ")}
 	}
-	if len(protectedPaths) == 0 {
+	if len(appArmorRules) == 0 {
 		return "", "", results
 	}
-	profile, err := GenerateAppArmorSudoProfile(protectedPaths)
+	profile, err := GenerateAppArmorSudoProfile(appArmorRules)
 	if err != nil {
 		for id, result := range results {
 			if result.Status == "deployed" {
@@ -73,6 +82,26 @@ func buildAppArmorDeployment(policies []EnforcementPolicy) (string, string, map[
 		return "", "", results
 	}
 	return profile, observerPolicy, results
+}
+
+func normalizeSensitiveFileOperations(operations []string) []string {
+	if len(operations) == 0 {
+		return []string{"write"}
+	}
+	seen := make(map[string]struct{}, len(operations))
+	result := make([]string, 0, len(operations))
+	for _, operation := range operations {
+		operation = strings.TrimSpace(strings.ToLower(operation))
+		if operation == "" {
+			continue
+		}
+		if _, ok := seen[operation]; ok {
+			continue
+		}
+		seen[operation] = struct{}{}
+		result = append(result, operation)
+	}
+	return result
 }
 
 type EnforcementSyncer struct {
