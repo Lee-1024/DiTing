@@ -70,6 +70,23 @@ func TestGenerateAppArmorSudoProfileUsesParserSupportedModesForLifecycleOperatio
 	}
 }
 
+func TestGenerateAppArmorSudoProfileUsesWriteModesForMetadataOperations(t *testing.T) {
+	profile, err := GenerateAppArmorSudoProfile([]AppArmorPathRule{{
+		Path:       "/tmp/diting-enforce-test/secret.txt",
+		Operations: []string{"chmod", "chown"},
+	}})
+	if err != nil {
+		t.Fatalf("generate profile: %v", err)
+	}
+
+	if strings.Contains(profile, `audit deny "/tmp/diting-enforce-test/secret.txt" m,`) {
+		t.Fatalf("expected metadata operations not to rely on mmap-only mode:\n%s", profile)
+	}
+	if !strings.Contains(profile, `audit deny "/tmp/diting-enforce-test/secret.txt" wkl,`) {
+		t.Fatalf("expected metadata operations to use write-class modes:\n%s", profile)
+	}
+}
+
 func TestNormalizeAppArmorOperationsDefaultsToWrite(t *testing.T) {
 	permissions, err := normalizeAppArmorOperations(nil)
 	if err != nil {
@@ -91,9 +108,9 @@ func TestNormalizeAppArmorOperationsUsesStablePermissions(t *testing.T) {
 		{name: "create", operation: []string{"create"}, permission: "wkl"},
 		{name: "delete", operation: []string{"delete"}, permission: "wkl"},
 		{name: "rename", operation: []string{"rename"}, permission: "wkl"},
-		{name: "chmod", operation: []string{"chmod"}, permission: "m"},
-		{name: "chown", operation: []string{"chown"}, permission: "m"},
-		{name: "all", operation: []string{"all"}, permission: "rwklm"},
+		{name: "chmod", operation: []string{"chmod"}, permission: "wkl"},
+		{name: "chown", operation: []string{"chown"}, permission: "wkl"},
+		{name: "all", operation: []string{"all"}, permission: "rwkl"},
 		{name: "deduplicated", operation: []string{"delete", "read", "delete"}, permission: "rwkl"},
 	}
 
