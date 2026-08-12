@@ -35,15 +35,15 @@ it('includes sensitive file operations in preview', () => {
     mode: 'enforce',
     name: 'protect',
     filePaths: ['/etc/docker/daemon.json'],
-    operations: ['read', 'write', 'delete'],
+    operations: ['read', 'change'],
   });
 
   expect(preview).toContain('operations:');
   expect(preview).toContain('  - read');
-  expect(preview).toContain('  - delete');
+  expect(preview).toContain('  - change');
 });
 
-it('defaults sensitive file operations to write', () => {
+it('defaults sensitive file operations to change', () => {
   const preview = generatePolicy({
     template: 'sensitive_file',
     mode: 'enforce',
@@ -51,7 +51,7 @@ it('defaults sensitive file operations to write', () => {
     filePaths: ['/etc/docker/daemon.json'],
   });
 
-  expect(preview).toContain('  - write');
+  expect(preview).toContain('  - change');
 });
 
 it('builds collector host select options and keeps legacy host ids', () => {

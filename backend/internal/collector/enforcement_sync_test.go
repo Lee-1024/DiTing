@@ -47,7 +47,7 @@ func TestBuildAppArmorDeploymentUsesSensitiveFileOperations(t *testing.T) {
 		Template:   "sensitive_file",
 		Mode:       "enforce",
 		Enabled:    true,
-		Definition: json.RawMessage(`{"filePaths":["/etc/docker/daemon.json"],"operations":["read","delete"]}`),
+		Definition: json.RawMessage(`{"filePaths":["/etc/docker/daemon.json"],"operations":["read","change"]}`),
 	}
 
 	profile, _, results := buildAppArmorDeployment([]EnforcementPolicy{policy})
@@ -56,14 +56,14 @@ func TestBuildAppArmorDeploymentUsesSensitiveFileOperations(t *testing.T) {
 		t.Fatalf("expected deployed result, got %#v", results["policy-1"])
 	}
 	if !strings.Contains(profile, `audit deny "/etc/docker/daemon.json" rwkl,`) {
-		t.Fatalf("expected read/delete permissions in profile:\n%s", profile)
+		t.Fatalf("expected read/change permissions in profile:\n%s", profile)
 	}
-	if !strings.Contains(results["policy-1"].Message, "read, delete") {
+	if !strings.Contains(results["policy-1"].Message, "read, change") {
 		t.Fatalf("expected deployment message to include operations, got %#v", results["policy-1"])
 	}
 }
 
-func TestBuildAppArmorDeploymentDefaultsLegacySensitiveFileToWrite(t *testing.T) {
+func TestBuildAppArmorDeploymentDefaultsSensitiveFileToChange(t *testing.T) {
 	policy := EnforcementPolicy{
 		ID:         "policy-1",
 		Template:   "sensitive_file",
@@ -75,7 +75,10 @@ func TestBuildAppArmorDeploymentDefaultsLegacySensitiveFileToWrite(t *testing.T)
 	profile, _, results := buildAppArmorDeployment([]EnforcementPolicy{policy})
 
 	if results["policy-1"].Status != "deployed" || !strings.Contains(profile, `wkl`) {
-		t.Fatalf("expected legacy write protection, result=%#v profile=%s", results["policy-1"], profile)
+		t.Fatalf("expected default change protection, result=%#v profile=%s", results["policy-1"], profile)
+	}
+	if !strings.Contains(results["policy-1"].Message, "change") {
+		t.Fatalf("expected deployment message to include default change operation, got %#v", results["policy-1"])
 	}
 }
 

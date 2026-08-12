@@ -245,7 +245,7 @@ func normalizeAppArmorPath(raw string) (string, error) {
 
 func normalizeAppArmorOperations(operations []string) (string, error) {
 	if len(operations) == 0 {
-		operations = []string{"write"}
+		operations = []string{"change"}
 	}
 
 	permissions := make(map[rune]struct{})
@@ -253,7 +253,7 @@ func normalizeAppArmorOperations(operations []string) (string, error) {
 		switch strings.TrimSpace(strings.ToLower(raw)) {
 		case "read":
 			permissions['r'] = struct{}{}
-		case "write":
+		case "write", "change":
 			permissions['w'] = struct{}{}
 			permissions['k'] = struct{}{}
 			permissions['l'] = struct{}{}

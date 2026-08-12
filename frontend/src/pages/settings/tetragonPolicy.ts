@@ -1,7 +1,7 @@
 export type PolicyTemplate = 'dangerous_command' | 'sensitive_file' | 'permission_change' | 'delete_behavior' | 'suspicious_process';
 export type PolicyMode = 'audit' | 'enforce' | 'disabled';
 export type UserMatchMode = 'all' | 'include' | 'exclude_root';
-export type SensitiveFileOperation = 'read' | 'write' | 'create' | 'delete' | 'rename' | 'chmod' | 'chown' | 'all';
+export type SensitiveFileOperation = 'read' | 'change' | 'all';
 
 export interface CollectorHostOptionSource {
   hostId: string;
@@ -35,7 +35,7 @@ export interface PolicyFormValues {
 export function generatePolicy(values: PolicyFormValues) {
   const enabled = values.enabled !== false && values.mode !== 'disabled';
   const paths = (values.filePaths ?? []).map((item) => item.trim()).filter(Boolean);
-  const operations = values.operations?.length ? values.operations : ['write'];
+  const operations = values.operations?.length ? values.operations : ['change'];
   const operationPreview = values.template === 'sensitive_file'
     ? `operations:\n${operations.map((operation) => `  - ${operation}`).join('\n')}\n`
     : '';

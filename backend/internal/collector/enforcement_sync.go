@@ -86,7 +86,7 @@ func buildAppArmorDeployment(policies []EnforcementPolicy) (string, string, map[
 
 func normalizeSensitiveFileOperations(operations []string) []string {
 	if len(operations) == 0 {
-		return []string{"write"}
+		return []string{"change"}
 	}
 	seen := make(map[string]struct{}, len(operations))
 	result := make([]string, 0, len(operations))

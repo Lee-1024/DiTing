@@ -87,13 +87,13 @@ func TestGenerateAppArmorSudoProfileUsesWriteModesForMetadataOperations(t *testi
 	}
 }
 
-func TestNormalizeAppArmorOperationsDefaultsToWrite(t *testing.T) {
+func TestNormalizeAppArmorOperationsDefaultsToChange(t *testing.T) {
 	permissions, err := normalizeAppArmorOperations(nil)
 	if err != nil {
 		t.Fatalf("normalize operations: %v", err)
 	}
 	if permissions != "wkl" {
-		t.Fatalf("expected legacy default wkl, got %q", permissions)
+		t.Fatalf("expected default change protection wkl, got %q", permissions)
 	}
 }
 
@@ -105,6 +105,7 @@ func TestNormalizeAppArmorOperationsUsesStablePermissions(t *testing.T) {
 	}{
 		{name: "read", operation: []string{"read"}, permission: "r"},
 		{name: "write", operation: []string{"write"}, permission: "wkl"},
+		{name: "change", operation: []string{"change"}, permission: "wkl"},
 		{name: "create", operation: []string{"create"}, permission: "wkl"},
 		{name: "delete", operation: []string{"delete"}, permission: "wkl"},
 		{name: "rename", operation: []string{"rename"}, permission: "wkl"},
@@ -124,6 +125,32 @@ func TestNormalizeAppArmorOperationsUsesStablePermissions(t *testing.T) {
 				t.Fatalf("expected %q, got %q", test.permission, permission)
 			}
 		})
+	}
+}
+
+func TestNormalizeAppArmorOperationsUsesDocumentedGranularity(t *testing.T) {
+	readOnly, err := normalizeAppArmorOperations([]string{"read"})
+	if err != nil {
+		t.Fatalf("normalize read: %v", err)
+	}
+	if readOnly != "r" {
+		t.Fatalf("expected read-only rule to stay read-only, got %q", readOnly)
+	}
+
+	changeOnly, err := normalizeAppArmorOperations([]string{"change"})
+	if err != nil {
+		t.Fatalf("normalize change: %v", err)
+	}
+	if changeOnly != "wkl" {
+		t.Fatalf("expected change rule to use AppArmor write-class modes, got %q", changeOnly)
+	}
+
+	readAndChange, err := normalizeAppArmorOperations([]string{"read", "change"})
+	if err != nil {
+		t.Fatalf("normalize read/change: %v", err)
+	}
+	if readAndChange != "rwkl" {
+		t.Fatalf("expected read/change rule to combine read and write-class modes, got %q", readAndChange)
 	}
 }
 

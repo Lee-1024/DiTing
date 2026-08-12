@@ -29,7 +29,7 @@ const defaultValues: PolicyFormValues = {
   commands: ['reboot', 'shutdown', 'poweroff', 'halt'],
   commandRuleText: 'systemctl restart|stop docker|docker.service',
   filePaths: ['/etc/docker/daemon.json'],
-  operations: ['write'],
+  operations: ['change'],
   processNames: [],
   userMatchMode: 'exclude_root',
   userIds: [],
@@ -372,16 +372,20 @@ export default function TetragonPolicyPage() {
                       mode="multiple"
                       options={[
                         { value: 'read', label: '读取' },
-                        { value: 'write', label: '写入/编辑' },
-                        { value: 'create', label: '创建' },
-                        { value: 'delete', label: '删除' },
-                        { value: 'rename', label: '重命名/移动' },
-                        { value: 'chmod', label: '权限变更' },
-                        { value: 'chown', label: '属主变更' },
+                        { value: 'change', label: '变更（写入/创建/删除/重命名/权限/属主）' },
                         { value: 'all', label: '全部保护' },
                       ]}
                     />
                   </Form.Item>
+                )}
+                {template === 'sensitive_file' && (
+                  <Alert
+                    type="info"
+                    showIcon
+                    style={{ marginBottom: 16 }}
+                    message="AppArmor 按权限类别拦截"
+                    description="变更类操作会同时覆盖写入、创建、删除、重命名、chmod 和 chown；这些操作在 AppArmor 中无法再拆成互不影响的独立开关。"
+                  />
                 )}
                 <Alert type="info" showIcon message="用户范围固定" description="首版固定放行原生root，并拦截通过sudo启动的进程，不按编辑器或命令名称过滤。" />
               </>
