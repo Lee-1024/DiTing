@@ -77,11 +77,7 @@ func buildAppArmorDeployment(policies []EnforcementPolicy) (string, string, map[
 		}
 		return "", "", results
 	}
-	observerPolicy, err := GenerateTetragonObserverPolicy(protectedPaths)
-	if err != nil {
-		return "", "", results
-	}
-	return profile, observerPolicy, results
+	return profile, "", results
 }
 
 func normalizeSensitiveFileOperations(operations []string) []string {
@@ -163,7 +159,7 @@ func (s *EnforcementSyncer) SyncOnce(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	profile, observerPolicy, results := buildAppArmorDeployment(policies)
+	profile, _, results := buildAppArmorDeployment(policies)
 	var applyErr error
 	if s.appArmor == nil {
 		applyErr = s.capabilityErr
@@ -178,10 +174,8 @@ func (s *EnforcementSyncer) SyncOnce(ctx context.Context) error {
 	} else {
 		_, applyErr = s.appArmor.Apply(ctx, profile)
 		if applyErr == nil {
-			if s.observer == nil {
-				applyErr = fmt.Errorf("Tetragon observer manager is unavailable")
-			} else {
-				applyErr = s.observer.Apply(ctx, observerPolicy)
+			if s.observer != nil {
+				_ = s.observer.Remove(ctx)
 			}
 		}
 	}

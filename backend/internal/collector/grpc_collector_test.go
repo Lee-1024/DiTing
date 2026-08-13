@@ -8,6 +8,8 @@ import (
 
 	"diting/backend/internal/audit"
 	tetragon "github.com/cilium/tetragon/api/v1/tetragon"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -128,6 +130,36 @@ func TestGRPCCollectorReportsStreamErrors(t *testing.T) {
 	}
 	if reported == nil {
 		t.Fatal("expected stream error to be reported")
+	}
+}
+
+func TestGRPCCollectorDoesNotReportUnavailableEOFAsHealthError(t *testing.T) {
+	var reported error
+	attempts := 0
+	collector := NewGRPCCollector("127.0.0.1:54321", 1, &recordingWriter{})
+	collector.reconnectInterval = time.Millisecond
+	collector.dial = func(context.Context, string) (eventStream, func() error, error) {
+		attempts++
+		if attempts == 1 {
+			err := status.Error(codes.Unavailable, "error reading from server: EOF")
+			return &fakeEventStream{err: err}, func() error { return nil }, nil
+		}
+		return &fakeEventStream{events: []*tetragon.GetEventsResponse{grpcExecResponse("node-1", "/usr/bin/id", "")}}, func() error { return nil }, nil
+	}
+	collector.SetErrorHandler(func(err error) {
+		reported = err
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	collector.afterWrite = cancel
+	if err := collector.Run(ctx); err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if attempts != 2 {
+		t.Fatalf("expected reconnect after transient EOF, got attempts=%d", attempts)
+	}
+	if reported != nil {
+		t.Fatalf("expected transient EOF not to be reported as health error, got %v", reported)
 	}
 }
 

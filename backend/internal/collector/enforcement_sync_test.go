@@ -26,10 +26,13 @@ func TestBuildAppArmorDeploymentUsesSensitiveFileDefinitions(t *testing.T) {
 		},
 	}
 
-	profile, _, results := buildAppArmorDeployment(policies)
+	profile, observerPolicy, results := buildAppArmorDeployment(policies)
 
 	if !strings.Contains(profile, "audit deny \"/etc/docker/daemon.json\" wkl,") {
 		t.Fatalf("expected docker path in profile:\n%s", profile)
+	}
+	if observerPolicy != "" {
+		t.Fatalf("expected AppArmor deployment not to generate Tetragon observer policy, got:\n%s", observerPolicy)
 	}
 	if !strings.Contains(profile, "audit deny \"/var/lib/diting\" wkl,") {
 		t.Fatalf("expected diting path in profile:\n%s", profile)

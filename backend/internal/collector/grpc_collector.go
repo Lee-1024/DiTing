@@ -5,12 +5,15 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"strings"
 	"time"
 
 	"diting/backend/internal/audit"
 	tetragon "github.com/cilium/tetragon/api/v1/tetragon"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 )
 
 type eventStream interface {
@@ -106,7 +109,7 @@ func (c *GRPCCollector) Run(ctx context.Context) error {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return nil
 		}
-		if errors.Is(err, io.EOF) {
+		if isGRPCStreamClosed(err) {
 			slog.Warn("collector grpc stream closed", "addr", c.addr)
 		} else {
 			slog.Error("collector grpc stream failed", "addr", c.addr, "error", err)
@@ -174,7 +177,7 @@ func (c *GRPCCollector) consume(ctx context.Context, stream eventStream) error {
 			}
 			continue
 		case err := <-errs:
-			if errors.Is(err, io.EOF) {
+			if isGRPCStreamClosed(err) {
 				if flushErr := flush(); flushErr != nil {
 					c.reportError(flushErr)
 					return flushErr
@@ -229,6 +232,17 @@ func (c *GRPCCollector) reportConnect() {
 	if c.onConnect != nil {
 		c.onConnect()
 	}
+}
+
+func isGRPCStreamClosed(err error) bool {
+	if errors.Is(err, io.EOF) {
+		return true
+	}
+	if status.Code(err) != codes.Unavailable {
+		return false
+	}
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "eof") || strings.Contains(message, "server closed")
 }
 
 // dialTetragon 处理 dial Tetragon 相关逻辑。
